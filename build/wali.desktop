@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=WALi - Linux Client for WhatsApp
+Comment=Lightweight WhatsApp Web client for Linux
+Exec=wali %u
+Icon=wali
+Type=Application
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+MimeType=x-scheme-handler/whatsapp;
+StartupWMClass=wali

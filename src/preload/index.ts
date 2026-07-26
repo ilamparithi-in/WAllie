@@ -72,6 +72,11 @@ export interface ElectronAPI {
   clearNotificationHistory: () => Promise<boolean>;
   saveCss: (accountId: string, customCss: string, selectedTheme: string) => Promise<boolean>;
 
+  // Custom protocol controls
+  onProtocolReceived: (callback: (url: string) => void) => () => void;
+  handleProtocolUrl: (accountId: string, url: string) => void;
+  signalProtocolReady: () => void;
+
   // Event listeners
   onAccountListChanged: (callback: (accounts: AccountInfo[], activeId: string) => void) => () => void;
   onUnreadCountChanged: (callback: (accountId: string, count: number) => void) => () => void;
@@ -129,6 +134,14 @@ const api: ElectronAPI = {
   getNotificationHistory: () => ipcRenderer.invoke('notification:get-history'),
   clearNotificationHistory: () => ipcRenderer.invoke('notification:clear-history'),
   saveCss: (accountId, customCss, selectedTheme) => ipcRenderer.invoke('account:save-css', accountId, customCss, selectedTheme),
+
+  onProtocolReceived: (callback) => {
+    const subscription = (_event: unknown, url: string) => callback(url);
+    ipcRenderer.on('protocol:received-url', subscription);
+    return () => ipcRenderer.removeListener('protocol:received-url', subscription);
+  },
+  handleProtocolUrl: (accountId, url) => ipcRenderer.send('protocol:handle-url', accountId, url),
+  signalProtocolReady: () => ipcRenderer.send('protocol:ready'),
 
   onAccountListChanged: (callback) => {
     const subscription = (_event: unknown, accounts: AccountInfo[], activeId: string) => callback(accounts, activeId);

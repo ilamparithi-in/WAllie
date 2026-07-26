@@ -1,0 +1,25 @@
+appId: dev.ilamparithi.wali
+productName: WALi - Linux Client for WhatsApp
+directories:
+  output: dist-pack
+  buildResources: build
+files:
+  - dist/**/*
+  - package.json
+linux:
+  category: Chat;Network;InstantMessaging;
+  target:
+    - pacman
+    - deb
+    - rpm
+    - AppImage
+    - flatpak
+  desktop:
+    Name: WALi - Linux Client for WhatsApp
+    Comment: Lightweight WhatsApp Web client for Linux
+    Categories: Network;InstantMessaging;Chat;
+    MimeType: x-scheme-handler/whatsapp;
+protocols:
+  - name: whatsapp
+    schemes:
+      - whatsapp

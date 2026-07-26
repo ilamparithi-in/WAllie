@@ -11,6 +11,38 @@ const __dirname = path.dirname(__filename);
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
 
+let pendingProtocolUrl: string | null = null;
+
+// Enforce single-instance lock
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+
+      const protocolUrl = commandLine.find(arg => arg.startsWith('whatsapp://') || arg.startsWith('wali://'));
+      if (protocolUrl) {
+        console.log(`Received protocol URL in second-instance: ${protocolUrl}`);
+        mainWindow.webContents.send('protocol:received-url', protocolUrl);
+      }
+    } else {
+      const protocolUrl = commandLine.find(arg => arg.startsWith('whatsapp://') || arg.startsWith('wali://'));
+      if (protocolUrl) {
+        pendingProtocolUrl = protocolUrl;
+      }
+    }
+  });
+
+  const startupUrl = process.argv.find(arg => arg.startsWith('whatsapp://') || arg.startsWith('wali://'));
+  if (startupUrl) {
+    pendingProtocolUrl = startupUrl;
+  }
+}
+
 const TITLEBAR_HEIGHT = 28;
 const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36';
@@ -1030,24 +1062,38 @@ ipcMain.handle('extension:remove', async (_event, accountId: string, extensionId
   return true;
 });
 
-app.whenReady().then(() => {
-  createMainWindow();
-  createTray();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
+if (gotTheLock) {
+  app.whenReady().then(() => {
+    // Register custom protocol clients
+    if (process.defaultApp) {
+      if (process.argv.length >= 2) {
+        const execArgs = [path.resolve(process.argv[1])];
+        app.setAsDefaultProtocolClient('whatsapp', process.execPath, execArgs);
+        app.setAsDefaultProtocolClient('wali', process.execPath, execArgs);
+      }
     } else {
-      mainWindow?.show();
+      app.setAsDefaultProtocolClient('whatsapp');
+      app.setAsDefaultProtocolClient('wali');
+    }
+
+    createMainWindow();
+    createTray();
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createMainWindow();
+      } else {
+        mainWindow?.show();
+      }
+    });
+  });
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit();
     }
   });
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+}
 
 // Zoom helper functions
 const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0];
@@ -1571,5 +1617,39 @@ ipcMain.handle('notification:clear-history', () => {
   saveNotificationHistory([]);
   mainWindow?.webContents.send('notification:history-changed', []);
   return true;
+});
+
+// Custom Protocol URL IPC Handlers
+ipcMain.on('protocol:ready', () => {
+  if (pendingProtocolUrl) {
+    console.log(`Sending pending protocol URL to ready renderer: ${pendingProtocolUrl}`);
+    mainWindow?.webContents.send('protocol:received-url', pendingProtocolUrl);
+    pendingProtocolUrl = null;
+  }
+});
+
+ipcMain.on('protocol:handle-url', async (_event, accountId: string, urlStr: string) => {
+  console.log(`Handling custom protocol URL for account ${accountId}: ${urlStr}`);
+  try {
+    const url = new URL(urlStr);
+    let waPath = '/';
+    if (url.hostname === 'send') {
+      waPath = '/send' + url.search;
+    } else if (url.pathname.startsWith('/send')) {
+      waPath = url.pathname + url.search;
+    }
+    const targetUrl = `https://web.whatsapp.com${waPath}`;
+    
+    // Switch active account
+    await switchActiveAccount(accountId);
+    
+    // Load URL
+    const targetView = accountViews.get(accountId);
+    if (targetView) {
+      targetView.webContents.loadURL(targetUrl);
+    }
+  } catch (error) {
+    console.error('Failed to handle custom protocol redirection:', error);
+  }
 });
 
