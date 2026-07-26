@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Minus, Square, Copy, X, Settings, Plus, MessageSquare, RotateCw } from 'lucide-react';
+import { Minus, Square, Copy, X, Settings, Plus, MessageSquare, RotateCw, Code } from 'lucide-react';
 import type { AccountInfo } from '../../preload';
 
 interface TitlebarProps {
@@ -12,6 +12,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
   const [zoomPercent, setZoomPercent] = useState<number>(100);
   const [showFlash, setShowFlash] = useState<boolean>(false);
+  const [showDevTools, setShowDevTools] = useState<boolean>(false);
 
   // Renaming state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -27,12 +28,15 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
   useEffect(() => {
     if (!window.electronAPI) return;
 
-    // Fetch initial accounts & window state
+    // Fetch initial accounts, settings & window state
     window.electronAPI.getAccounts().then((accs) => {
       setAccounts(accs);
     });
     window.electronAPI.getActiveAccountId().then(setActiveId);
     window.electronAPI.isMaximized().then(setIsMaximized);
+    window.electronAPI.getGlobalSettings().then((settings) => {
+      setShowDevTools(!!settings.showDevToolsToggle);
+    });
 
     // Listen for account updates
     const unsubscribeAccount = window.electronAPI.onAccountListChanged((updatedAccounts, updatedActiveId) => {
@@ -78,12 +82,17 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
       }
     });
 
+    const unsubscribeGlobalSettings = window.electronAPI.onGlobalSettingsChanged((settings) => {
+      setShowDevTools(!!settings.showDevToolsToggle);
+    });
+
     return () => {
       unsubscribeAccount();
       unsubscribeUnread();
       unsubscribeMaximized();
       unsubscribeZoom();
       unsubscribeTriggerRename();
+      unsubscribeGlobalSettings();
       if (flashTimeout) clearTimeout(flashTimeout);
     };
   }, []);
@@ -245,6 +254,18 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
         >
           <RotateCw className="w-3.5 h-3.5" />
         </button>
+
+        {/* DevTools Toggle Button */}
+        {showDevTools && (
+          <button
+            onClick={() => window.electronAPI?.toggleDevTools()}
+            title="Toggle Developer Tools"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
+          >
+            <Code className="w-3.5 h-3.5" />
+          </button>
+        )}
 
         {/* Settings Button */}
         <button

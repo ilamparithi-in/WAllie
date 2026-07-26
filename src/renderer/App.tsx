@@ -39,8 +39,13 @@ export const App: React.FC = () => {
       }
     });
 
+    const unsubscribeCloseRequest = window.electronAPI.onSettingsCloseRequest(() => {
+      handleCloseSettings();
+    });
+
     return () => {
       unsubscribeDownload?.();
+      unsubscribeCloseRequest?.();
     };
   }, []);
 

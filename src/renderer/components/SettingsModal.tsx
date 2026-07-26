@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield } from 'lucide-react';
+import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft } from 'lucide-react';
 import type { AccountInfo, GlobalSettings } from '../../preload';
 
 interface SettingsModalProps {
@@ -7,10 +7,10 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
-type TabType = 'extensions' | 'css' | 'storage' | 'notifications' | 'general';
+type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('general');
+  const [activePage, setActivePage] = useState<PageType>('main');
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [isImporting, setIsImporting] = useState<boolean>(false);
@@ -25,6 +25,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   } | null>(null);
   const [isLoadingStorage, setIsLoadingStorage] = useState<boolean>(false);
   const [isClearing, setIsClearing] = useState<boolean>(false);
+
+  // Custom CSS live state and debounce ref
+  const [customCss, setCustomCss] = useState<string>('');
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Notification History state
+  const [notificationHistory, setNotificationHistory] = useState<any[]>([]);
+  const [notifSearch, setNotifSearch] = useState<string>('');
+  const [notifAccountFilter, setNotifAccountFilter] = useState<string>('all');
+
+  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
 
   const handleToggleGlobalSetting = async (key: keyof GlobalSettings, value: boolean) => {
     if (!globalSettings) return;
@@ -90,10 +101,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   };
 
   useEffect(() => {
-    if (activeTab === 'storage' && selectedAccountId) {
+    if (activePage === 'storage' && selectedAccountId) {
       fetchStorageSizes(selectedAccountId);
     }
-  }, [activeTab, selectedAccountId]);
+  }, [activePage, selectedAccountId]);
 
   const handleClearStorage = async (type: 'cache' | 'media') => {
     if (!selectedAccountId) return;
@@ -124,7 +135,71 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   }, [selectedAccountId]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (selectedAccount) {
+      setCustomCss(selectedAccount.settings?.customCss || '');
+    }
+  }, [selectedAccountId, accounts]);
+
+  const handleCssChange = (newCss: string) => {
+    setCustomCss(newCss);
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(async () => {
+      if (!selectedAccountId) return;
+      const currentTheme = selectedAccount?.settings?.selectedTheme || 'none';
+      try {
+        await window.electronAPI.saveCss(selectedAccountId, newCss, currentTheme);
+        setAccounts((prev) =>
+          prev.map((acc) =>
+            acc.id === selectedAccountId
+              ? { ...acc, settings: { ...acc.settings!, customCss: newCss } }
+              : acc
+          )
+        );
+      } catch (err) {
+        console.error('Failed to save live CSS override:', err);
+      }
+    }, 300);
+  };
+
+  const handleSelectPresetTheme = async (themeName: string) => {
+    if (!selectedAccountId) return;
+    try {
+      await window.electronAPI.saveCss(selectedAccountId, customCss, themeName);
+      setAccounts((prev) =>
+        prev.map((acc) =>
+          acc.id === selectedAccountId
+            ? { ...acc, settings: { ...acc.settings!, selectedTheme: themeName } }
+            : acc
+        )
+      );
+    } catch (err) {
+      console.error('Failed to save preset theme:', err);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    try {
+      await window.electronAPI.clearNotificationHistory();
+    } catch (err) {
+      console.error('Failed to clear notification logs:', err);
+    }
+  };
+
+  const filteredNotifications = notificationHistory.filter((notif) => {
+    const matchesSearch =
+      notif.title.toLowerCase().includes(notifSearch.toLowerCase()) ||
+      notif.body.toLowerCase().includes(notifSearch.toLowerCase());
+    const matchesAccount = notifAccountFilter === 'all' || notif.accountId === notifAccountFilter;
+    return matchesSearch && matchesAccount;
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      setActivePage('main');
+      return;
+    }
 
     // Fetch accounts and active account on open
     window.electronAPI?.getAccounts().then((accs) => {
@@ -140,6 +215,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       setGlobalSettings(settings);
     });
 
+    // Fetch initial notification history
+    window.electronAPI?.getNotificationHistory().then((history) => {
+      setNotificationHistory(history);
+    });
+
     // Listen for real-time account list changes
     const unsubscribeAccount = window.electronAPI?.onAccountListChanged((updatedAccounts, updatedActiveId) => {
       setAccounts(updatedAccounts);
@@ -149,14 +229,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       }
     });
 
+    // Listen for notification log changes
+    const unsubscribeHistory = window.electronAPI?.onNotificationHistoryChanged((updatedHistory) => {
+      setNotificationHistory(updatedHistory);
+    });
+
     return () => {
       unsubscribeAccount?.();
+      unsubscribeHistory?.();
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
-  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
   const extensions = selectedAccount?.extensions || [];
 
   const handleImportExtension = async (importType: 'folder' | 'archive') => {
@@ -192,15 +275,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   return (
     <div
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 select-text"
+      className={`fixed top-[28px] right-0 bottom-0 z-50 w-[450px] bg-[#111b21] border-l border-[#222d34] shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out select-text ${
+        isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+      }`}
     >
-      <div className="w-full max-w-2xl bg-[#111b21] border border-[#222d34] rounded-lg shadow-2xl overflow-hidden flex flex-col h-[520px]">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#222d34] bg-[#202c33]">
-          <div className="flex items-center gap-2 text-[#e9edef] font-medium text-sm">
-            <SettingsIcon className="w-4 h-4 text-[#00a884]" />
-            <span>Application Settings</span>
-          </div>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#222d34] bg-[#202c33] flex-shrink-0">
+          {activePage === 'main' ? (
+            <div className="flex items-center gap-2 text-[#e9edef] font-medium text-sm">
+              <SettingsIcon className="w-4 h-4 text-[#00a884]" />
+              <span>Application Settings</span>
+            </div>
+          ) : (
+            <button
+              onClick={() => setActivePage('main')}
+              className="flex items-center gap-2 text-[#00a884] font-medium text-sm hover:text-[#00c298] transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="text-[#e9edef] font-semibold text-xs">
+                {activePage === 'general' && 'General Settings'}
+                {activePage === 'extensions' && 'Chrome Extensions'}
+                {activePage === 'css' && 'Custom CSS & Themes'}
+                {activePage === 'storage' && 'Storage & Cache'}
+                {activePage === 'notifications' && 'Notification History'}
+              </span>
+            </button>
+          )}
           <button
             onClick={onClose}
             className="p-1 rounded hover:bg-[#111b21] text-[#8696a0] hover:text-[#e9edef] transition-colors"
@@ -209,74 +309,78 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar Tabs */}
-          <div className="w-48 bg-[#111b21] border-r border-[#222d34] p-2 flex flex-col gap-1 text-xs">
-            <button
-              onClick={() => setActiveTab('general')}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded font-medium transition-colors text-left ${
-                activeTab === 'general'
-                  ? 'bg-[#202c33] text-[#00a884]'
-                  : 'text-[#8696a0] hover:bg-[#182229] hover:text-[#e9edef]'
-              }`}
-            >
-              <SettingsIcon className="w-4 h-4" />
-              <span>General</span>
-            </button>
+        {/* Modal Body / Drawer Content */}
+        <div className="flex-grow p-4 overflow-y-auto text-xs text-[#d1d7db] bg-[#111b21]">
+          {activePage === 'main' && (
+            <div className="flex flex-col space-y-2 select-text pb-4">
+              <button
+                onClick={() => setActivePage('general')}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
+                  <SettingsIcon className="w-4 h-4" />
+                </div>
+                <div className="flex-grow min-w-0">
+                  <div className="font-semibold text-[#e9edef] text-[12px]">General Settings</div>
+                  <div className="text-[10px] text-[#8696a0] mt-0.5">Tray settings, preloading, and permissions</div>
+                </div>
+              </button>
 
-            <button
-              onClick={() => setActiveTab('extensions')}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded font-medium transition-colors text-left ${
-                activeTab === 'extensions'
-                  ? 'bg-[#202c33] text-[#00a884]'
-                  : 'text-[#8696a0] hover:bg-[#182229] hover:text-[#e9edef]'
-              }`}
-            >
-              <Puzzle className="w-4 h-4" />
-              <span>Chrome Extensions</span>
-            </button>
+              <button
+                onClick={() => setActivePage('extensions')}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
+                  <Puzzle className="w-4 h-4" />
+                </div>
+                <div className="flex-grow min-w-0">
+                  <div className="font-semibold text-[#e9edef] text-[12px]">Chrome Extensions</div>
+                  <div className="text-[10px] text-[#8696a0] mt-0.5">Manage helper extensions and plugins</div>
+                </div>
+              </button>
 
-            <button
-              onClick={() => setActiveTab('css')}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded font-medium transition-colors text-left ${
-                activeTab === 'css'
-                  ? 'bg-[#202c33] text-[#00a884]'
-                  : 'text-[#8696a0] hover:bg-[#182229] hover:text-[#e9edef]'
-              }`}
-            >
-              <Palette className="w-4 h-4" />
-              <span>Custom CSS</span>
-            </button>
+              <button
+                onClick={() => setActivePage('css')}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
+                  <Palette className="w-4 h-4" />
+                </div>
+                <div className="flex-grow min-w-0">
+                  <div className="font-semibold text-[#e9edef] text-[12px]">Custom CSS & Themes</div>
+                  <div className="text-[10px] text-[#8696a0] mt-0.5">Select preset themes or write custom CSS</div>
+                </div>
+              </button>
 
-            <button
-              onClick={() => setActiveTab('storage')}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded font-medium transition-colors text-left ${
-                activeTab === 'storage'
-                  ? 'bg-[#202c33] text-[#00a884]'
-                  : 'text-[#8696a0] hover:bg-[#182229] hover:text-[#e9edef]'
-              }`}
-            >
-              <Database className="w-4 h-4" />
-              <span>Storage & Cache</span>
-            </button>
+              <button
+                onClick={() => setActivePage('storage')}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
+                  <Database className="w-4 h-4" />
+                </div>
+                <div className="flex-grow min-w-0">
+                  <div className="font-semibold text-[#e9edef] text-[12px]">Storage & Cache</div>
+                  <div className="text-[10px] text-[#8696a0] mt-0.5">Inspect sizes, clear browser media or cache</div>
+                </div>
+              </button>
 
-            <button
-              onClick={() => setActiveTab('notifications')}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded font-medium transition-colors text-left ${
-                activeTab === 'notifications'
-                  ? 'bg-[#202c33] text-[#00a884]'
-                  : 'text-[#8696a0] hover:bg-[#182229] hover:text-[#e9edef]'
-              }`}
-            >
-              <Bell className="w-4 h-4" />
-              <span>Notification History</span>
-            </button>
-          </div>
+              <button
+                onClick={() => setActivePage('notifications')}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div className="flex-grow min-w-0">
+                  <div className="font-semibold text-[#e9edef] text-[12px]">Notification History</div>
+                  <div className="text-[10px] text-[#8696a0] mt-0.5">View and search desktop alert logs</div>
+                </div>
+              </button>
+            </div>
+          )}
 
-          {/* Content Pane */}
-          <div className="flex-1 p-5 overflow-y-auto text-xs text-[#d1d7db] bg-[#111b21]">
-            {activeTab === 'general' && (
+          {activePage === 'general' && (
               <div className="space-y-5">
                 {/* Global Behavior Settings */}
                 <div>
@@ -326,6 +430,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                         type="checkbox"
                         checked={globalSettings?.loadAllOnLaunch ?? false}
                         onChange={(e) => handleToggleGlobalSetting('loadAllOnLaunch', e.target.checked)}
+                        className="accent-[#00a884]"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
+                      <div>
+                        <div className="font-medium text-[#e9edef]">Show Developer Tools Toggle</div>
+                        <div className="text-[11px] text-[#8696a0]">
+                          Show a code icon in the titlebar to toggle developer tools for WhatsApp Web
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={globalSettings?.showDevToolsToggle ?? false}
+                        onChange={(e) => handleToggleGlobalSetting('showDevToolsToggle', e.target.checked)}
                         className="accent-[#00a884]"
                       />
                     </label>
@@ -406,7 +525,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             )}
 
-            {activeTab === 'extensions' && (
+            {activePage === 'extensions' && (
               <div className="flex flex-col h-full">
                 {/* Extensions Header with Switcher & Import Dropdown */}
                 <div className="flex items-center justify-between mb-4 border-b border-[#222d34] pb-3 flex-shrink-0 relative">
@@ -529,18 +648,77 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             )}
 
-            {activeTab === 'css' && (
-              <div>
-                <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2">
-                  Custom CSS Injector
-                </h3>
-                <p className="text-[#8696a0] mt-2">
-                  Custom theme styles and CSS overrides will be enabled in Phase 4.
-                </p>
+            {activePage === 'css' && (
+              <div className="flex flex-col h-full space-y-4">
+                <div className="flex-shrink-0 flex items-center justify-between border-b border-[#222d34] pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-xs text-[#e9edef]">Account CSS:</span>
+                    <select
+                      value={selectedAccountId}
+                      onChange={(e) => setSelectedAccountId(e.target.value)}
+                      className="bg-[#202c33] text-[#e9edef] px-2 py-1 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884]"
+                    >
+                      {accounts.map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex-shrink-0 space-y-2">
+                  <div className="text-[11px] font-semibold text-[#e9edef]">Preset Themes</div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleSelectPresetTheme('none')}
+                      className={`px-3 py-1.5 rounded text-[10px] font-semibold transition-colors border \${
+                        selectedAccount?.settings?.selectedTheme === 'none' || !selectedAccount?.settings?.selectedTheme
+                          ? 'bg-[#00a884] text-[#111b21] border-[#00a884]'
+                          : 'bg-[#202c33] text-[#aebac1] border-[#222d34] hover:bg-[#2a3942]'
+                      }`}
+                    >
+                      Default Theme
+                    </button>
+                    <button
+                      onClick={() => handleSelectPresetTheme('oled')}
+                      className={`px-3 py-1.5 rounded text-[10px] font-semibold transition-colors border \${
+                        selectedAccount?.settings?.selectedTheme === 'oled'
+                          ? 'bg-[#00a884] text-[#111b21] border-[#00a884]'
+                          : 'bg-[#202c33] text-[#aebac1] border-[#222d34] hover:bg-[#2a3942]'
+                      }`}
+                    >
+                      OLED Dark
+                    </button>
+                    <button
+                      onClick={() => handleSelectPresetTheme('compact')}
+                      className={`px-3 py-1.5 rounded text-[10px] font-semibold transition-colors border \${
+                        selectedAccount?.settings?.selectedTheme === 'compact'
+                          ? 'bg-[#00a884] text-[#111b21] border-[#00a884]'
+                          : 'bg-[#202c33] text-[#aebac1] border-[#222d34] hover:bg-[#2a3942]'
+                      }`}
+                    >
+                      Compact UI
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-grow flex flex-col min-h-0 pt-2">
+                  <div className="text-[11px] font-semibold text-[#e9edef] mb-1.5 flex items-center justify-between">
+                    <span>Live Stylesheet Editor</span>
+                    <span className="text-[9px] text-[#8696a0] font-normal italic">Changes inject instantly</span>
+                  </div>
+                  <textarea
+                    value={customCss}
+                    onChange={(e) => handleCssChange(e.target.value)}
+                    placeholder="/* Type custom CSS overrides here. e.g. body { filter: invert(1); } */"
+                    className="flex-1 w-full bg-[#182229] text-[#e9edef] p-3 rounded border border-[#222d34] font-mono text-[11px] resize-none outline-none focus:border-[#00a884] placeholder-[#667781] leading-relaxed h-[180px]"
+                  />
+                </div>
               </div>
             )}
 
-            {activeTab === 'storage' && (
+            {activePage === 'storage' && (
               <div className="flex flex-col h-full space-y-4">
                 {/* Account selector header */}
                 <div className="flex items-center gap-2 border-b border-[#222d34] pb-3 flex-shrink-0">
@@ -639,19 +817,110 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             )}
 
-            {activeTab === 'notifications' && (
-              <div>
-                <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2">
-                  Notification History
-                </h3>
-                <p className="text-[#8696a0] mt-2">
-                  Local JSON notification log history drawer will be enabled in Phase 4.
-                </p>
+            {activePage === 'notifications' && (
+              <div className="flex flex-col h-full space-y-4">
+                <div className="flex-shrink-0 flex items-center justify-between gap-3 border-b border-[#222d34] pb-3">
+                  <div className="flex items-center gap-2 flex-grow">
+                    <input
+                      type="text"
+                      value={notifSearch}
+                      onChange={(e) => setNotifSearch(e.target.value)}
+                      placeholder="Search notifications..."
+                      className="w-1/2 bg-[#182229] text-[#e9edef] px-2.5 py-1.5 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] placeholder-[#667781]"
+                    />
+                    <select
+                      value={notifAccountFilter}
+                      onChange={(e) => setNotifAccountFilter(e.target.value)}
+                      className="w-1/2 bg-[#202c33] text-[#e9edef] px-2 py-1.5 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884]"
+                    >
+                      <option value="all">All Accounts</option>
+                      {accounts.map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={handleClearHistory}
+                    disabled={notificationHistory.length === 0}
+                    className="px-2.5 py-1.5 bg-[#ea4335]/10 border border-[#ea4335]/30 text-[#ea4335] hover:bg-[#ea4335]/25 disabled:opacity-50 font-bold rounded transition-colors text-[10px] flex-shrink-0"
+                  >
+                    Clear History
+                  </button>
+                </div>
+
+                <div className="flex-grow overflow-y-auto space-y-2 pr-1 h-[260px]">
+                  {filteredNotifications.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center text-[#8696a0]">
+                      <Bell className="w-10 h-10 mb-2.5 text-[#202c33]" />
+                      <p className="font-semibold text-[#d1d7db] mb-0.5 text-xs">No Notification Logs</p>
+                      <p className="text-[10px] max-w-[200px] leading-normal">
+                        {notifSearch || notifAccountFilter !== 'all'
+                          ? 'No logs match your filter'
+                          : 'Desktop alerts are logged here'}
+                      </p>
+                    </div>
+                  ) : (
+                    filteredNotifications.map((notif) => {
+                      const date = new Date(notif.timestamp);
+                      const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+                      return (
+                        <div
+                          key={notif.id}
+                          className="flex items-start gap-2.5 p-2.5 bg-[#182229] border border-[#222d34] rounded-lg hover:border-[#374248] transition-colors text-[11px]"
+                        >
+                          {notif.icon ? (
+                            <img
+                              src={notif.icon}
+                              alt=""
+                              className="w-7 h-7 rounded-full flex-shrink-0 object-cover bg-[#202c33]"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const parent = e.currentTarget.parentElement;
+                                if (parent) {
+                                  const fb = parent.querySelector('.avatar-fallback');
+                                  if (fb) (fb as HTMLElement).style.display = 'flex';
+                                }
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className="avatar-fallback w-7 h-7 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0"
+                            style={{ display: notif.icon ? 'none' : 'flex' }}
+                          >
+                            <Bell className="w-3.5 h-3.5" />
+                          </div>
+
+                          <div className="min-w-0 flex-grow">
+                            <div className="flex items-baseline justify-between gap-1.5">
+                              <span className="font-semibold text-xs text-[#e9edef] truncate">
+                                {notif.title}
+                              </span>
+                              <span className="text-[9px] text-[#8696a0] flex-shrink-0 whitespace-nowrap">
+                                {dateStr}, {timeStr}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-[#8696a0] mt-0.5 break-words max-h-16 overflow-y-auto no-scrollbar">
+                              {notif.body}
+                            </div>
+                            <div className="mt-1 flex items-center">
+                              <span className="bg-[#202c33] text-[#00a884] font-medium text-[8px] px-1 py-0.5 rounded border border-[#222d34]">
+                                {notif.accountName}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
-      </div>
-    </div>
   );
 };

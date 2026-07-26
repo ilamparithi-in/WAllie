@@ -34,6 +34,8 @@ interface Account {
     cameraEnabled: boolean;
     micEnabled: boolean;
     notificationsEnabled: boolean;
+    customCss?: string;
+    selectedTheme?: string;
   };
 }
 
@@ -41,6 +43,7 @@ interface GlobalSettings {
   closeToTray: boolean;
   hardwareAcceleration: boolean;
   loadAllOnLaunch: boolean;
+  showDevToolsToggle?: boolean;
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -60,6 +63,7 @@ function loadSettings(): GlobalSettings {
         closeToTray: parsed.closeToTray !== false,
         hardwareAcceleration: parsed.hardwareAcceleration !== false,
         loadAllOnLaunch: !!parsed.loadAllOnLaunch,
+        showDevToolsToggle: !!parsed.showDevToolsToggle,
       };
     }
   } catch (error) {
@@ -69,6 +73,7 @@ function loadSettings(): GlobalSettings {
     closeToTray: true,
     hardwareAcceleration: true,
     loadAllOnLaunch: false,
+    showDevToolsToggle: false,
   };
 }
 
@@ -100,10 +105,12 @@ function loadAccounts(): Account[] {
           loggedIn: !!acc.loggedIn,
           extensions: acc.extensions || [],
           unreadCount: 0, // Reset badge on startup
-          settings: acc.settings || {
-            cameraEnabled: true,
-            micEnabled: true,
-            notificationsEnabled: true,
+          settings: {
+            cameraEnabled: acc.settings?.cameraEnabled !== false,
+            micEnabled: acc.settings?.micEnabled !== false,
+            notificationsEnabled: acc.settings?.notificationsEnabled !== false,
+            customCss: acc.settings?.customCss || '',
+            selectedTheme: acc.settings?.selectedTheme || 'none',
           },
         }));
       }
@@ -125,6 +132,8 @@ function loadAccounts(): Account[] {
         cameraEnabled: true,
         micEnabled: true,
         notificationsEnabled: true,
+        customCss: '',
+        selectedTheme: 'none',
       },
     },
   ];
@@ -143,6 +152,8 @@ function saveAccounts() {
         cameraEnabled: true,
         micEnabled: true,
         notificationsEnabled: true,
+        customCss: '',
+        selectedTheme: 'none',
       },
     }));
     fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(dataToSave, null, 2), 'utf8');
@@ -373,6 +384,7 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
 
   const view = new WebContentsView({
     webPreferences: {
+      preload: path.join(__dirname, '../preload/index.cjs'),
       partition: account.partition,
       contextIsolation: true,
       nodeIntegration: false,
@@ -420,22 +432,9 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
     return { action: 'allow' };
   });
 
-  // Handle beforeunload / discard changes prompts when refreshing
-  view.webContents.on('will-prevent-unload', async (event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      const choice = await dialog.showMessageBox(mainWindow, {
-        type: 'question',
-        buttons: ['Cancel', 'Reload'],
-        defaultId: 1,
-        cancelId: 0,
-        title: 'Reload site?',
-        message: 'Changes you made may not be saved.',
-        detail: 'Are you sure you want to reload this site?',
-      });
-      if (choice.response === 1) {
-        event.preventDefault(); // Allows the page to unload and reload
-      }
-    }
+  // Handle beforeunload / discard changes prompts when refreshing by always allowing reload
+  view.webContents.on('will-prevent-unload', (event) => {
+    event.preventDefault(); // Synchronously ignore beforeunload and allow the page to reload
   });
 
   // Handle title & page badge updates for unread notifications count
@@ -493,7 +492,11 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
     }
   };
 
-  view.webContents.on('dom-ready', checkLoginStatus);
+  view.webContents.on('dom-ready', () => {
+    checkLoginStatus();
+    insertedCssKeys.delete(account.id); // Page reload clears previously inserted CSS in Chromium
+    injectCustomCssForView(account.id, view.webContents);
+  });
   view.webContents.on('page-title-updated', checkLoginStatus);
 
   // Also setup a light interval to catch fast scans / login actions
@@ -524,10 +527,11 @@ function updateActiveViewBounds() {
     const activeView = accountViews.get(activeAccountId);
 
     if (activeView) {
+      const viewWidth = settingsOpen ? Math.max(0, width - DRAWER_WIDTH) : width;
       activeView.setBounds({
         x: 0,
         y: TITLEBAR_HEIGHT,
-        width: Math.max(0, width),
+        width: Math.max(0, viewWidth),
         height: Math.max(0, height - TITLEBAR_HEIGHT),
       });
     }
@@ -557,6 +561,9 @@ async function switchActiveAccount(newAccountId: string) {
   if (targetView) {
     mainWindow.contentView.addChildView(targetView);
     updateActiveViewBounds();
+
+    // Inject Custom CSS theme if applicable
+    injectCustomCssForView(newAccountId, targetView.webContents);
 
     // Sync zoom level for the newly selected account view
     const zoomPercent = Math.round(targetView.webContents.getZoomFactor() * 100);
@@ -767,17 +774,13 @@ ipcMain.handle('window:isMaximized', () => {
   return mainWindow?.isMaximized() ?? false;
 });
 
+let settingsOpen = false;
+const DRAWER_WIDTH = 450;
+
 ipcMain.on('settings:toggle', (_event, isOpen: boolean) => {
   console.log('IPC Received: settings:toggle, isOpen:', isOpen);
-  const activeView = accountViews.get(activeAccountId);
-  if (activeView && mainWindow && !mainWindow.isDestroyed()) {
-    if (isOpen) {
-      mainWindow.contentView.removeChildView(activeView);
-    } else {
-      mainWindow.contentView.addChildView(activeView);
-      updateActiveViewBounds();
-    }
-  }
+  settingsOpen = isOpen;
+  updateActiveViewBounds();
 });
 
 ipcMain.handle('account:get-all', () => accounts);
@@ -1125,6 +1128,150 @@ function registerZoomShortcuts(contents: Electron.WebContents) {
   });
 }
 
+const OLED_THEME_CSS = `
+/* OLED Dark Theme overrides */
+body,
+body.web,
+.web,
+#app,
+.app-wrapper,
+.two,
+.three {
+  background-color: #000000 !important;
+  background-image: none !important;
+}
+
+:root {
+  --app-background: #000000 !important;
+  --background-default: #000000 !important;
+  --background-default-hover: #111111 !important;
+  --background-default-active: #1a1a1a !important;
+  --conversation-panel-background: #000000 !important;
+  --panel-background: #000000 !important;
+  --panel-background-deep: #050505 !important;
+  --panel-background-hover: #111111 !important;
+  --panel-background-colored: #080808 !important;
+  --panel-header-background: #0a0a0a !important;
+  --panel-header-icon: #aebac1 !important;
+  --search-container-background: #050505 !important;
+  --search-input-background: #111111 !important;
+  --system-message-background: #111111 !important;
+  --incoming-message-background: #121212 !important;
+  --incoming-message-background-deeper: #1a1a1a !important;
+  --outgoing-message-background: #054738 !important;
+  --outgoing-message-background-deeper: #095c4a !important;
+  
+  --border-default: #1a1a1a !important;
+  --border-panel: #1a1a1a !important;
+  --border-stronger: #262626 !important;
+  --border-list: #1a1a1a !important;
+  
+  --input-placeholder: #667781 !important;
+  --primary: #00a884 !important;
+  --message-primary: #e9edef !important;
+}
+
+#pane-side,
+._33L3z,
+[data-testid="chat-list"] {
+  background-color: #000000 !important;
+}
+
+footer,
+footer > div {
+  background-color: #0a0a0a !important;
+  border-top: 1px solid #1a1a1a !important;
+}
+
+.message-in,
+.message-out,
+[data-testid="msg-container"] {
+  border: 1px solid #1a1a1a !important;
+}
+`;
+
+const COMPACT_THEME_CSS = `
+/* Compact UI Theme overrides */
+:root {
+  --chat-list-width: 250px !important;
+}
+
+div[data-testid="cell-frame-container"] {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+  min-height: 48px !important;
+}
+
+div[data-testid="cell-frame-container"] img,
+div[data-testid="cell-frame-container"] svg,
+div[data-testid="cell-frame-container"] .avatar {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+header {
+  height: 44px !important;
+  padding: 4px 8px !important;
+}
+
+div[data-testid="chat-list-search"] {
+  padding: 4px 8px !important;
+}
+
+span[data-testid="cell-frame-title"] {
+  font-size: 13px !important;
+}
+
+div[data-testid="msg-container"] {
+  padding: 2px 6px !important;
+}
+
+div[data-testid="msg-container"] span {
+  font-size: 12.5px !important;
+}
+
+footer {
+  padding: 4px 8px !important;
+  min-height: 40px !important;
+}
+`;
+
+const insertedCssKeys = new Map<string, string>();
+
+async function injectCustomCssForView(accountId: string, webContents: Electron.WebContents) {
+  const account = accounts.find((a) => a.id === accountId);
+  if (!account || !account.settings) return;
+
+  const previousKey = insertedCssKeys.get(accountId);
+  if (previousKey) {
+    try {
+      await webContents.removeInsertedCSS(previousKey);
+      insertedCssKeys.delete(accountId);
+    } catch (err) {
+      // Ignore if key is already invalid due to page reload
+    }
+  }
+
+  const { customCss = '', selectedTheme = 'none' } = account.settings;
+
+  let themeCss = '';
+  if (selectedTheme === 'oled') {
+    themeCss = OLED_THEME_CSS;
+  } else if (selectedTheme === 'compact') {
+    themeCss = COMPACT_THEME_CSS;
+  }
+
+  const combinedCss = themeCss + '\n' + customCss;
+  if (!combinedCss.trim()) return;
+
+  try {
+    const key = await webContents.insertCSS(combinedCss);
+    insertedCssKeys.set(accountId, key);
+  } catch (err) {
+    console.error('Failed to insert CSS:', err);
+  }
+}
+
 function getPartitionDirName(partition: string): string {
   if (partition.startsWith('persist:')) {
     return partition.substring(8);
@@ -1180,6 +1327,49 @@ async function getAccountStorageSizes(partition: string) {
   };
 }
 
+interface HistoricalNotification {
+  id: string;
+  accountId: string;
+  accountName: string;
+  title: string;
+  body: string;
+  icon: string;
+  timestamp: number;
+}
+
+const NOTIFICATION_HISTORY_FILE = path.join(app.getPath('userData'), 'notification_history.json');
+const MAX_NOTIFICATIONS = 100;
+
+function loadNotificationHistory(): HistoricalNotification[] {
+  try {
+    if (fs.existsSync(NOTIFICATION_HISTORY_FILE)) {
+      const data = fs.readFileSync(NOTIFICATION_HISTORY_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Failed to load notification history:', error);
+  }
+  return [];
+}
+
+function saveNotificationHistory(history: HistoricalNotification[]) {
+  try {
+    fs.writeFileSync(NOTIFICATION_HISTORY_FILE, JSON.stringify(history, null, 2), 'utf8');
+  } catch (error) {
+    console.error('Failed to save notification history:', error);
+  }
+}
+
+function logNotificationToHistory(notif: HistoricalNotification) {
+  const history = loadNotificationHistory();
+  history.unshift(notif);
+  if (history.length > MAX_NOTIFICATIONS) {
+    history.splice(MAX_NOTIFICATIONS);
+  }
+  saveNotificationHistory(history);
+  mainWindow?.webContents.send('notification:history-changed', history);
+}
+
 // IPC Handlers for Storage Management
 ipcMain.handle('account:get-storage-sizes', async (_event, accountId: string) => {
   const account = accounts.find((a) => a.id === accountId);
@@ -1225,6 +1415,7 @@ ipcMain.handle('settings:get-global', () => globalSettings);
 ipcMain.handle('settings:save-global', (_event, newSettings: GlobalSettings) => {
   globalSettings = newSettings;
   saveSettings(globalSettings);
+  mainWindow?.webContents.send('settings:global-changed', globalSettings);
   return true;
 });
 
@@ -1245,5 +1436,140 @@ ipcMain.handle('account:update-settings', (_event, accountId: string, settings: 
     return true;
   }
   return false;
+});
+
+// IPC Handler to save Custom CSS & Theme and apply it live
+ipcMain.handle('account:save-css', (_event, accountId: string, customCss: string, selectedTheme: string) => {
+  const account = accounts.find((a) => a.id === accountId);
+  if (account) {
+    if (!account.settings) {
+      account.settings = { cameraEnabled: true, micEnabled: true, notificationsEnabled: true };
+    }
+    account.settings.customCss = customCss;
+    account.settings.selectedTheme = selectedTheme;
+    saveAccounts();
+
+    const view = accountViews.get(accountId);
+    if (view) {
+      injectCustomCssForView(accountId, view.webContents);
+    }
+    return true;
+  }
+  return false;
+});
+
+// DevTools Toggling IPC handler
+ipcMain.on('devtools:toggle', () => {
+  console.log('IPC Received: devtools:toggle');
+  const activeContents = getActiveWebContents();
+  if (activeContents) {
+    if (activeContents.isDevToolsOpened()) {
+      activeContents.closeDevTools();
+    } else {
+      activeContents.openDevTools({ mode: 'detach' });
+    }
+  } else {
+    if (mainWindow?.webContents.isDevToolsOpened()) {
+      mainWindow.webContents.closeDevTools();
+    } else {
+      mainWindow?.webContents.openDevTools({ mode: 'detach' });
+    }
+  }
+});
+
+// Web notification interception and native DBus libnotify creation
+ipcMain.on('notification:create', async (event, data: { title: string; body: string; icon: string; tag: string }) => {
+  const senderWebContents = event.sender;
+  let senderAccount: Account | undefined;
+  for (const [accId, view] of accountViews.entries()) {
+    if (view.webContents === senderWebContents) {
+      senderAccount = accounts.find((a) => a.id === accId);
+      break;
+    }
+  }
+
+  if (!senderAccount) return;
+
+  // 1. Account Branding
+  const brandedTitle = `[${senderAccount.name}] ${data.title}`;
+
+  // 2. Save to local log history
+  logNotificationToHistory({
+    id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    accountId: senderAccount.id,
+    accountName: senderAccount.name,
+    title: data.title,
+    body: data.body,
+    icon: data.icon, // Base64 representation
+    timestamp: Date.now(),
+  });
+
+  // Check if native system notifications are muted for this account
+  if (senderAccount.settings?.notificationsEnabled === false) {
+    return;
+  }
+
+  // 3. Construct native notification avatar
+  let iconImage: any = null;
+  if (data.icon && data.icon.startsWith('data:image')) {
+    try {
+      iconImage = nativeImage.createFromDataURL(data.icon);
+    } catch (err) {
+      console.error('Failed to create NativeImage from base64 avatar:', err);
+    }
+  }
+
+  // 4. Trigger native Linux notification with sound and actions
+  const nativeNotif = new Notification({
+    title: brandedTitle,
+    body: data.body,
+    icon: iconImage || undefined,
+    silent: false,
+    actions: [
+      { type: 'button', text: 'Open Chat' }
+    ]
+  });
+
+  const onSelectAction = () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    if (senderAccount) {
+      switchActiveAccount(senderAccount.id);
+    }
+    senderWebContents.send('notification:clicked-reply', data.tag);
+  };
+
+  nativeNotif.on('click', onSelectAction);
+  nativeNotif.on('action', (event, index) => {
+    if (index === 0) {
+      onSelectAction();
+    }
+  });
+
+  nativeNotif.show();
+});
+
+// Handle light dismiss closes from webview click events
+ipcMain.on('webview:clicked', () => {
+  if (settingsOpen && mainWindow) {
+    mainWindow.webContents.send('settings:close-request');
+  }
+});
+
+ipcMain.on('notification:close-request', (_event, tag: string) => {
+  // Option to close native notification if trackable
+});
+
+// Notification History IPC Handlers
+ipcMain.handle('notification:get-history', () => {
+  return loadNotificationHistory();
+});
+
+ipcMain.handle('notification:clear-history', () => {
+  saveNotificationHistory([]);
+  mainWindow?.webContents.send('notification:history-changed', []);
+  return true;
 });
 
