@@ -317,12 +317,145 @@ function setupWhatsAppIntegration() {
   (window as any).Notification = CustomNotification;
 }
 
+function injectCallTitlebar() {
+  // Wait for documentElement and body to be available
+  if (!document.documentElement || !document.body) {
+    setTimeout(injectCallTitlebar, 50);
+    return;
+  }
+
+  // Check if already injected
+  if (document.getElementById('custom-call-titlebar')) return;
+
+  // Create style element to shift body content and style html/body
+  const style = document.createElement('style');
+  style.id = 'custom-call-titlebar-styles';
+  style.innerHTML = `
+    html {
+      background-color: #111b21 !important;
+    }
+    body {
+      transform: translateY(28px) !important;
+      height: calc(100vh - 28px) !important;
+      position: relative !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+    }
+  `;
+  document.documentElement.appendChild(style);
+
+  // Create the titlebar container
+  const container = document.createElement('div');
+  container.id = 'custom-call-titlebar';
+  
+  // Style container
+  Object.assign(container.style, {
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    right: '0',
+    height: '28px',
+    background: '#111b21',
+    borderBottom: '1px solid #222d34',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    fontFamily: 'Segoe UI, Helvetica Neue, Helvetica, Lucide Sans, Arial, sans-serif',
+    color: '#aebac1',
+    fontSize: '12px',
+    zIndex: '999999',
+    userSelect: 'none'
+  });
+
+  // Request the account name from main process
+  ipcRenderer.invoke('account:get-name-for-session').then((accountName: string) => {
+    // Fill in HTML
+    container.innerHTML = `
+      <div style="-webkit-app-region: no-drag; display: flex; align-items: center; padding-left: 12px; gap: 8px; font-family: sans-serif;">
+        <span style="color: #00a884; display: flex; align-items: center; justify-content: center; font-size: 13px;">📞</span>
+        <span style="color: #e9edef; font-size: 11px; font-weight: 600; tracking-wide: 0.05em;">WhatsApp Call</span>
+        <span style="padding: 1px 6px; background: rgba(0, 168, 132, 0.1); border: 1px solid rgba(0, 168, 132, 0.2); color: #00a884; border-radius: 4px; font-size: 10px; font-weight: bold;">${accountName}</span>
+      </div>
+      <div style="-webkit-app-region: drag; flex: 1; height: 100%; cursor: move;"></div>
+      <div style="-webkit-app-region: no-drag; display: flex; align-items: center; gap: 2px; padding-right: 4px;">
+        <button id="pin-btn" title="Pin (Stay on Top)" style="background: none; border: none; color: #8696a0; cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; transition: color 0.2s;">📌</button>
+        <div style="height: 12px; width: 1px; background-color: #222d34; margin: 0 4px; display: inline-block;"></div>
+        <button id="min-btn" title="Minimize" style="background: none; border: none; color: #8696a0; cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold;">−</button>
+        <button id="close-btn" title="End Call & Close" style="background: none; border: none; color: #8696a0; cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: background-color 0.2s, color 0.2s; border-radius: 4px;">✕</button>
+      </div>
+    `;
+
+    document.documentElement.appendChild(container);
+
+    // Hook up button events
+    const pinBtn = document.getElementById('pin-btn');
+    const minBtn = document.getElementById('min-btn');
+    const closeBtn = document.getElementById('close-btn');
+
+    // Fetch initial pin status
+    ipcRenderer.invoke('window:get-always-on-top').then((isPinned: boolean) => {
+      if (pinBtn) {
+        pinBtn.style.color = isPinned ? '#00a884' : '#8696a0';
+      }
+    });
+
+    pinBtn?.addEventListener('click', () => {
+      ipcRenderer.send('window:toggle-always-on-top');
+    });
+
+    ipcRenderer.on('window:always-on-top-changed', (_event: any, isPinned: boolean) => {
+      if (pinBtn) {
+        pinBtn.style.color = isPinned ? '#00a884' : '#8696a0';
+      }
+    });
+
+    minBtn?.addEventListener('click', () => {
+      ipcRenderer.send('window:minimize');
+    });
+
+    closeBtn?.addEventListener('click', () => {
+      ipcRenderer.send('window:close');
+    });
+
+    // Style close button hover
+    closeBtn?.addEventListener('mouseenter', () => {
+      closeBtn.style.backgroundColor = '#ea4335';
+      closeBtn.style.color = '#ffffff';
+    });
+    closeBtn?.addEventListener('mouseleave', () => {
+      closeBtn.style.backgroundColor = 'transparent';
+      closeBtn.style.color = '#8696a0';
+    });
+
+    // Style pin button hover
+    pinBtn?.addEventListener('mouseenter', () => {
+      pinBtn.style.color = '#e9edef';
+    });
+    pinBtn?.addEventListener('mouseleave', () => {
+      ipcRenderer.invoke('window:get-always-on-top').then((isPinned: boolean) => {
+        pinBtn.style.color = isPinned ? '#00a884' : '#8696a0';
+      });
+    });
+
+    // Style min button hover
+    minBtn?.addEventListener('mouseenter', () => {
+      minBtn.style.color = '#e9edef';
+    });
+    minBtn?.addEventListener('mouseleave', () => {
+      minBtn.style.color = '#8696a0';
+    });
+  });
+}
+
 const isWhatsApp = window.location.hostname.includes('whatsapp.com');
 
 if (!isWhatsApp) {
   contextBridge.exposeInMainWorld('electronAPI', api);
 } else {
   setupWhatsAppIntegration();
+  if (window.location.pathname.includes('/call')) {
+    injectCallTitlebar();
+  }
 }
 
 export {};

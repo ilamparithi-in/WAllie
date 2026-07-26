@@ -458,13 +458,52 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
         return { action: 'deny' };
       }
 
-      // Open internal WhatsApp pages (like calling popout) in a customized window
-      createCallWindow(account, url);
-      return { action: 'deny' };
+      // Allow internal WhatsApp windows (like calling popout) to open with our custom browser options.
+      // This ensures window.open returns a valid reference, preventing "Allow popups" warning.
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 900,
+          height: 650,
+          minWidth: 500,
+          minHeight: 400,
+          frame: false, // Frameless native window
+          titleBarStyle: 'hidden', // Custom titlebar integration
+          backgroundColor: '#111b21',
+          autoHideMenuBar: true,
+          webPreferences: {
+            preload: path.join(__dirname, '../preload/index.cjs'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: false,
+            backgroundThrottling: false, // Prevent video/audio calls lagging when blurred
+          }
+        }
+      };
     } catch (e) {
       shell.openExternal(url).catch((err) => console.error('Failed to open external link:', err));
       return { action: 'deny' };
     }
+  });
+
+  // Style and track the created child window
+  view.webContents.on('did-create-window', (childWindow, details) => {
+    console.log(`Intercepted child window creation for URL: ${details.url}`);
+    
+    // Pause any playing media across other tabs
+    pauseAllMedia();
+
+    // Remove toolbar/menubar completely
+    childWindow.setMenu(null);
+    childWindow.setAutoHideMenuBar(true);
+    childWindow.menuBarVisible = false;
+
+    // Track the call window
+    callWindows.add(childWindow);
+
+    childWindow.on('closed', () => {
+      callWindows.delete(childWindow);
+    });
   });
 
   // Handle beforeunload / discard changes prompts when refreshing by always allowing reload
@@ -568,91 +607,7 @@ function pauseAllMedia() {
   }
 }
 
-async function createCallWindow(account: Account, url: string) {
-  // First, pause any playing media across all other accounts/tabs
-  pauseAllMedia();
 
-  const callWindow = new BrowserWindow({
-    width: 900,
-    height: 650,
-    minWidth: 500,
-    minHeight: 400,
-    frame: false,
-    titleBarStyle: 'hidden',
-    backgroundColor: '#111b21',
-    show: false,
-    webPreferences: {
-      preload: path.join(__dirname, '../preload/index.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
-  });
-
-  callWindow.setMenu(null); // Remove toolbar/menubar completely
-
-  callWindows.add(callWindow);
-
-  // Load the React renderer index.html with query parameters to render the Call UI
-  const rendererUrl = process.env.VITE_DEV_SERVER_URL
-    ? `${process.env.VITE_DEV_SERVER_URL}?page=call&accountName=${encodeURIComponent(account.name)}&accountId=${account.id}`
-    : `file://${path.join(__dirname, '../renderer/index.html')}?page=call&accountName=${encodeURIComponent(account.name)}&accountId=${account.id}`;
-
-  callWindow.loadURL(rendererUrl);
-
-  // Create the WebContentsView to render the actual WhatsApp Calling UI
-  const view = new WebContentsView({
-    webPreferences: {
-      preload: path.join(__dirname, '../preload/index.cjs'),
-      partition: account.partition,
-      contextIsolation: true,
-      nodeIntegration: false,
-      backgroundThrottling: false, // Don't throttle calls!
-      sandbox: true,
-      webSecurity: true,
-    },
-  });
-
-  view.webContents.setUserAgent(DEFAULT_USER_AGENT);
-  view.webContents.loadURL(url);
-
-  // Add the WebContentsView to the Call window
-  callWindow.contentView.addChildView(view);
-
-  // Position it below the 28px titlebar
-  const updateBounds = () => {
-    if (callWindow.isDestroyed()) return;
-    const [w, h] = callWindow.getContentSize();
-    view.setBounds({
-      x: 0,
-      y: 28,
-      width: w,
-      height: Math.max(0, h - 28),
-    });
-  };
-
-  callWindow.on('resize', updateBounds);
-  updateBounds();
-
-  // Show window when the renderer is ready
-  callWindow.once('ready-to-show', () => {
-    callWindow.show();
-  });
-
-  // Handle window close
-  callWindow.on('closed', () => {
-    callWindows.delete(callWindow);
-  });
-
-  // Handle WhatsApp call page closure (e.g., when the call is ended from inside the app)
-  view.webContents.on('destroyed', () => {
-    if (!callWindow.isDestroyed()) {
-      callWindow.close();
-    }
-  });
-
-  registerZoomShortcuts(view.webContents);
-}
 
 let resizeTimeout: NodeJS.Timeout | null = null;
 
@@ -951,6 +906,16 @@ ipcMain.handle('window:get-always-on-top', (event) => {
   console.log('IPC Handle: window:get-always-on-top');
   const win = BrowserWindow.fromWebContents(event.sender);
   return win?.isAlwaysOnTop() ?? false;
+});
+ipcMain.handle('account:get-name-for-session', (event) => {
+  console.log('IPC Handle: account:get-name-for-session');
+  for (const account of accounts) {
+    const accSession = session.fromPartition(account.partition);
+    if (accSession === event.sender.session) {
+      return account.name;
+    }
+  }
+  return 'WhatsApp';
 });
 
 let settingsOpen = false;
