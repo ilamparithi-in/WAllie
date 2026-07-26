@@ -10,6 +10,8 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [activeId, setActiveId] = useState<string>('default');
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
+  const [zoomPercent, setZoomPercent] = useState<number>(100);
+  const [showFlash, setShowFlash] = useState<boolean>(false);
 
   useEffect(() => {
     if (!window.electronAPI) return;
@@ -35,10 +37,22 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
       setIsMaximized(maxState);
     });
 
+    let flashTimeout: NodeJS.Timeout | null = null;
+    const unsubscribeZoom = window.electronAPI.onZoomChanged((percent) => {
+      setZoomPercent(percent);
+      setShowFlash(true);
+      if (flashTimeout) clearTimeout(flashTimeout);
+      flashTimeout = setTimeout(() => {
+        setShowFlash(false);
+      }, 800);
+    });
+
     return () => {
       unsubscribeAccount();
       unsubscribeUnread();
       unsubscribeMaximized();
+      unsubscribeZoom();
+      if (flashTimeout) clearTimeout(flashTimeout);
     };
   }, []);
 
@@ -116,8 +130,24 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
       {/* Right: Settings Gear + Window Controls */}
       <div
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        className="flex items-center h-full"
+        className="flex items-center h-full gap-0.5"
       >
+        {/* Zoom Indicator Badge */}
+        {zoomPercent !== 100 && (
+          <button
+            onClick={() => window.electronAPI?.resetZoom()}
+            title="Zoom level active. Click to reset to 100%"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            className={`flex items-center justify-center px-1.5 h-[18px] rounded text-[10px] font-extrabold tracking-wide transition-all duration-200 ${
+              showFlash
+                ? 'bg-[#00a884] text-[#111b21] scale-105 shadow-md'
+                : 'bg-[#202c33] text-[#00a884] hover:bg-[#2a3942] hover:text-[#e9edef]'
+            }`}
+          >
+            {zoomPercent}%
+          </button>
+        )}
+
         {/* Settings Button */}
         <button
           onClick={onOpenSettings}

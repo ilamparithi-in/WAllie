@@ -22,11 +22,13 @@ export interface ElectronAPI {
 
   // Settings & View toggle
   toggleSettings: (isOpen: boolean) => void;
+  resetZoom: () => void;
 
   // Event listeners
   onAccountListChanged: (callback: (accounts: AccountInfo[], activeId: string) => void) => () => void;
   onUnreadCountChanged: (callback: (accountId: string, count: number) => void) => () => void;
   onMaximizedStateChanged: (callback: (isMaximized: boolean) => void) => () => void;
+  onZoomChanged: (callback: (zoomPercent: number) => void) => () => void;
 }
 
 const api: ElectronAPI = {
@@ -42,6 +44,7 @@ const api: ElectronAPI = {
   removeAccount: (id: string) => ipcRenderer.invoke('account:remove', id),
 
   toggleSettings: (isOpen: boolean) => ipcRenderer.send('settings:toggle', isOpen),
+  resetZoom: () => ipcRenderer.send('zoom:reset'),
 
   onAccountListChanged: (callback) => {
     const subscription = (_event: unknown, accounts: AccountInfo[], activeId: string) => callback(accounts, activeId);
@@ -59,6 +62,12 @@ const api: ElectronAPI = {
     const subscription = (_event: unknown, isMaximized: boolean) => callback(isMaximized);
     ipcRenderer.on('window:maximized-changed', subscription);
     return () => ipcRenderer.removeListener('window:maximized-changed', subscription);
+  },
+
+  onZoomChanged: (callback) => {
+    const subscription = (_event: unknown, zoomPercent: number) => callback(zoomPercent);
+    ipcRenderer.on('zoom:changed', subscription);
+    return () => ipcRenderer.removeListener('zoom:changed', subscription);
   },
 };
 

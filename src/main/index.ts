@@ -53,6 +53,9 @@ function createAccountView(account: Account): WebContentsView {
   view.webContents.setUserAgent(DEFAULT_USER_AGENT);
   view.webContents.loadURL('https://web.whatsapp.com');
 
+  // Register zoom shortcuts
+  registerZoomShortcuts(view.webContents);
+
   // Handle title & page badge updates for unread notifications count
   view.webContents.on('page-title-updated', (_event, title) => {
     const match = title.match(/\((\d+)\)/);
@@ -66,20 +69,31 @@ function createAccountView(account: Account): WebContentsView {
   return view;
 }
 
+let resizeTimeout: NodeJS.Timeout | null = null;
+
 function updateActiveViewBounds() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
-  const [width, height] = mainWindow.getContentSize();
-  const activeView = accountViews.get(activeAccountId);
-
-  if (activeView) {
-    activeView.setBounds({
-      x: 0,
-      y: TITLEBAR_HEIGHT,
-      width: Math.max(0, width),
-      height: Math.max(0, height - TITLEBAR_HEIGHT),
-    });
+  if (resizeTimeout) {
+    clearTimeout(resizeTimeout);
   }
+
+  resizeTimeout = setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    const [width, height] = mainWindow.getContentSize();
+    const activeView = accountViews.get(activeAccountId);
+
+    if (activeView) {
+      activeView.setBounds({
+        x: 0,
+        y: TITLEBAR_HEIGHT,
+        width: Math.max(0, width),
+        height: Math.max(0, height - TITLEBAR_HEIGHT),
+      });
+    }
+    resizeTimeout = null;
+  }, 50); // 50ms debounce to prevent sizing race conditions
 }
 
 function switchActiveAccount(newAccountId: string) {
@@ -104,6 +118,10 @@ function switchActiveAccount(newAccountId: string) {
   if (targetView) {
     mainWindow.contentView.addChildView(targetView);
     updateActiveViewBounds();
+
+    // Sync zoom level for the newly selected account view
+    const zoomPercent = Math.round(targetView.webContents.getZoomFactor() * 100);
+    mainWindow.webContents.send('zoom:changed', zoomPercent);
   }
 
   mainWindow.webContents.send('account:list-changed', accounts, activeAccountId);
@@ -149,14 +167,21 @@ function createMainWindow() {
     switchActiveAccount(activeAccountId);
   });
 
+  // Register zoom shortcuts on main window as well
+  registerZoomShortcuts(mainWindow.webContents);
+
   mainWindow.on('resize', updateActiveViewBounds);
   mainWindow.on('maximize', () => {
     console.log('Main window maximized');
     mainWindow?.webContents.send('window:maximized-changed', true);
+    // Explicitly update bounds with a short delay to ensure GTK has fully transitioned layout
+    setTimeout(updateActiveViewBounds, 100);
   });
   mainWindow.on('unmaximize', () => {
     console.log('Main window unmaximized');
     mainWindow?.webContents.send('window:maximized-changed', false);
+    // Explicitly update bounds with a short delay to ensure GTK has fully transitioned layout
+    setTimeout(updateActiveViewBounds, 100);
   });
 
   mainWindow.on('close', (event) => {
@@ -247,6 +272,13 @@ ipcMain.handle('account:get-all', () => accounts);
 ipcMain.handle('account:get-active-id', () => activeAccountId);
 ipcMain.on('account:switch', (_event, id: string) => switchActiveAccount(id));
 
+ipcMain.on('zoom:reset', () => {
+  const activeContents = getActiveWebContents();
+  if (activeContents) {
+    resetZoom(activeContents);
+  }
+});
+
 ipcMain.handle('account:add', (_event, customName?: string) => {
   const newIndex = accounts.length + 1;
   const newAccount: Account = {
@@ -294,3 +326,82 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
+// Zoom helper functions
+const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0];
+
+function changeZoom(contents: Electron.WebContents, direction: 'in' | 'out') {
+  try {
+    const currentFactor = contents.getZoomFactor();
+    
+    // Find closest zoom step
+    let closestIndex = 4; // Default to 1.0 (index 4)
+    let minDiff = Math.abs(currentFactor - ZOOM_STEPS[closestIndex]);
+    
+    for (let i = 0; i < ZOOM_STEPS.length; i++) {
+      const diff = Math.abs(currentFactor - ZOOM_STEPS[i]);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIndex = i;
+      }
+    }
+
+    let nextIndex = closestIndex;
+    if (direction === 'in') {
+      nextIndex = Math.min(ZOOM_STEPS.length - 1, closestIndex + 1);
+    } else {
+      nextIndex = Math.max(0, closestIndex - 1);
+    }
+
+    const newFactor = ZOOM_STEPS[nextIndex];
+    contents.setZoomFactor(newFactor);
+    
+    const zoomPercent = Math.round(newFactor * 100);
+    console.log(`Setting zoom factor to: ${newFactor} (${zoomPercent}%)`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('zoom:changed', zoomPercent);
+    }
+  } catch (error) {
+    console.error('Error changing zoom factor:', error);
+  }
+}
+
+function resetZoom(contents: Electron.WebContents) {
+  try {
+    contents.setZoomFactor(1.0);
+    console.log('Resetting zoom factor to: 1.0 (100%)');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('zoom:changed', 100);
+    }
+  } catch (error) {
+    console.error('Error resetting zoom factor:', error);
+  }
+}
+
+function getActiveWebContents(): Electron.WebContents | null {
+  const activeView = accountViews.get(activeAccountId);
+  return activeView ? activeView.webContents : null;
+}
+
+function registerZoomShortcuts(contents: Electron.WebContents) {
+  contents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown') {
+      const isControl = process.platform === 'darwin' ? input.meta : input.control;
+      if (isControl) {
+        if (input.key === '=' || input.key === '+') {
+          const targetContents = getActiveWebContents() || contents;
+          changeZoom(targetContents, 'in');
+          event.preventDefault();
+        } else if (input.key === '-') {
+          const targetContents = getActiveWebContents() || contents;
+          changeZoom(targetContents, 'out');
+          event.preventDefault();
+        } else if (input.key === '0') {
+          const targetContents = getActiveWebContents() || contents;
+          resetZoom(targetContents);
+          event.preventDefault();
+        }
+      }
+    }
+  });
+}
