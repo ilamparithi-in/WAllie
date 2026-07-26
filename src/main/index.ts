@@ -457,11 +457,14 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
         shell.openExternal(url).catch((err) => console.error('Failed to open external link:', err));
         return { action: 'deny' };
       }
+
+      // Open internal WhatsApp pages (like calling popout) in a customized window
+      createCallWindow(account, url);
+      return { action: 'deny' };
     } catch (e) {
       shell.openExternal(url).catch((err) => console.error('Failed to open external link:', err));
       return { action: 'deny' };
     }
-    return { action: 'allow' };
   });
 
   // Handle beforeunload / discard changes prompts when refreshing by always allowing reload
@@ -541,6 +544,114 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
   }, 2500);
 
   return view;
+}
+
+const callWindows = new Set<BrowserWindow>();
+
+function pauseAllMedia() {
+  for (const [id, view] of accountViews.entries()) {
+    try {
+      view.webContents.executeJavaScript(`
+        (() => {
+          try {
+            document.querySelectorAll('video, audio').forEach(el => {
+              if (!el.paused) {
+                el.pause();
+              }
+            });
+          } catch (e) {}
+        })()
+      `).catch(() => {});
+    } catch (e) {
+      // Ignore errors
+    }
+  }
+}
+
+async function createCallWindow(account: Account, url: string) {
+  // First, pause any playing media across all other accounts/tabs
+  pauseAllMedia();
+
+  const callWindow = new BrowserWindow({
+    width: 900,
+    height: 650,
+    minWidth: 500,
+    minHeight: 400,
+    frame: false,
+    titleBarStyle: 'hidden',
+    backgroundColor: '#111b21',
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  callWindow.setMenu(null); // Remove toolbar/menubar completely
+
+  callWindows.add(callWindow);
+
+  // Load the React renderer index.html with query parameters to render the Call UI
+  const rendererUrl = process.env.VITE_DEV_SERVER_URL
+    ? `${process.env.VITE_DEV_SERVER_URL}?page=call&accountName=${encodeURIComponent(account.name)}&accountId=${account.id}`
+    : `file://${path.join(__dirname, '../renderer/index.html')}?page=call&accountName=${encodeURIComponent(account.name)}&accountId=${account.id}`;
+
+  callWindow.loadURL(rendererUrl);
+
+  // Create the WebContentsView to render the actual WhatsApp Calling UI
+  const view = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.cjs'),
+      partition: account.partition,
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false, // Don't throttle calls!
+      sandbox: true,
+      webSecurity: true,
+    },
+  });
+
+  view.webContents.setUserAgent(DEFAULT_USER_AGENT);
+  view.webContents.loadURL(url);
+
+  // Add the WebContentsView to the Call window
+  callWindow.contentView.addChildView(view);
+
+  // Position it below the 28px titlebar
+  const updateBounds = () => {
+    if (callWindow.isDestroyed()) return;
+    const [w, h] = callWindow.getContentSize();
+    view.setBounds({
+      x: 0,
+      y: 28,
+      width: w,
+      height: Math.max(0, h - 28),
+    });
+  };
+
+  callWindow.on('resize', updateBounds);
+  updateBounds();
+
+  // Show window when the renderer is ready
+  callWindow.once('ready-to-show', () => {
+    callWindow.show();
+  });
+
+  // Handle window close
+  callWindow.on('closed', () => {
+    callWindows.delete(callWindow);
+  });
+
+  // Handle WhatsApp call page closure (e.g., when the call is ended from inside the app)
+  view.webContents.on('destroyed', () => {
+    if (!callWindow.isDestroyed()) {
+      callWindow.close();
+    }
+  });
+
+  registerZoomShortcuts(view.webContents);
 }
 
 let resizeTimeout: NodeJS.Timeout | null = null;
@@ -783,27 +894,63 @@ async function removeAccountLogic(id: string): Promise<boolean> {
 }
 
 // Register IPC handlers
-ipcMain.on('window:minimize', () => {
+ipcMain.on('window:minimize', (event) => {
   console.log('IPC Received: window:minimize');
-  mainWindow?.minimize();
-});
-ipcMain.on('window:maximize', () => {
-  console.log('IPC Received: window:maximize');
-  if (mainWindow?.isMaximized()) {
-    mainWindow.unmaximize();
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    win.minimize();
   } else {
-    mainWindow?.maximize();
+    mainWindow?.minimize();
   }
 });
-ipcMain.on('window:close', () => {
+ipcMain.on('window:maximize', (event) => {
+  console.log('IPC Received: window:maximize');
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    if (win.isMaximized()) {
+      win.unmaximize();
+    } else {
+      win.maximize();
+    }
+  } else {
+    if (mainWindow?.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow?.maximize();
+    }
+  }
+});
+ipcMain.on('window:close', (event) => {
   console.log('IPC Received: window:close');
-  if (mainWindow) {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    if (win === mainWindow) {
+      mainWindow.hide();
+    } else {
+      win.close();
+    }
+  } else if (mainWindow) {
     mainWindow.hide();
   }
 });
-ipcMain.handle('window:isMaximized', () => {
+ipcMain.handle('window:isMaximized', (event) => {
   console.log('IPC Handle: window:isMaximized');
-  return mainWindow?.isMaximized() ?? false;
+  const win = BrowserWindow.fromWebContents(event.sender);
+  return win?.isMaximized() ?? false;
+});
+ipcMain.on('window:toggle-always-on-top', (event) => {
+  console.log('IPC Received: window:toggle-always-on-top');
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    const isAlwaysOnTop = !win.isAlwaysOnTop();
+    win.setAlwaysOnTop(isAlwaysOnTop, 'screen-saver');
+    event.sender.send('window:always-on-top-changed', isAlwaysOnTop);
+  }
+});
+ipcMain.handle('window:get-always-on-top', (event) => {
+  console.log('IPC Handle: window:get-always-on-top');
+  const win = BrowserWindow.fromWebContents(event.sender);
+  return win?.isAlwaysOnTop() ?? false;
 });
 
 let settingsOpen = false;
@@ -1437,16 +1584,64 @@ ipcMain.handle('account:clear-storage', async (_event, accountId: string, type: 
       });
       console.log(`Cache cleared successfully for account: ${accountId}`);
     } else if (type === 'media') {
+      // Clear filesystem and websql (which don't store authentication)
       await accountSession.clearStorageData({
-        storages: ['indexdb', 'filesystem', 'websql'],
+        storages: ['filesystem', 'websql'],
       });
-      console.log(`Media data cleared successfully for account: ${accountId}`);
+      console.log(`Filesystem and WebSQL cleared for account: ${accountId}`);
+
+      // Get or temporarily create the view to execute the IndexedDB deletion
+      let view = accountViews.get(accountId);
+      if (!view) {
+        const acc = accounts.find((a) => a.id === accountId);
+        if (acc) {
+          view = await createAccountView(acc);
+          accountViews.set(accountId, view);
+        }
+      }
+
+      if (view) {
+        const runClear = async () => {
+          const clearScript = `
+            (async () => {
+              try {
+                if (!window.indexedDB || !window.indexedDB.databases) return false;
+                const dbs = await window.indexedDB.databases();
+                const keptDbs = ['wawc', 'signal-storage'];
+                for (const db of dbs) {
+                  if (db.name && !keptDbs.includes(db.name)) {
+                    window.indexedDB.deleteDatabase(db.name);
+                  }
+                }
+                return true;
+              } catch (err) {
+                return false;
+              }
+            })()
+          `;
+          try {
+            await view.webContents.executeJavaScript(clearScript);
+          } catch (err) {
+            console.error('Failed to run selective IndexedDB clear:', err);
+          }
+          view.webContents.reload();
+        };
+
+        if (view.webContents.isLoading()) {
+          view.webContents.once('dom-ready', runClear);
+        } else {
+          await runClear();
+        }
+      }
+      console.log(`Selective IndexedDB clear initiated for account: ${accountId}`);
     }
 
-    // Reload the view if it exists to refresh database connections
-    const view = accountViews.get(accountId);
-    if (view) {
-      view.webContents.reload();
+    // Reload the view if it exists to refresh database connections (only for non-media types, since media reloads itself after script runs)
+    if (type !== 'media') {
+      const view = accountViews.get(accountId);
+      if (view) {
+        view.webContents.reload();
+      }
     }
     return true;
   } catch (error) {

@@ -37,6 +37,9 @@ export interface ElectronAPI {
   maximizeWindow: () => void;
   closeWindow: () => void;
   isMaximized: () => Promise<boolean>;
+  toggleAlwaysOnTop: () => void;
+  getAlwaysOnTop: () => Promise<boolean>;
+  onAlwaysOnTopChanged: (callback: (isAlwaysOnTop: boolean) => void) => () => void;
 
   // Account controls
   getAccounts: () => Promise<AccountInfo[]>;
@@ -103,6 +106,8 @@ const api: ElectronAPI = {
   maximizeWindow: () => ipcRenderer.send('window:maximize'),
   closeWindow: () => ipcRenderer.send('window:close'),
   isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+  toggleAlwaysOnTop: () => ipcRenderer.send('window:toggle-always-on-top'),
+  getAlwaysOnTop: () => ipcRenderer.invoke('window:get-always-on-top'),
 
   getAccounts: () => ipcRenderer.invoke('account:get-all'),
   getActiveAccountId: () => ipcRenderer.invoke('account:get-active-id'),
@@ -205,6 +210,12 @@ const api: ElectronAPI = {
     ) => callback(data);
     ipcRenderer.on('download:progress', subscription);
     return () => ipcRenderer.removeListener('download:progress', subscription);
+  },
+
+  onAlwaysOnTopChanged: (callback) => {
+    const subscription = (_event: unknown, isAlwaysOnTop: boolean) => callback(isAlwaysOnTop);
+    ipcRenderer.on('window:always-on-top-changed', subscription);
+    return () => ipcRenderer.removeListener('window:always-on-top-changed', subscription);
   },
 };
 

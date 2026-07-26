@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Titlebar } from './components/Titlebar';
 import { SettingsModal } from './components/SettingsModal';
+import { CallWindow } from './components/CallWindow';
 import { Download, CheckCircle, XCircle, X } from 'lucide-react';
 
 import type { AccountInfo } from '../preload';
@@ -15,6 +16,13 @@ interface DownloadState {
 }
 
 export const App: React.FC = () => {
+  const params = new URLSearchParams(window.location.search);
+  const page = params.get('page');
+
+  if (page === 'call') {
+    return <CallWindow />;
+  }
+
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [downloads, setDownloads] = useState<DownloadState[]>([]);
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
