@@ -19,6 +19,8 @@ export interface AccountInfo {
     cameraEnabled: boolean;
     micEnabled: boolean;
     notificationsEnabled: boolean;
+    geolocationEnabled?: boolean;
+    clipboardReadEnabled?: boolean;
     customCss?: string;
     selectedTheme?: string;
   };
@@ -27,7 +29,7 @@ export interface AccountInfo {
 export interface GlobalSettings {
   closeToTray: boolean;
   hardwareAcceleration: boolean;
-  loadAllOnLaunch: boolean;
+  preloadAccountIds?: string[];
   showDevToolsToggle?: boolean;
   notificationLoggingEnabled?: boolean;
 }

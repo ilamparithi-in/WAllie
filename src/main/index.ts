@@ -66,6 +66,8 @@ interface Account {
     cameraEnabled: boolean;
     micEnabled: boolean;
     notificationsEnabled: boolean;
+    geolocationEnabled?: boolean;
+    clipboardReadEnabled?: boolean;
     customCss?: string;
     selectedTheme?: string;
   };
@@ -74,7 +76,7 @@ interface Account {
 interface GlobalSettings {
   closeToTray: boolean;
   hardwareAcceleration: boolean;
-  loadAllOnLaunch: boolean;
+  preloadAccountIds?: string[];
   showDevToolsToggle?: boolean;
   notificationLoggingEnabled?: boolean;
 }
@@ -92,10 +94,29 @@ function loadSettings(): GlobalSettings {
     if (fs.existsSync(SETTINGS_FILE)) {
       const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
       const parsed = JSON.parse(data);
+      let preloadAccountIds = parsed.preloadAccountIds;
+      if (!Array.isArray(preloadAccountIds)) {
+        if (parsed.loadAllOnLaunch) {
+          try {
+            if (fs.existsSync(ACCOUNTS_FILE)) {
+              const accountsData = fs.readFileSync(ACCOUNTS_FILE, 'utf8');
+              const accs = JSON.parse(accountsData);
+              if (Array.isArray(accs)) {
+                preloadAccountIds = accs.map((a: any) => a.id);
+              }
+            }
+          } catch (e) {
+            console.error('Failed to load accounts for settings migration:', e);
+          }
+        }
+        if (!Array.isArray(preloadAccountIds)) {
+          preloadAccountIds = [];
+        }
+      }
       return {
         closeToTray: parsed.closeToTray !== false,
         hardwareAcceleration: parsed.hardwareAcceleration !== false,
-        loadAllOnLaunch: !!parsed.loadAllOnLaunch,
+        preloadAccountIds,
         showDevToolsToggle: !!parsed.showDevToolsToggle,
         notificationLoggingEnabled: !!parsed.notificationLoggingEnabled,
       };
@@ -106,7 +127,7 @@ function loadSettings(): GlobalSettings {
   return {
     closeToTray: true,
     hardwareAcceleration: true,
-    loadAllOnLaunch: false,
+    preloadAccountIds: [],
     showDevToolsToggle: false,
     notificationLoggingEnabled: false,
   };
@@ -144,6 +165,8 @@ function loadAccounts(): Account[] {
             cameraEnabled: acc.settings?.cameraEnabled !== false,
             micEnabled: acc.settings?.micEnabled !== false,
             notificationsEnabled: acc.settings?.notificationsEnabled !== false,
+            geolocationEnabled: acc.settings?.geolocationEnabled === true,
+            clipboardReadEnabled: acc.settings?.clipboardReadEnabled === true,
             customCss: acc.settings?.customCss || '',
             selectedTheme: acc.settings?.selectedTheme || 'none',
           },
@@ -167,6 +190,8 @@ function loadAccounts(): Account[] {
         cameraEnabled: true,
         micEnabled: true,
         notificationsEnabled: true,
+        geolocationEnabled: false,
+        clipboardReadEnabled: false,
         customCss: '',
         selectedTheme: 'none',
       },
@@ -187,6 +212,8 @@ function saveAccounts() {
         cameraEnabled: true,
         micEnabled: true,
         notificationsEnabled: true,
+        geolocationEnabled: false,
+        clipboardReadEnabled: false,
         customCss: '',
         selectedTheme: 'none',
       },
@@ -241,13 +268,19 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
   if (!configuredSessions.has(account.partition)) {
     configuredSessions.add(account.partition);
 
-    // Permission Request Handler (Camera, Mic, Notifications)
+    // Permission Request Handler (Camera, Mic, Notifications, Geolocation, Clipboard-Read)
     accountSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
       const url = details.requestingUrl;
       const isWA = url.includes('whatsapp.com') || url.includes('whatsapp.net');
       if (isWA) {
         const targetAccount = accounts.find((a) => a.partition === account.partition);
-        const settings = targetAccount?.settings || { cameraEnabled: true, micEnabled: true, notificationsEnabled: true };
+        const settings = targetAccount?.settings || {
+          cameraEnabled: true,
+          micEnabled: true,
+          notificationsEnabled: true,
+          geolocationEnabled: false,
+          clipboardReadEnabled: false
+        };
 
         if (permission === 'notifications') {
           callback(settings.notificationsEnabled);
@@ -265,7 +298,19 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
           callback(granted);
           return;
         }
-        callback(true); // Auto-allow background-sync and other internal features for WhatsApp
+        if (permission === 'geolocation') {
+          callback(!!settings.geolocationEnabled);
+          return;
+        }
+        if (permission === 'clipboard-read') {
+          callback(!!settings.clipboardReadEnabled);
+          return;
+        }
+        if ((permission as string) === 'background-sync' || permission === 'fullscreen') {
+          callback(true); // Allow standard background-sync and fullscreen features for WhatsApp
+          return;
+        }
+        callback(false); // Deny other permissions by default for security
         return;
       }
       callback(false);
@@ -276,7 +321,13 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
       const isWA = requestingOrigin.includes('whatsapp.com') || requestingOrigin.includes('whatsapp.net');
       if (isWA) {
         const targetAccount = accounts.find((a) => a.partition === account.partition);
-        const settings = targetAccount?.settings || { cameraEnabled: true, micEnabled: true, notificationsEnabled: true };
+        const settings = targetAccount?.settings || {
+          cameraEnabled: true,
+          micEnabled: true,
+          notificationsEnabled: true,
+          geolocationEnabled: false,
+          clipboardReadEnabled: false
+        };
 
         if (permission === 'notifications') {
           return settings.notificationsEnabled;
@@ -287,7 +338,16 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
           if (mediaType === 'audio') return settings.micEnabled;
           return settings.cameraEnabled || settings.micEnabled;
         }
-        return true; // Auto-allow other standard queries (like background sync)
+        if (permission === 'geolocation') {
+          return !!settings.geolocationEnabled;
+        }
+        if (permission === 'clipboard-read') {
+          return !!settings.clipboardReadEnabled;
+        }
+        if ((permission as string) === 'background-sync' || permission === 'fullscreen') {
+          return true; // Auto-allow other standard queries (like background sync / fullscreen)
+        }
+        return false;
       }
       return false;
     });
@@ -620,6 +680,21 @@ let resizeTimeout: NodeJS.Timeout | null = null;
 function updateActiveViewBounds() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
+  // 1. Immediately update bounds synchronously for a live, lag-free resize experience
+  const [width, height] = mainWindow.getContentSize();
+  const activeView = accountViews.get(activeAccountId);
+
+  if (activeView) {
+    const viewWidth = settingsOpen ? Math.max(0, width - DRAWER_WIDTH) : width;
+    activeView.setBounds({
+      x: 0,
+      y: TITLEBAR_HEIGHT,
+      width: Math.max(0, viewWidth),
+      height: Math.max(0, height - TITLEBAR_HEIGHT),
+    });
+  }
+
+  // 2. Retain debounced update as a trailing fallback to ensure final layout settle
   if (resizeTimeout) {
     clearTimeout(resizeTimeout);
   }
@@ -627,16 +702,16 @@ function updateActiveViewBounds() {
   resizeTimeout = setTimeout(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
 
-    const [width, height] = mainWindow.getContentSize();
-    const activeView = accountViews.get(activeAccountId);
+    const [w, h] = mainWindow.getContentSize();
+    const aView = accountViews.get(activeAccountId);
 
-    if (activeView) {
-      const viewWidth = settingsOpen ? Math.max(0, width - DRAWER_WIDTH) : width;
-      activeView.setBounds({
+    if (aView) {
+      const vWidth = settingsOpen ? Math.max(0, w - DRAWER_WIDTH) : w;
+      aView.setBounds({
         x: 0,
         y: TITLEBAR_HEIGHT,
-        width: Math.max(0, viewWidth),
-        height: Math.max(0, height - TITLEBAR_HEIGHT),
+        width: Math.max(0, vWidth),
+        height: Math.max(0, h - TITLEBAR_HEIGHT),
       });
     }
     resizeTimeout = null;
@@ -715,10 +790,11 @@ function createMainWindow() {
     await switchActiveAccount(activeAccountId);
 
     // Preload remaining accounts in the background if configured
-    if (globalSettings.loadAllOnLaunch) {
-      console.log('Preloading all accounts in the background...');
+    const preloadIds = globalSettings.preloadAccountIds || [];
+    if (preloadIds.length > 0) {
+      console.log('Preloading configured accounts in the background...', preloadIds);
       for (const account of accounts) {
-        if (account.id !== activeAccountId && !accountViews.has(account.id)) {
+        if (account.id !== activeAccountId && !accountViews.has(account.id) && preloadIds.includes(account.id)) {
           createAccountView(account).then((view) => {
             accountViews.set(account.id, view);
             console.log(`Preloaded account: ${account.name} (${account.id})`);
@@ -1735,13 +1811,19 @@ function toggleDevToolsForAccount(accountId: string) {
   let resizeTimeout: NodeJS.Timeout | null = null;
   const updateBounds = () => {
     if (devtoolsWindow.isDestroyed()) return;
+
+    // 1. Immediately update bounds synchronously
+    const [width, height] = devtoolsWindow.getContentSize();
+    devtoolsView.setBounds({ x: 0, y: 28, width, height: Math.max(0, height - 28) });
+
+    // 2. Retain debounced update as a trailing fallback to ensure final layout settle
     if (resizeTimeout) {
       clearTimeout(resizeTimeout);
     }
     resizeTimeout = setTimeout(() => {
       if (devtoolsWindow.isDestroyed()) return;
-      const [width, height] = devtoolsWindow.getContentSize();
-      devtoolsView.setBounds({ x: 0, y: 28, width, height: Math.max(0, height - 28) });
+      const [w, h] = devtoolsWindow.getContentSize();
+      devtoolsView.setBounds({ x: 0, y: 28, width: w, height: Math.max(0, h - 28) });
       resizeTimeout = null;
     }, 50);
   };

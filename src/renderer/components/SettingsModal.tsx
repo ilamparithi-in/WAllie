@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft } from 'lucide-react';
+import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users } from 'lucide-react';
 import type { AccountInfo, GlobalSettings } from '../../preload';
 
 interface SettingsModalProps {
@@ -7,7 +7,7 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
-type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general';
+type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const [activePage, setActivePage] = useState<PageType>('main');
@@ -37,7 +37,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
 
-  const handleToggleGlobalSetting = async (key: keyof GlobalSettings, value: boolean) => {
+  const handleToggleGlobalSetting = async (key: keyof GlobalSettings, value: any) => {
     if (!globalSettings) return;
     const updated = { ...globalSettings, [key]: value };
     setStorageSizes(null); // Force recalculation if anything changes
@@ -50,7 +50,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   };
 
   const handleToggleAccountPermission = async (
-    permission: 'cameraEnabled' | 'micEnabled' | 'notificationsEnabled',
+    permission: 'cameraEnabled' | 'micEnabled' | 'notificationsEnabled' | 'geolocationEnabled' | 'clipboardReadEnabled',
     value: boolean
   ) => {
     if (!selectedAccountId) return;
@@ -61,6 +61,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       cameraEnabled: true,
       micEnabled: true,
       notificationsEnabled: true,
+      geolocationEnabled: false,
+      clipboardReadEnabled: false,
     };
 
     const updatedSettings = {
@@ -294,6 +296,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <ArrowLeft className="w-4 h-4" />
               <span className="text-[#e9edef] font-semibold text-xs">
                 {activePage === 'general' && 'General Settings'}
+                {activePage === 'preload' && 'Accounts to load on launch'}
+                {activePage === 'permissions' && 'Browser permissions'}
                 {activePage === 'extensions' && 'Chrome Extensions'}
                 {activePage === 'css' && 'Custom CSS & Themes'}
                 {activePage === 'storage' && 'Storage & Cache'}
@@ -322,7 +326,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 </div>
                 <div className="flex-grow min-w-0">
                   <div className="font-semibold text-[#e9edef] text-[12px]">General Settings</div>
-                  <div className="text-[10px] text-[#8696a0] mt-0.5">Tray settings, preloading, and permissions</div>
+                  <div className="text-[10px] text-[#8696a0] mt-0.5">Tray settings and GPU hardware acceleration</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActivePage('preload')}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
+                  <Users className="w-4 h-4" />
+                </div>
+                <div className="flex-grow min-w-0">
+                  <div className="font-semibold text-[#e9edef] text-[12px]">Accounts to load on launch</div>
+                  <div className="text-[10px] text-[#8696a0] mt-0.5">Select which accounts get preloaded in the background</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActivePage('permissions')}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
+                  <Shield className="w-4 h-4" />
+                </div>
+                <div className="flex-grow min-w-0">
+                  <div className="font-semibold text-[#e9edef] text-[12px]">Browser permissions</div>
+                  <div className="text-[10px] text-[#8696a0] mt-0.5">Manage camera, mic, notifications, geolocation, and clipboard access</div>
                 </div>
               </button>
 
@@ -421,21 +451,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
                     <label className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
                       <div>
-                        <div className="font-medium text-[#e9edef]">Load All Accounts on Launch</div>
-                        <div className="text-[11px] text-[#8696a0]">
-                          Preload all account views in parallel on startup for instant notifications
-                        </div>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={globalSettings?.loadAllOnLaunch ?? false}
-                        onChange={(e) => handleToggleGlobalSetting('loadAllOnLaunch', e.target.checked)}
-                        className="accent-[#00a884]"
-                      />
-                    </label>
-
-                    <label className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-                      <div>
                         <div className="font-medium text-[#e9edef]">Show Developer Tools Toggle</div>
                         <div className="text-[11px] text-[#8696a0]">
                           Show a code icon in the titlebar to toggle developer tools for WhatsApp Web
@@ -466,14 +481,77 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   </div>
                 </div>
 
-                {/* Per-Account Permissions Settings */}
+
+              </div>
+            )}
+
+            {activePage === 'preload' && (
+              <div className="space-y-5">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-[#00a884]" />
+                    <span>Accounts to load on launch</span>
+                  </h3>
+                  <p className="text-[11px] text-[#8696a0] mt-2 mb-4 leading-relaxed">
+                    Select which WhatsApp accounts should preload in the background when the application starts.
+                    Preloading allows you to receive instant notifications without opening each account manually.
+                  </p>
+
+                  {accounts.length === 0 ? (
+                    <div className="text-center py-6 text-[#8696a0] bg-[#182229] border border-[#222d34] rounded-lg">
+                      No accounts added yet.
+                    </div>
+                  ) : (
+                    <div className="bg-[#182229] border border-[#222d34] rounded-lg divide-y divide-[#222d34]/60">
+                      {accounts.map((acc) => {
+                        const isPreloaded = globalSettings?.preloadAccountIds?.includes(acc.id) ?? false;
+                        return (
+                          <label
+                            key={acc.id}
+                            className="flex items-center justify-between cursor-pointer p-3 hover:bg-[#202c33]/50 transition-colors"
+                          >
+                            <div className="flex flex-col min-w-0 pr-4">
+                              <span className="font-medium text-[#e9edef] text-[12px] truncate">
+                                {acc.name}
+                              </span>
+                              <span className="text-[10px] text-[#8696a0] truncate mt-0.5">
+                                {acc.id}
+                              </span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={isPreloaded}
+                              onChange={(e) => {
+                                if (!globalSettings) return;
+                                const currentIds = globalSettings.preloadAccountIds || [];
+                                const updatedIds = e.target.checked
+                                  ? [...currentIds, acc.id]
+                                  : currentIds.filter((id) => id !== acc.id);
+                                handleToggleGlobalSetting('preloadAccountIds', updatedIds);
+                              }}
+                              className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activePage === 'permissions' && (
+              <div className="space-y-5">
                 <div>
                   <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
                     <Shield className="w-4 h-4 text-[#00a884]" />
-                    <span>Account Permissions</span>
+                    <span>Browser permissions</span>
                   </h3>
-                  
-                  <div className="mt-3 p-3 bg-[#182229] border border-[#222d34] rounded-lg space-y-3">
+                  <p className="text-[11px] text-[#8696a0] mt-2 mb-4 leading-relaxed">
+                    Configure web feature permissions for each account. Disabling unused permissions prevents scripts from accessing sensitive resources.
+                  </p>
+
+                  <div className="p-3 bg-[#182229] border border-[#222d34] rounded-lg space-y-4">
                     <div className="flex items-center justify-between pb-2 border-b border-[#222d34]/60">
                       <span className="font-semibold text-xs text-[#e9edef]">Select Target Account:</span>
                       <select
@@ -490,48 +568,74 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     </div>
 
                     {selectedAccount && (
-                      <div className="space-y-2 pt-1 text-[11px]">
-                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40">
+                      <div className="space-y-3 pt-1">
+                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
                           <div>
-                            <div className="font-medium text-[#e9edef]">Push Notifications</div>
-                            <div className="text-[10px] text-[#8696a0]">Allow WhatsApp to show desktop notifications</div>
+                            <div className="font-medium text-[#e9edef] text-[11px]">Push Notifications</div>
+                            <div className="text-[10px] text-[#8696a0] mt-0.5">Allow WhatsApp to show desktop notifications</div>
                           </div>
                           <input
                             type="checkbox"
                             checked={selectedAccount.settings?.notificationsEnabled ?? true}
                             onChange={(e) => handleToggleAccountPermission('notificationsEnabled', e.target.checked)}
-                            className="accent-[#00a884]"
+                            className="accent-[#00a884] w-4 h-4 cursor-pointer"
                           />
                         </label>
 
-                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40">
+                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
                           <div>
-                            <div className="font-medium text-[#e9edef]">Camera Access</div>
-                            <div className="text-[10px] text-[#8696a0]">Allow video capture for video calls</div>
+                            <div className="font-medium text-[#e9edef] text-[11px]">Camera Access</div>
+                            <div className="text-[10px] text-[#8696a0] mt-0.5">Allow video capture for video calls</div>
                           </div>
                           <input
                             type="checkbox"
                             checked={selectedAccount.settings?.cameraEnabled ?? true}
                             onChange={(e) => handleToggleAccountPermission('cameraEnabled', e.target.checked)}
-                            className="accent-[#00a884]"
+                            className="accent-[#00a884] w-4 h-4 cursor-pointer"
                           />
                         </label>
 
-                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40">
+                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
                           <div>
-                            <div className="font-medium text-[#e9edef]">Microphone Access</div>
-                            <div className="text-[10px] text-[#8696a0]">Allow audio capture for voice calls</div>
+                            <div className="font-medium text-[#e9edef] text-[11px]">Microphone Access</div>
+                            <div className="text-[10px] text-[#8696a0] mt-0.5">Allow audio capture for voice calls</div>
                           </div>
                           <input
                             type="checkbox"
                             checked={selectedAccount.settings?.micEnabled ?? true}
                             onChange={(e) => handleToggleAccountPermission('micEnabled', e.target.checked)}
-                            className="accent-[#00a884]"
+                            className="accent-[#00a884] w-4 h-4 cursor-pointer"
                           />
                         </label>
 
-                        <div className="text-[10px] text-[#8696a0] italic text-center pt-2">
-                          * Toggling account permissions reloads the account webview to apply changes.
+                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+                          <div>
+                            <div className="font-medium text-[#e9edef] text-[11px]">Geolocation Access</div>
+                            <div className="text-[10px] text-[#8696a0] mt-0.5">Allow sharing current location inside chats</div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={selectedAccount.settings?.geolocationEnabled ?? false}
+                            onChange={(e) => handleToggleAccountPermission('geolocationEnabled', e.target.checked)}
+                            className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                          />
+                        </label>
+
+                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+                          <div>
+                            <div className="font-medium text-[#e9edef] text-[11px]">Clipboard Access (Read)</div>
+                            <div className="text-[10px] text-[#8696a0] mt-0.5">Allow pages to read text and files from your system clipboard</div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={selectedAccount.settings?.clipboardReadEnabled ?? false}
+                            onChange={(e) => handleToggleAccountPermission('clipboardReadEnabled', e.target.checked)}
+                            className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                          />
+                        </label>
+
+                        <div className="text-[10px] text-[#8696a0] italic text-center pt-2 border-t border-[#222d34]/60">
+                          * Toggling browser permissions reloads the account webview to apply changes.
                         </div>
                       </div>
                     )}
