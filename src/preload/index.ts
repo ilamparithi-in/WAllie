@@ -1,9 +1,20 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+export interface ExtensionInfo {
+  id: string;
+  name: string;
+  version: string;
+  path: string;
+  enabled: boolean;
+}
+
 export interface AccountInfo {
   id: string;
   name: string;
   unreadCount: number;
+  partition: string;
+  loggedIn?: boolean;
+  extensions?: ExtensionInfo[];
 }
 
 export interface ElectronAPI {
@@ -19,6 +30,14 @@ export interface ElectronAPI {
   switchAccount: (id: string) => void;
   addAccount: (name?: string) => Promise<AccountInfo>;
   removeAccount: (id: string) => Promise<boolean>;
+  renameAccount: (id: string, name: string) => Promise<boolean>;
+  reloadActiveAccount: () => void;
+  showAccountContextMenu: (accountId: string) => void;
+
+  // Extension controls
+  importExtension: (accountId: string, importType: 'folder' | 'archive') => Promise<ExtensionInfo | null>;
+  toggleExtension: (accountId: string, extensionId: string, enabled: boolean) => Promise<boolean>;
+  removeExtension: (accountId: string, extensionId: string) => Promise<boolean>;
 
   // Settings & View toggle
   toggleSettings: (isOpen: boolean) => void;
@@ -29,6 +48,7 @@ export interface ElectronAPI {
   onUnreadCountChanged: (callback: (accountId: string, count: number) => void) => () => void;
   onMaximizedStateChanged: (callback: (isMaximized: boolean) => void) => () => void;
   onZoomChanged: (callback: (zoomPercent: number) => void) => () => void;
+  onTriggerRename: (callback: (accountId: string) => void) => () => void;
 }
 
 const api: ElectronAPI = {
@@ -42,6 +62,16 @@ const api: ElectronAPI = {
   switchAccount: (id: string) => ipcRenderer.send('account:switch', id),
   addAccount: (name?: string) => ipcRenderer.invoke('account:add', name),
   removeAccount: (id: string) => ipcRenderer.invoke('account:remove', id),
+  renameAccount: (id: string, name: string) => ipcRenderer.invoke('account:rename', id, name),
+  reloadActiveAccount: () => ipcRenderer.send('account:reload-active'),
+  showAccountContextMenu: (accountId: string) => ipcRenderer.send('account:context-menu', accountId),
+
+  importExtension: (accountId: string, importType: 'folder' | 'archive') =>
+    ipcRenderer.invoke('extension:import', accountId, importType),
+  toggleExtension: (accountId: string, extensionId: string, enabled: boolean) =>
+    ipcRenderer.invoke('extension:toggle', accountId, extensionId, enabled),
+  removeExtension: (accountId: string, extensionId: string) =>
+    ipcRenderer.invoke('extension:remove', accountId, extensionId),
 
   toggleSettings: (isOpen: boolean) => ipcRenderer.send('settings:toggle', isOpen),
   resetZoom: () => ipcRenderer.send('zoom:reset'),
@@ -69,6 +99,13 @@ const api: ElectronAPI = {
     ipcRenderer.on('zoom:changed', subscription);
     return () => ipcRenderer.removeListener('zoom:changed', subscription);
   },
+
+  onTriggerRename: (callback) => {
+    const subscription = (_event: unknown, accountId: string) => callback(accountId);
+    ipcRenderer.on('account:trigger-rename', subscription);
+    return () => ipcRenderer.removeListener('account:trigger-rename', subscription);
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);
+export {};

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Minus, Square, Copy, X, Settings, Plus, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Minus, Square, Copy, X, Settings, Plus, MessageSquare, RotateCw } from 'lucide-react';
 import type { AccountInfo } from '../../preload';
 
 interface TitlebarProps {
@@ -13,11 +13,18 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
   const [zoomPercent, setZoomPercent] = useState<number>(100);
   const [showFlash, setShowFlash] = useState<boolean>(false);
 
+  // Renaming state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState<string>('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (!window.electronAPI) return;
 
     // Fetch initial accounts & window state
-    window.electronAPI.getAccounts().then(setAccounts);
+    window.electronAPI.getAccounts().then((accs) => {
+      setAccounts(accs);
+    });
     window.electronAPI.getActiveAccountId().then(setActiveId);
     window.electronAPI.isMaximized().then(setIsMaximized);
 
@@ -47,20 +54,47 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
       }, 800);
     });
 
+    // Listen for context-menu triggered renaming events from the main process
+    const unsubscribeTriggerRename = window.electronAPI.onTriggerRename((id) => {
+      const acc = accounts.find((a) => a.id === id);
+      if (acc) {
+        setEditingId(acc.id);
+        setEditName(acc.name);
+      } else {
+        // Fallback check if state accounts array hasn't updated yet
+        window.electronAPI.getAccounts().then((accs) => {
+          const matched = accs.find((a) => a.id === id);
+          if (matched) {
+            setEditingId(matched.id);
+            setEditName(matched.name);
+          }
+        });
+      }
+    });
+
     return () => {
       unsubscribeAccount();
       unsubscribeUnread();
       unsubscribeMaximized();
       unsubscribeZoom();
+      unsubscribeTriggerRename();
       if (flashTimeout) clearTimeout(flashTimeout);
     };
-  }, []);
+  }, [accounts]);
+
+  useEffect(() => {
+    if (editingId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingId]);
 
   const handleMinimize = () => window.electronAPI?.minimizeWindow();
   const handleMaximize = () => window.electronAPI?.maximizeWindow();
   const handleClose = () => window.electronAPI?.closeWindow();
 
   const handleSwitchTab = (id: string) => {
+    if (editingId) return; // Prevent switching when editing tab name
     setActiveId(id);
     window.electronAPI?.switchAccount(id);
   };
@@ -70,6 +104,34 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
     if (newAcc) {
       handleSwitchTab(newAcc.id);
     }
+  };
+
+  const handleStartEdit = (account: AccountInfo, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingId(account.id);
+    setEditName(account.name);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    const trimmed = editName.trim();
+    if (trimmed && trimmed !== accounts.find((a) => a.id === editingId)?.name) {
+      await window.electronAPI.renameAccount(editingId, trimmed);
+    }
+    setEditingId(null);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      setEditingId(null);
+    }
+  };
+
+  const handleContextMenu = (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    window.electronAPI?.showAccountContextMenu(id);
   };
 
   return (
@@ -88,24 +150,44 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
         <div className="flex items-center h-full gap-0.5 overflow-x-auto no-scrollbar">
           {accounts.map((account) => {
             const isActive = account.id === activeId;
+            const isEditing = account.id === editingId;
+
             return (
-              <button
+              <div
                 key={account.id}
                 onClick={() => handleSwitchTab(account.id)}
+                onDoubleClick={(e) => handleStartEdit(account, e)}
+                onContextMenu={(e) => handleContextMenu(account.id, e)}
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                className={`group flex items-center gap-1.5 px-2.5 h-[22px] rounded-t text-[11px] font-medium transition-colors ${
+                className={`group flex items-center gap-1.5 px-2.5 h-[22px] rounded-t text-[11px] font-medium transition-colors cursor-pointer relative ${
                   isActive
                     ? 'bg-[#202c33] text-[#e9edef] border-t-2 border-[#00a884]'
                     : 'text-[#8696a0] hover:bg-[#182229] hover:text-[#d1d7db]'
                 }`}
+                title="Double click to rename, Right-click for options"
               >
-                <span className="truncate max-w-[100px]">{account.name}</span>
-                {account.unreadCount > 0 && (
+                {isEditing ? (
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onBlur={handleSaveEdit}
+                    className="bg-[#111b21] text-[#e9edef] px-1 rounded border border-[#00a884] text-[10px] w-[80px] h-[16px] outline-none"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="truncate max-w-[100px]">{account.name}</span>
+                )}
+
+                {/* Unread badge */}
+                {!isEditing && account.unreadCount > 0 && (
                   <span className="bg-[#00a884] text-[#111b21] font-bold text-[9px] px-1 rounded-full min-w-[14px] text-center leading-[13px]">
                     {account.unreadCount > 99 ? '99+' : account.unreadCount}
                   </span>
                 )}
-              </button>
+              </div>
             );
           })}
 
@@ -147,6 +229,16 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
             {zoomPercent}%
           </button>
         )}
+
+        {/* Refresh Button */}
+        <button
+          onClick={() => window.electronAPI?.reloadActiveAccount()}
+          title="Refresh WhatsApp Web"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
+        >
+          <RotateCw className="w-3.5 h-3.5" />
+        </button>
 
         {/* Settings Button */}
         <button
