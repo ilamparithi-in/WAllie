@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 export interface ExtensionInfo {
   id: string;
@@ -29,6 +29,7 @@ export interface GlobalSettings {
   hardwareAcceleration: boolean;
   loadAllOnLaunch: boolean;
   showDevToolsToggle?: boolean;
+  notificationLoggingEnabled?: boolean;
 }
 
 export interface ElectronAPI {
@@ -237,84 +238,238 @@ async function resolveIconToBase64(url: string): Promise<string | null> {
   }
 }
 
+let onClickCallback: ((tag: string) => void) | null = null;
+
 function setupWhatsAppIntegration() {
   // Light dismiss on webview click
   window.addEventListener('click', () => {
     ipcRenderer.send('webview:clicked');
   });
 
-  // Notification Interception
-  const OriginalNotification = (window as any).Notification;
-  if (!OriginalNotification) return;
-
-  const activeNotificationCallbacks = new Map<string, () => void>();
-
-  ipcRenderer.on('notification:clicked-reply', (_event: any, tag: string) => {
-    const callback = activeNotificationCallbacks.get(tag);
-    if (callback) {
-      callback();
+  // Expose safe proxy methods to the Main World
+  contextBridge.exposeInMainWorld('__walinux_ipc', {
+    createNotification: (data: { title: string; body: string; icon: string; tag: string }) => {
+      resolveIconToBase64(data.icon).then((base64Icon) => {
+        ipcRenderer.send('notification:create', {
+          title: data.title,
+          body: data.body,
+          icon: base64Icon || '',
+          tag: data.tag,
+        });
+      });
+    },
+    closeNotification: (tag: string) => {
+      ipcRenderer.send('notification:close-request', tag);
+    },
+    onNotificationClicked: (callback: (tag: string) => void) => {
+      onClickCallback = callback;
+    },
+    createLogEntry: (data: { title: string; body: string }) => {
+      ipcRenderer.send('notification:create-log-entry', data);
     }
   });
 
-  class CustomNotification extends EventTarget {
-    public title: string;
-    public body: string;
-    public icon: string;
-    public tag: string;
+  ipcRenderer.on('notification:clicked-reply', (_event: any, tag: string) => {
+    if (onClickCallback) {
+      onClickCallback(tag);
+    }
+  });
 
-    public onclick: (() => void) | null = null;
-    public onclose: (() => void) | null = null;
-    public onerror: (() => void) | null = null;
-    public onshow: (() => void) | null = null;
+  // Inject the custom Notification class and the MutationObserver message tracker into the Main World (worldId 0)
+  webFrame.executeJavaScriptInIsolatedWorld(0, [{
+    code: `
+      (() => {
+        const OriginalNotification = window.Notification;
+        if (!OriginalNotification) return;
 
-    constructor(title: string, options: any = {}) {
-      super();
-      this.title = title;
-      this.body = options.body || '';
-      this.icon = options.icon || '';
-      this.tag = options.tag || `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const activeNotificationCallbacks = new Map();
 
-      if (this.tag) {
-        activeNotificationCallbacks.set(this.tag, () => {
-          if (this.onclick) this.onclick();
-          this.dispatchEvent(new Event('click'));
+        if (window.__walinux_ipc) {
+          window.__walinux_ipc.onNotificationClicked((tag) => {
+            const callback = activeNotificationCallbacks.get(tag);
+            if (callback) {
+              callback();
+            }
+          });
+        }
+
+        class CustomNotification extends EventTarget {
+          constructor(title, options = {}) {
+            super();
+            this.title = title;
+            this.body = options.body || '';
+            this.icon = options.icon || '';
+            this.tag = options.tag || 'notif_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+
+            if (this.tag) {
+              activeNotificationCallbacks.set(this.tag, () => {
+                if (this.onclick) this.onclick();
+                this.dispatchEvent(new Event('click'));
+              });
+            }
+
+            if (window.__walinux_ipc) {
+              window.__walinux_ipc.createNotification({
+                title: this.title,
+                body: this.body,
+                icon: this.icon,
+                tag: this.tag,
+              });
+            }
+
+            setTimeout(() => {
+              if (this.onshow) this.onshow();
+              this.dispatchEvent(new Event('show'));
+            }, 50);
+          }
+
+          close() {
+            if (window.__walinux_ipc) {
+              window.__walinux_ipc.closeNotification(this.tag);
+            }
+            activeNotificationCallbacks.delete(this.tag);
+            if (this.onclose) this.onclose();
+            this.dispatchEvent(new Event('close'));
+          }
+
+          static get permission() {
+            return OriginalNotification.permission;
+          }
+
+          static requestPermission(callback) {
+            return OriginalNotification.requestPermission(callback);
+          }
+        }
+
+        window.Notification = CustomNotification;
+
+        // MutationObserver based message deletion and edit tracker
+        const messageStore = new Map();
+        const deletionPhrases = [
+          'message was deleted',
+          'message deleted',
+          'mensaje fue eliminado',
+          'mensaje eliminado',
+          'mensagem foi apagada',
+          'mensagem apagada',
+          'message a été supprimé',
+          'nachricht wurde gelöscht',
+          'messaggio è stato eliminato',
+          'bericht is verwijderd',
+          'इस संदेश को हटा दिया गया था',
+          'इस संदेश को हटा दिया गया',
+          'تم حذف هذه الرسالة'
+        ];
+
+        function isDeletionText(t) {
+          const clean = t.toLowerCase();
+          return deletionPhrases.some(phrase => clean.includes(phrase));
+        }
+
+        function scanMessages() {
+          const msgElements = document.querySelectorAll('[data-id]');
+          
+          // Prevent memory leaks
+          if (messageStore.size > 2000) {
+            const keys = Array.from(messageStore.keys());
+            for (let i = 0; i < 500; i++) {
+              messageStore.delete(keys[i]);
+            }
+          }
+
+          for (const msgEl of msgElements) {
+            const id = msgEl.getAttribute('data-id');
+            if (!id) continue;
+
+            const textEl = msgEl.querySelector('.copyable-text');
+            let text = '';
+            let sender = '';
+
+            if (textEl) {
+              text = textEl.textContent || '';
+              const preText = textEl.getAttribute('data-pre-plain-text');
+              if (preText) {
+                const match = preText.match(/]\\s*([^:]+):/);
+                if (match) {
+                  sender = match[1].trim();
+                }
+              }
+            } else {
+              const selectable = msgEl.querySelector('.selectable-text');
+              if (selectable) {
+                text = selectable.textContent || '';
+              } else {
+                text = msgEl.textContent || '';
+              }
+            }
+
+            text = text.trim();
+            if (!text) continue;
+
+            // Extract sender name from DOM layout if data-pre-plain-text wasn't available
+            if (!sender) {
+              const container = msgEl.closest('.message-in, .message-out');
+              if (container) {
+                if (container.classList.contains('message-out')) {
+                  sender = 'You';
+                } else {
+                  const nameEl = container.querySelector('span[dir="auto"]');
+                  if (nameEl && nameEl.textContent) {
+                    sender = nameEl.textContent.trim();
+                  }
+                }
+              }
+            }
+
+            if (!sender) {
+              sender = 'Contact';
+            }
+
+            if (messageStore.has(id)) {
+              const prev = messageStore.get(id);
+              if (prev.text !== text) {
+                const wasDeletion = isDeletionText(text);
+                const prevWasDeletion = isDeletionText(prev.text);
+
+                if (wasDeletion && !prevWasDeletion) {
+                  // Message was deleted
+                  if (window.__walinux_ipc) {
+                    window.__walinux_ipc.createLogEntry({
+                      title: '⚠️ [Deleted] ' + (prev.sender || sender),
+                      body: 'Original: "' + prev.text + '"'
+                    });
+                  }
+                } else if (!wasDeletion && !prevWasDeletion) {
+                  // Message was edited
+                  if (window.__walinux_ipc) {
+                    window.__walinux_ipc.createLogEntry({
+                      title: '✏️ [Edited] ' + (prev.sender || sender),
+                      body: 'Original: "' + prev.text + '"\\nEdited: "' + text + '"'
+                    });
+                  }
+                }
+              }
+            }
+
+            messageStore.set(id, { text, sender, timestamp: Date.now() });
+          }
+        }
+
+        // Start observing DOM changes for messages
+        const observer = new MutationObserver(() => {
+          scanMessages();
         });
-      }
-
-      resolveIconToBase64(options.icon).then((base64Icon) => {
-        ipcRenderer.send('notification:create', {
-          title: this.title,
-          body: this.body,
-          icon: base64Icon || '',
-          tag: this.tag,
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+          characterData: true
         });
-      });
 
-      setTimeout(() => {
-        if (this.onshow) this.onshow();
-        this.dispatchEvent(new Event('show'));
-      }, 50);
-    }
-
-    close() {
-      ipcRenderer.send('notification:close-request', this.tag);
-      if (this.tag) {
-        activeNotificationCallbacks.delete(this.tag);
-      }
-      if (this.onclose) this.onclose();
-      this.dispatchEvent(new Event('close'));
-    }
-
-    static get permission() {
-      return OriginalNotification.permission;
-    }
-
-    static requestPermission(callback?: (permission: string) => void) {
-      return OriginalNotification.requestPermission(callback);
-    }
-  }
-
-  (window as any).Notification = CustomNotification;
+        // Initial scan
+        scanMessages();
+      })();
+    `
+  }]);
 }
 
 function injectCallTitlebar() {

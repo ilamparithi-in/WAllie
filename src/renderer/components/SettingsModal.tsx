@@ -448,6 +448,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                         className="accent-[#00a884]"
                       />
                     </label>
+
+                    <label className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
+                      <div>
+                        <div className="font-medium text-[#e9edef]">Enable Notification Logging</div>
+                        <div className="text-[11px] text-[#8696a0]">
+                          Log desktop notifications, message edits, and deletions to history (disabled by default)
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={globalSettings?.notificationLoggingEnabled ?? false}
+                        onChange={(e) => handleToggleGlobalSetting('notificationLoggingEnabled', e.target.checked)}
+                        className="accent-[#00a884]"
+                      />
+                    </label>
                   </div>
                 </div>
 
@@ -819,6 +834,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
             {activePage === 'notifications' && (
               <div className="flex flex-col h-full space-y-4">
+                {globalSettings?.notificationLoggingEnabled === false && (
+                  <div className="flex-shrink-0 bg-[#ea4335]/15 border border-[#ea4335]/30 text-[#ea4335] px-3 py-2 rounded text-[11px] leading-normal">
+                    ⚠️ Notification logging is currently disabled. Go to the <strong>General</strong> tab to enable it so notifications, edits, and deletions can be recorded.
+                  </div>
+                )}
                 <div className="flex-shrink-0 flex items-center justify-between gap-3 border-b border-[#222d34] pb-3">
                   <div className="flex items-center gap-2 flex-grow">
                     <input

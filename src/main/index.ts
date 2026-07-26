@@ -76,6 +76,7 @@ interface GlobalSettings {
   hardwareAcceleration: boolean;
   loadAllOnLaunch: boolean;
   showDevToolsToggle?: boolean;
+  notificationLoggingEnabled?: boolean;
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -96,6 +97,7 @@ function loadSettings(): GlobalSettings {
         hardwareAcceleration: parsed.hardwareAcceleration !== false,
         loadAllOnLaunch: !!parsed.loadAllOnLaunch,
         showDevToolsToggle: !!parsed.showDevToolsToggle,
+        notificationLoggingEnabled: !!parsed.notificationLoggingEnabled,
       };
     }
   } catch (error) {
@@ -106,6 +108,7 @@ function loadSettings(): GlobalSettings {
     hardwareAcceleration: true,
     loadAllOnLaunch: false,
     showDevToolsToggle: false,
+    notificationLoggingEnabled: false,
   };
 }
 
@@ -1700,15 +1703,17 @@ ipcMain.on('notification:create', async (event, data: { title: string; body: str
   const brandedTitle = `[${senderAccount.name}] ${data.title}`;
 
   // 2. Save to local log history
-  logNotificationToHistory({
-    id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-    accountId: senderAccount.id,
-    accountName: senderAccount.name,
-    title: data.title,
-    body: data.body,
-    icon: data.icon, // Base64 representation
-    timestamp: Date.now(),
-  });
+  if (globalSettings.notificationLoggingEnabled) {
+    logNotificationToHistory({
+      id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      accountId: senderAccount.id,
+      accountName: senderAccount.name,
+      title: data.title,
+      body: data.body,
+      icon: data.icon, // Base64 representation
+      timestamp: Date.now(),
+    });
+  }
 
   // Check if native system notifications are muted for this account
   if (senderAccount.settings?.notificationsEnabled === false) {
@@ -1755,6 +1760,31 @@ ipcMain.on('notification:create', async (event, data: { title: string; body: str
   });
 
   nativeNotif.show();
+});
+
+ipcMain.on('notification:create-log-entry', async (event, data: { title: string; body: string }) => {
+  const senderWebContents = event.sender;
+  let senderAccount: Account | undefined;
+  for (const [accId, view] of accountViews.entries()) {
+    if (view.webContents === senderWebContents) {
+      senderAccount = accounts.find((a) => a.id === accId);
+      break;
+    }
+  }
+
+  if (!senderAccount) return;
+
+  if (globalSettings.notificationLoggingEnabled) {
+    logNotificationToHistory({
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      accountId: senderAccount.id,
+      accountName: senderAccount.name,
+      title: data.title,
+      body: data.body,
+      icon: '',
+      timestamp: Date.now(),
+    });
+  }
 });
 
 // Handle light dismiss closes from webview click events
