@@ -1,4 +1,4 @@
-import { app, BrowserWindow, WebContentsView, ipcMain, Tray, Menu, nativeImage, session, dialog } from 'electron';
+import { app, BrowserWindow, WebContentsView, ipcMain, Tray, Menu, nativeImage, session, dialog, desktopCapturer, shell, Notification } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -30,13 +30,63 @@ interface Account {
   unreadCount: number;
   loggedIn: boolean;
   extensions: ExtensionInfo[];
+  settings?: {
+    cameraEnabled: boolean;
+    micEnabled: boolean;
+    notificationsEnabled: boolean;
+  };
+}
+
+interface GlobalSettings {
+  closeToTray: boolean;
+  hardwareAcceleration: boolean;
+  loadAllOnLaunch: boolean;
 }
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
-// Accounts configuration file
+// Settings & Accounts configuration files
 const ACCOUNTS_FILE = path.join(app.getPath('userData'), 'accounts.json');
+const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
+
+// Helper to load settings
+function loadSettings(): GlobalSettings {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
+      const parsed = JSON.parse(data);
+      return {
+        closeToTray: parsed.closeToTray !== false,
+        hardwareAcceleration: parsed.hardwareAcceleration !== false,
+        loadAllOnLaunch: !!parsed.loadAllOnLaunch,
+      };
+    }
+  } catch (error) {
+    console.error('Failed to load settings configuration:', error);
+  }
+  return {
+    closeToTray: true,
+    hardwareAcceleration: true,
+    loadAllOnLaunch: false,
+  };
+}
+
+// Helper to save settings
+function saveSettings(settings: GlobalSettings) {
+  try {
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+  } catch (error) {
+    console.error('Failed to save settings configuration:', error);
+  }
+}
+
+let globalSettings = loadSettings();
+
+// Disable hardware acceleration if config specifies before app gets ready
+if (!globalSettings.hardwareAcceleration) {
+  app.disableHardwareAcceleration();
+}
 
 // Helper to load accounts
 function loadAccounts(): Account[] {
@@ -50,6 +100,11 @@ function loadAccounts(): Account[] {
           loggedIn: !!acc.loggedIn,
           extensions: acc.extensions || [],
           unreadCount: 0, // Reset badge on startup
+          settings: acc.settings || {
+            cameraEnabled: true,
+            micEnabled: true,
+            notificationsEnabled: true,
+          },
         }));
       }
     }
@@ -66,6 +121,11 @@ function loadAccounts(): Account[] {
       unreadCount: 0,
       loggedIn: false,
       extensions: [],
+      settings: {
+        cameraEnabled: true,
+        micEnabled: true,
+        notificationsEnabled: true,
+      },
     },
   ];
 }
@@ -73,12 +133,17 @@ function loadAccounts(): Account[] {
 // Helper to save accounts
 function saveAccounts() {
   try {
-    const dataToSave = accounts.map(({ id, name, partition, loggedIn, extensions }) => ({
+    const dataToSave = accounts.map(({ id, name, partition, loggedIn, extensions, settings }) => ({
       id,
       name,
       partition,
       loggedIn,
       extensions,
+      settings: settings || {
+        cameraEnabled: true,
+        micEnabled: true,
+        notificationsEnabled: true,
+      },
     }));
     fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(dataToSave, null, 2), 'utf8');
   } catch (error) {
@@ -114,11 +179,183 @@ let activeAccountId = accounts[0].id;
 // Map of account ID to WebContentsView
 const accountViews = new Map<string, WebContentsView>();
 
+// Keep track of which sessions have been configured to avoid duplicate handlers
+const configuredSessions = new Set<string>();
+
 async function createAccountView(account: Account): Promise<WebContentsView> {
   const accountSession = session.fromPartition(account.partition);
 
   // Set standard User-Agent on session headers to ensure WhatsApp Web loads smoothly
   accountSession.setUserAgent(DEFAULT_USER_AGENT);
+
+  // Configure session-level handlers once per session partition
+  if (!configuredSessions.has(account.partition)) {
+    configuredSessions.add(account.partition);
+
+    // Permission Request Handler (Camera, Mic, Notifications)
+    accountSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+      const url = details.requestingUrl;
+      const isWA = url.includes('whatsapp.com') || url.includes('whatsapp.net');
+      if (isWA) {
+        const targetAccount = accounts.find((a) => a.partition === account.partition);
+        const settings = targetAccount?.settings || { cameraEnabled: true, micEnabled: true, notificationsEnabled: true };
+
+        if (permission === 'notifications') {
+          callback(settings.notificationsEnabled);
+          return;
+        }
+        if (permission === 'media') {
+          const mediaTypes = (details as any).mediaTypes || [];
+          let granted = true;
+          if (mediaTypes.includes('video') && !settings.cameraEnabled) {
+            granted = false;
+          }
+          if (mediaTypes.includes('audio') && !settings.micEnabled) {
+            granted = false;
+          }
+          callback(granted);
+          return;
+        }
+        callback(true); // Auto-allow background-sync and other internal features for WhatsApp
+        return;
+      }
+      callback(false);
+    });
+
+    // Permission Check Handler
+    accountSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+      const isWA = requestingOrigin.includes('whatsapp.com') || requestingOrigin.includes('whatsapp.net');
+      if (isWA) {
+        const targetAccount = accounts.find((a) => a.partition === account.partition);
+        const settings = targetAccount?.settings || { cameraEnabled: true, micEnabled: true, notificationsEnabled: true };
+
+        if (permission === 'notifications') {
+          return settings.notificationsEnabled;
+        }
+        if (permission === 'media') {
+          const mediaType = details?.mediaType;
+          if (mediaType === 'video') return settings.cameraEnabled;
+          if (mediaType === 'audio') return settings.micEnabled;
+          return settings.cameraEnabled || settings.micEnabled;
+        }
+        return true; // Auto-allow other standard queries (like background sync)
+      }
+      return false;
+    });
+
+    // Screen Sharing / Display Media Request Handler (PipeWire / X11)
+    accountSession.setDisplayMediaRequestHandler((request, callback) => {
+      desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
+        let selected = false;
+        const menu = Menu.buildFromTemplate([
+          ...sources.map((source) => ({
+            label: source.name || `Source ${source.id}`,
+            click: () => {
+              selected = true;
+              callback({ video: source, audio: 'loopback' });
+            },
+          })),
+          { type: 'separator' },
+          {
+            label: 'Cancel',
+            click: () => {
+              // Action handled in menu dismiss callback
+            },
+          },
+        ]);
+
+        menu.popup({
+          window: mainWindow || undefined,
+          callback: () => {
+            if (!selected) {
+              callback({}); // Cancel the request if menu is dismissed without selection
+            }
+          },
+        });
+      }).catch((err) => {
+        console.error('Failed to get screen sharing sources:', err);
+        callback({}); // Fail gracefully to avoid hanging the renderer
+      });
+    });
+
+    // Downloads Interception Handler
+    accountSession.on('will-download', (event, item) => {
+      const fileName = item.getFilename();
+      const downloadsPath = app.getPath('downloads');
+      const savePath = path.join(downloadsPath, fileName);
+
+      // Generate a unique save path to avoid silent overwrites
+      let uniqueSavePath = savePath;
+      let counter = 1;
+      const ext = path.extname(fileName);
+      const base = path.basename(fileName, ext);
+      while (fs.existsSync(uniqueSavePath)) {
+        uniqueSavePath = path.join(downloadsPath, `${base} (${counter})${ext}`);
+        counter++;
+      }
+      item.setSavePath(uniqueSavePath);
+
+      const startTime = item.getStartTime();
+      mainWindow?.webContents.send('download:progress', {
+        id: startTime,
+        filename: fileName,
+        percent: 0,
+        state: 'progressing',
+        receivedBytes: 0,
+        totalBytes: item.getTotalBytes(),
+      });
+
+      item.on('updated', (event, state) => {
+        if (state === 'interrupted') {
+          mainWindow?.webContents.send('download:progress', {
+            id: startTime,
+            filename: fileName,
+            percent: 0,
+            state: 'failed',
+          });
+        } else if (state === 'progressing') {
+          if (!item.isPaused()) {
+            const received = item.getReceivedBytes();
+            const total = item.getTotalBytes();
+            const percent = total > 0 ? Math.round((received / total) * 100) : 0;
+            mainWindow?.webContents.send('download:progress', {
+              id: startTime,
+              filename: fileName,
+              percent,
+              state: 'progressing',
+              receivedBytes: received,
+              totalBytes: total,
+            });
+          }
+        }
+      });
+
+      item.once('done', (event, state) => {
+        if (state === 'completed') {
+          mainWindow?.webContents.send('download:progress', {
+            id: startTime,
+            filename: fileName,
+            percent: 100,
+            state: 'completed',
+          });
+
+          // Show system desktop notification
+          const notification = new Notification({
+            title: 'Download Complete',
+            body: `Successfully downloaded ${path.basename(uniqueSavePath)} to Downloads folder.`,
+          });
+          notification.show();
+        } else {
+          mainWindow?.webContents.send('download:progress', {
+            id: startTime,
+            filename: fileName,
+            percent: 0,
+            state: 'failed',
+          });
+        }
+      });
+    });
+  }
 
   // Load all enabled extensions for this account's session
   if (account.extensions && account.extensions.length > 0) {
@@ -150,6 +387,38 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
 
   // Register zoom shortcuts
   registerZoomShortcuts(view.webContents);
+
+  // Link Delegation: Intercept external link clicks
+  view.webContents.on('will-navigate', (event, url) => {
+    try {
+      const parsedUrl = new URL(url);
+      const isWhatsApp = parsedUrl.hostname === 'web.whatsapp.com' || parsedUrl.hostname.endsWith('.whatsapp.com');
+      if (!isWhatsApp) {
+        event.preventDefault();
+        shell.openExternal(url).catch((err) => console.error('Failed to open external link:', err));
+      }
+    } catch (err) {
+      event.preventDefault();
+      shell.openExternal(url).catch((err) => console.error('Failed to open external link:', err));
+    }
+  });
+
+  // Link Delegation: Intercept target="_blank" window openings
+  view.webContents.setWindowOpenHandler((details) => {
+    const url = details.url;
+    try {
+      const parsedUrl = new URL(url);
+      const isWhatsApp = parsedUrl.hostname === 'web.whatsapp.com' || parsedUrl.hostname.endsWith('.whatsapp.com');
+      if (!isWhatsApp) {
+        shell.openExternal(url).catch((err) => console.error('Failed to open external link:', err));
+        return { action: 'deny' };
+      }
+    } catch (e) {
+      shell.openExternal(url).catch((err) => console.error('Failed to open external link:', err));
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
 
   // Handle beforeunload / discard changes prompts when refreshing
   view.webContents.on('will-prevent-unload', async (event) => {
@@ -333,6 +602,21 @@ function createMainWindow() {
     mainWindow?.show();
     // Initialize initial active view
     await switchActiveAccount(activeAccountId);
+
+    // Preload remaining accounts in the background if configured
+    if (globalSettings.loadAllOnLaunch) {
+      console.log('Preloading all accounts in the background...');
+      for (const account of accounts) {
+        if (account.id !== activeAccountId && !accountViews.has(account.id)) {
+          createAccountView(account).then((view) => {
+            accountViews.set(account.id, view);
+            console.log(`Preloaded account: ${account.name} (${account.id})`);
+          }).catch((err) => {
+            console.error(`Failed to preload account ${account.name}:`, err);
+          });
+        }
+      }
+    }
   });
 
   // Register zoom shortcuts on main window as well
@@ -840,3 +1124,126 @@ function registerZoomShortcuts(contents: Electron.WebContents) {
     }
   });
 }
+
+function getPartitionDirName(partition: string): string {
+  if (partition.startsWith('persist:')) {
+    return partition.substring(8);
+  }
+  return partition;
+}
+
+async function calculatePathSize(itemPath: string): Promise<number> {
+  try {
+    const stats = await fs.promises.stat(itemPath);
+    if (stats.isFile()) {
+      return stats.size;
+    }
+    if (stats.isDirectory()) {
+      const files = await fs.promises.readdir(itemPath);
+      const sizes = await Promise.all(
+        files.map((file) => calculatePathSize(path.join(itemPath, file)))
+      );
+      return sizes.reduce((acc, curr) => acc + curr, 0);
+    }
+  } catch (err) {
+    // Return 0 if folder/file doesn't exist
+  }
+  return 0;
+}
+
+async function getAccountStorageSizes(partition: string) {
+  const partitionDirName = getPartitionDirName(partition);
+  const partitionDir = path.join(app.getPath('userData'), 'Partitions', partitionDirName);
+
+  const cacheDirs = ['Cache', 'Code Cache', 'GPUCache', 'DawnWebGPUCache', 'DawnGraphiteCache'];
+  const localStorageDirs = ['Local Storage', 'Session Storage'];
+  const indexedDbDirs = ['IndexedDB'];
+  const cookiesFiles = ['Cookies', 'Cookies-journal'];
+
+  const cachePromises = cacheDirs.map((dir) => calculatePathSize(path.join(partitionDir, dir)));
+  const localStoragePromises = localStorageDirs.map((dir) => calculatePathSize(path.join(partitionDir, dir)));
+  const indexedDbPromises = indexedDbDirs.map((dir) => calculatePathSize(path.join(partitionDir, dir)));
+  const cookiesPromises = cookiesFiles.map((file) => calculatePathSize(path.join(partitionDir, file)));
+
+  const [cacheSizes, localStorageSizes, indexedDbSizes, cookiesSizes] = await Promise.all([
+    Promise.all(cachePromises),
+    Promise.all(localStoragePromises),
+    Promise.all(indexedDbPromises),
+    Promise.all(cookiesPromises),
+  ]);
+
+  return {
+    cache: cacheSizes.reduce((a, b) => a + b, 0),
+    localStorage: localStorageSizes.reduce((a, b) => a + b, 0),
+    indexedDb: indexedDbSizes.reduce((a, b) => a + b, 0),
+    cookies: cookiesSizes.reduce((a, b) => a + b, 0),
+  };
+}
+
+// IPC Handlers for Storage Management
+ipcMain.handle('account:get-storage-sizes', async (_event, accountId: string) => {
+  const account = accounts.find((a) => a.id === accountId);
+  if (!account) return { cache: 0, localStorage: 0, indexedDb: 0, cookies: 0 };
+  return await getAccountStorageSizes(account.partition);
+});
+
+ipcMain.handle('account:clear-storage', async (_event, accountId: string, type: 'cache' | 'media') => {
+  const account = accounts.find((a) => a.id === accountId);
+  if (!account) return false;
+
+  const accountSession = session.fromPartition(account.partition);
+
+  try {
+    if (type === 'cache') {
+      await accountSession.clearCache();
+      await accountSession.clearStorageData({
+        storages: ['shadercache', 'cachestorage'],
+      });
+      console.log(`Cache cleared successfully for account: ${accountId}`);
+    } else if (type === 'media') {
+      await accountSession.clearStorageData({
+        storages: ['indexdb', 'filesystem', 'websql'],
+      });
+      console.log(`Media data cleared successfully for account: ${accountId}`);
+    }
+
+    // Reload the view if it exists to refresh database connections
+    const view = accountViews.get(accountId);
+    if (view) {
+      view.webContents.reload();
+    }
+    return true;
+  } catch (error) {
+    console.error(`Failed to clear storage for account ${accountId} (type: ${type}):`, error);
+    return false;
+  }
+});
+
+// IPC Handlers for Settings Management
+ipcMain.handle('settings:get-global', () => globalSettings);
+
+ipcMain.handle('settings:save-global', (_event, newSettings: GlobalSettings) => {
+  globalSettings = newSettings;
+  saveSettings(globalSettings);
+  return true;
+});
+
+ipcMain.handle('account:update-settings', (_event, accountId: string, settings: Account['settings']) => {
+  const account = accounts.find((a) => a.id === accountId);
+  if (account) {
+    account.settings = settings;
+    saveAccounts();
+
+    // Reload active view to apply permissions changes immediately
+    const view = accountViews.get(accountId);
+    if (view) {
+      view.webContents.reload();
+    }
+    
+    // Broadcast list changed to synchronize renderer states
+    mainWindow?.webContents.send('account:list-changed', accounts, activeAccountId);
+    return true;
+  }
+  return false;
+});
+

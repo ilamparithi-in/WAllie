@@ -18,6 +18,12 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
   const [editName, setEditName] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const accountsRef = useRef(accounts);
+
+  useEffect(() => {
+    accountsRef.current = accounts;
+  }, [accounts]);
+
   useEffect(() => {
     if (!window.electronAPI) return;
 
@@ -56,7 +62,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
 
     // Listen for context-menu triggered renaming events from the main process
     const unsubscribeTriggerRename = window.electronAPI.onTriggerRename((id) => {
-      const acc = accounts.find((a) => a.id === id);
+      const acc = accountsRef.current.find((a) => a.id === id);
       if (acc) {
         setEditingId(acc.id);
         setEditName(acc.name);
@@ -80,7 +86,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
       unsubscribeTriggerRename();
       if (flashTimeout) clearTimeout(flashTimeout);
     };
-  }, [accounts]);
+  }, []);
 
   useEffect(() => {
     if (editingId && inputRef.current) {

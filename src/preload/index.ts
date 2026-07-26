@@ -15,6 +15,17 @@ export interface AccountInfo {
   partition: string;
   loggedIn?: boolean;
   extensions?: ExtensionInfo[];
+  settings?: {
+    cameraEnabled: boolean;
+    micEnabled: boolean;
+    notificationsEnabled: boolean;
+  };
+}
+
+export interface GlobalSettings {
+  closeToTray: boolean;
+  hardwareAcceleration: boolean;
+  loadAllOnLaunch: boolean;
 }
 
 export interface ElectronAPI {
@@ -43,12 +54,31 @@ export interface ElectronAPI {
   toggleSettings: (isOpen: boolean) => void;
   resetZoom: () => void;
 
+  // Storage & Cache controls
+  getStorageSizes: (accountId: string) => Promise<{ cache: number; localStorage: number; indexedDb: number; cookies: number }>;
+  clearStorage: (accountId: string, type: 'cache' | 'media') => Promise<boolean>;
+
+  // Global & Account Settings Controls
+  getGlobalSettings: () => Promise<GlobalSettings>;
+  saveGlobalSettings: (settings: GlobalSettings) => Promise<boolean>;
+  updateAccountSettings: (accountId: string, settings: { cameraEnabled: boolean; micEnabled: boolean; notificationsEnabled: boolean }) => Promise<boolean>;
+
   // Event listeners
   onAccountListChanged: (callback: (accounts: AccountInfo[], activeId: string) => void) => () => void;
   onUnreadCountChanged: (callback: (accountId: string, count: number) => void) => () => void;
   onMaximizedStateChanged: (callback: (isMaximized: boolean) => void) => () => void;
   onZoomChanged: (callback: (zoomPercent: number) => void) => () => void;
   onTriggerRename: (callback: (accountId: string) => void) => () => void;
+  onDownloadProgress: (
+    callback: (data: {
+      id: number;
+      filename: string;
+      percent: number;
+      state: 'progressing' | 'completed' | 'failed';
+      receivedBytes?: number;
+      totalBytes?: number;
+    }) => void
+  ) => () => void;
 }
 
 const api: ElectronAPI = {
@@ -75,6 +105,13 @@ const api: ElectronAPI = {
 
   toggleSettings: (isOpen: boolean) => ipcRenderer.send('settings:toggle', isOpen),
   resetZoom: () => ipcRenderer.send('zoom:reset'),
+
+  getStorageSizes: (accountId) => ipcRenderer.invoke('account:get-storage-sizes', accountId),
+  clearStorage: (accountId, type) => ipcRenderer.invoke('account:clear-storage', accountId, type),
+
+  getGlobalSettings: () => ipcRenderer.invoke('settings:get-global'),
+  saveGlobalSettings: (settings) => ipcRenderer.invoke('settings:save-global', settings),
+  updateAccountSettings: (accountId, settings) => ipcRenderer.invoke('account:update-settings', accountId, settings),
 
   onAccountListChanged: (callback) => {
     const subscription = (_event: unknown, accounts: AccountInfo[], activeId: string) => callback(accounts, activeId);
@@ -104,6 +141,22 @@ const api: ElectronAPI = {
     const subscription = (_event: unknown, accountId: string) => callback(accountId);
     ipcRenderer.on('account:trigger-rename', subscription);
     return () => ipcRenderer.removeListener('account:trigger-rename', subscription);
+  },
+
+  onDownloadProgress: (callback) => {
+    const subscription = (
+      _event: unknown,
+      data: {
+        id: number;
+        filename: string;
+        percent: number;
+        state: 'progressing' | 'completed' | 'failed';
+        receivedBytes?: number;
+        totalBytes?: number;
+      }
+    ) => callback(data);
+    ipcRenderer.on('download:progress', subscription);
+    return () => ipcRenderer.removeListener('download:progress', subscription);
   },
 };
 
