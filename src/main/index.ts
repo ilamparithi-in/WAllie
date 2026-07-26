@@ -225,6 +225,9 @@ let activeAccountId = accounts[0].id;
 // Map of account ID to WebContentsView
 const accountViews = new Map<string, WebContentsView>();
 
+// Map of account ID to custom DevTools BrowserWindow
+const devtoolsWindows = new Map<string, BrowserWindow>();
+
 // Keep track of which sessions have been configured to avoid duplicate handlers
 const configuredSessions = new Set<string>();
 
@@ -843,6 +846,13 @@ async function removeAccountLogic(id: string): Promise<boolean> {
     accountViews.delete(id);
   }
 
+  // Close and delete the associated DevTools window if open
+  const devtoolsWin = devtoolsWindows.get(id);
+  if (devtoolsWin && !devtoolsWin.isDestroyed()) {
+    devtoolsWin.close();
+  }
+  devtoolsWindows.delete(id);
+
   if (activeAccountId === id) {
     await switchActiveAccount(accounts[0].id);
   } else {
@@ -974,6 +984,19 @@ ipcMain.handle('account:rename', (_event, id: string, newName: string) => {
     account.name = newName;
     saveAccounts();
     mainWindow?.webContents.send('account:list-changed', accounts, activeAccountId);
+
+    const devtoolsWin = devtoolsWindows.get(id);
+    if (devtoolsWin && !devtoolsWin.isDestroyed()) {
+      devtoolsWin.setTitle(`DevTools - ${newName}`);
+      devtoolsWin.webContents.executeJavaScript(`
+        const badgeEl = document.querySelector('.titlebar-left-badge');
+        if (badgeEl) badgeEl.textContent = ${JSON.stringify(newName)};
+        document.title = 'DevTools - ' + ${JSON.stringify(newName)};
+        const metaEl = document.querySelector('meta[name="account-name"]');
+        if (metaEl) metaEl.setAttribute('content', encodeURIComponent(${JSON.stringify(newName)}));
+      `).catch((err) => console.error('Failed to update devtools window title:', err));
+    }
+
     return true;
   }
   return false;
@@ -1667,16 +1690,108 @@ ipcMain.handle('account:save-css', (_event, accountId: string, customCss: string
   return false;
 });
 
+function toggleDevToolsForAccount(accountId: string) {
+  const account = accounts.find((a) => a.id === accountId);
+  const view = accountViews.get(accountId);
+  if (!view || !account) return;
+
+  const webContents = view.webContents;
+
+  if (devtoolsWindows.has(accountId)) {
+    const existingWin = devtoolsWindows.get(accountId)!;
+    if (!existingWin.isDestroyed()) {
+      existingWin.close();
+      return;
+    }
+  }
+
+  const devtoolsWindow = new BrowserWindow({
+    width: 900,
+    height: 600,
+    minWidth: 500,
+    minHeight: 400,
+    frame: false,
+    titleBarStyle: 'hidden',
+    backgroundColor: '#111b21',
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.cjs'),
+      partition: account.partition,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  devtoolsWindows.set(accountId, devtoolsWindow);
+
+  const devtoolsView = new WebContentsView({
+    webPreferences: {
+      partition: account.partition,
+    }
+  });
+  devtoolsWindow.contentView.addChildView(devtoolsView);
+
+  let resizeTimeout: NodeJS.Timeout | null = null;
+  const updateBounds = () => {
+    if (devtoolsWindow.isDestroyed()) return;
+    if (resizeTimeout) {
+      clearTimeout(resizeTimeout);
+    }
+    resizeTimeout = setTimeout(() => {
+      if (devtoolsWindow.isDestroyed()) return;
+      const [width, height] = devtoolsWindow.getContentSize();
+      devtoolsView.setBounds({ x: 0, y: 28, width, height: Math.max(0, height - 28) });
+      resizeTimeout = null;
+    }, 50);
+  };
+
+  devtoolsWindow.on('resize', updateBounds);
+  devtoolsWindow.once('ready-to-show', () => {
+    devtoolsWindow.show();
+    updateBounds();
+  });
+
+  devtoolsWindow.on('maximize', () => {
+    devtoolsWindow.webContents.send('window:maximized-changed', true);
+    setTimeout(updateBounds, 100);
+  });
+
+  devtoolsWindow.on('unmaximize', () => {
+    devtoolsWindow.webContents.send('window:maximized-changed', false);
+    setTimeout(updateBounds, 100);
+  });
+
+  devtoolsWindow.on('closed', () => {
+    if (resizeTimeout) {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = null;
+    }
+    devtoolsWindows.delete(accountId);
+    try {
+      if (webContents && !webContents.isDestroyed()) {
+        webContents.closeDevTools();
+      }
+    } catch (err) {
+      console.error('Error closing DevTools during window close:', err);
+    }
+  });
+
+  // Attach devtools to the WebContentsView's webContents
+  webContents.setDevToolsWebContents(devtoolsView.webContents);
+  webContents.openDevTools({ mode: 'detach' });
+
+  // Custom HTML loading with meta tags to tell the preload script to inject the unified titlebar
+  const htmlContent = `<!DOCTYPE html><html><head><title>DevTools - ${account.name}</title><meta name="is-devtools" content="true"><meta name="account-name" content="${encodeURIComponent(account.name)}"></head><body></body></html>`;
+
+  devtoolsWindow.loadURL('data:text/html;charset=UTF-8,' + encodeURIComponent(htmlContent));
+}
+
 // DevTools Toggling IPC handler
 ipcMain.on('devtools:toggle', () => {
   console.log('IPC Received: devtools:toggle');
-  const activeContents = getActiveWebContents();
-  if (activeContents) {
-    if (activeContents.isDevToolsOpened()) {
-      activeContents.closeDevTools();
-    } else {
-      activeContents.openDevTools({ mode: 'detach' });
-    }
+  if (activeAccountId && accountViews.has(activeAccountId)) {
+    toggleDevToolsForAccount(activeAccountId);
   } else {
     if (mainWindow?.webContents.isDevToolsOpened()) {
       mainWindow.webContents.closeDevTools();

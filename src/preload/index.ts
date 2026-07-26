@@ -472,132 +472,236 @@ function setupWhatsAppIntegration() {
   }]);
 }
 
-function injectCallTitlebar() {
+function injectUnifiedTitlebar(options: {
+  title: string;
+  badge?: string;
+  iconType: 'call' | 'devtools';
+  controls: ('pin' | 'min' | 'max' | 'close')[];
+}) {
   // Wait for documentElement and body to be available
   if (!document.documentElement || !document.body) {
-    setTimeout(injectCallTitlebar, 50);
+    setTimeout(() => injectUnifiedTitlebar(options), 50);
     return;
   }
 
   // Check if already injected
-  if (document.getElementById('custom-call-titlebar')) return;
+  if (document.getElementById('custom-titlebar')) return;
 
   // Create style element to shift body content and style html/body
   const style = document.createElement('style');
-  style.id = 'custom-call-titlebar-styles';
+  style.id = 'custom-titlebar-styles';
   style.innerHTML = `
-    html {
+    html, body {
       background-color: #111b21 !important;
-    }
-    body {
-      transform: translateY(28px) !important;
-      height: calc(100vh - 28px) !important;
-      position: relative !important;
       margin: 0 !important;
+      padding: 0 !important;
+      height: 100% !important;
       overflow: hidden !important;
+    }
+    body > :not(#custom-titlebar) {
+      transform: translateY(28px) !important;
+      height: calc(100% - 28px) !important;
+    }
+    #custom-titlebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 28px;
+      background-color: #111b21;
+      border-bottom: 1px solid #222d34;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #aebac1;
+      font-size: 11px;
+      font-weight: 500;
+      z-index: 999999;
+      user-select: none;
+    }
+    .titlebar-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding-left: 10px;
+      -webkit-app-region: no-drag;
+    }
+    .titlebar-left-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #00a884;
+    }
+    .titlebar-left-icon svg {
+      width: 14px;
+      height: 14px;
+    }
+    .titlebar-left-title {
+      color: #e9edef;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .titlebar-left-badge {
+      padding: 1px 6px;
+      background: rgba(0, 168, 132, 0.1);
+      border: 1px solid rgba(0, 168, 132, 0.2);
+      color: #00a884;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: bold;
+    }
+    .titlebar-drag-region {
+      flex: 1;
+      height: 100%;
+      -webkit-app-region: drag;
+      cursor: move;
+    }
+    .titlebar-right {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      gap: 2px;
+      padding-right: 4px;
+      -webkit-app-region: no-drag;
+    }
+    .titlebar-btn {
+      width: 28px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      color: #8696a0;
+      cursor: pointer;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    .titlebar-btn-close {
+      width: 32px;
+    }
+    .titlebar-btn:hover {
+      background-color: #202c33;
+      color: #e9edef;
+    }
+    .titlebar-btn-close:hover {
+      background-color: #ea4335 !important;
+      color: #ffffff !important;
+    }
+    .titlebar-btn svg {
+      width: 13px;
+      height: 13px;
+    }
+    .titlebar-divider {
+      height: 12px;
+      width: 1px;
+      background-color: #222d34;
+      margin: 0 4px;
     }
   `;
   document.documentElement.appendChild(style);
 
-  // Create the titlebar container
+  // SVGs definition matching Lucide icons exactly
+  const phoneIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>`;
+  const codeIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>`;
+  const pinIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-.44-1.24l-2.78-3.5A2 2 0 0 1 15 9.24V5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v4.24a2 2 0 0 1-.78 1.28l-2.78 3.5a2 2 0 0 0-.44 1.24z"></path></svg>`;
+  const minIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
+  const maxIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="max-icon-svg"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`;
+  const closeIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+
   const container = document.createElement('div');
-  container.id = 'custom-call-titlebar';
-  
-  // Style container
-  Object.assign(container.style, {
-    position: 'fixed',
-    top: '0',
-    left: '0',
-    right: '0',
-    height: '28px',
-    background: '#111b21',
-    borderBottom: '1px solid #222d34',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    fontFamily: 'Segoe UI, Helvetica Neue, Helvetica, Lucide Sans, Arial, sans-serif',
-    color: '#aebac1',
-    fontSize: '12px',
-    zIndex: '999999',
-    userSelect: 'none'
+  container.id = 'custom-titlebar';
+
+  const leftIcon = options.iconType === 'call' ? phoneIcon : codeIcon;
+  const badgeHtml = options.badge ? `<span class="titlebar-left-badge">${options.badge}</span>` : '';
+
+  let controlsHtml = '';
+  options.controls.forEach((control) => {
+    if (control === 'pin') {
+      controlsHtml += `<button class="titlebar-btn" id="pin-btn" title="Pin (Stay on Top)">${pinIcon}</button>`;
+      controlsHtml += `<div class="titlebar-divider"></div>`;
+    } else if (control === 'min') {
+      controlsHtml += `<button class="titlebar-btn" id="min-btn" title="Minimize">${minIcon}</button>`;
+    } else if (control === 'max') {
+      controlsHtml += `<button class="titlebar-btn" id="max-btn" title="Maximize">${maxIcon}</button>`;
+    } else if (control === 'close') {
+      controlsHtml += `<button class="titlebar-btn titlebar-btn-close" id="close-btn" title="Close">${closeIcon}</button>`;
+    }
   });
 
-  // Request the account name from main process
-  ipcRenderer.invoke('account:get-name-for-session').then((accountName: string) => {
-    // Fill in HTML
-    container.innerHTML = `
-      <div style="-webkit-app-region: no-drag; display: flex; align-items: center; padding-left: 12px; gap: 8px; font-family: sans-serif;">
-        <span style="color: #00a884; display: flex; align-items: center; justify-content: center; font-size: 13px;">📞</span>
-        <span style="color: #e9edef; font-size: 11px; font-weight: 600; tracking-wide: 0.05em;">WhatsApp Call</span>
-        <span style="padding: 1px 6px; background: rgba(0, 168, 132, 0.1); border: 1px solid rgba(0, 168, 132, 0.2); color: #00a884; border-radius: 4px; font-size: 10px; font-weight: bold;">${accountName}</span>
-      </div>
-      <div style="-webkit-app-region: drag; flex: 1; height: 100%; cursor: move;"></div>
-      <div style="-webkit-app-region: no-drag; display: flex; align-items: center; gap: 2px; padding-right: 4px;">
-        <button id="pin-btn" title="Pin (Stay on Top)" style="background: none; border: none; color: #8696a0; cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; transition: color 0.2s;">📌</button>
-        <div style="height: 12px; width: 1px; background-color: #222d34; margin: 0 4px; display: inline-block;"></div>
-        <button id="min-btn" title="Minimize" style="background: none; border: none; color: #8696a0; cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold;">−</button>
-        <button id="close-btn" title="End Call & Close" style="background: none; border: none; color: #8696a0; cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: background-color 0.2s, color 0.2s; border-radius: 4px;">✕</button>
-      </div>
-    `;
+  container.innerHTML = `
+    <div class="titlebar-left">
+      <span class="titlebar-left-icon">${leftIcon}</span>
+      <span class="titlebar-left-title">${options.title}</span>
+      ${badgeHtml}
+    </div>
+    <div class="titlebar-drag-region"></div>
+    <div class="titlebar-right">
+      ${controlsHtml}
+    </div>
+  `;
 
-    document.documentElement.appendChild(container);
+  document.body.appendChild(container);
 
-    // Hook up button events
-    const pinBtn = document.getElementById('pin-btn');
-    const minBtn = document.getElementById('min-btn');
-    const closeBtn = document.getElementById('close-btn');
+  const pinBtn = document.getElementById('pin-btn');
+  const minBtn = document.getElementById('min-btn');
+  const maxBtn = document.getElementById('max-btn');
+  const closeBtn = document.getElementById('close-btn');
 
-    // Fetch initial pin status
+  if (pinBtn) {
     ipcRenderer.invoke('window:get-always-on-top').then((isPinned: boolean) => {
-      if (pinBtn) {
-        pinBtn.style.color = isPinned ? '#00a884' : '#8696a0';
-      }
+      pinBtn.style.color = isPinned ? '#00a884' : '#8696a0';
     });
 
-    pinBtn?.addEventListener('click', () => {
+    pinBtn.addEventListener('click', () => {
       ipcRenderer.send('window:toggle-always-on-top');
     });
 
     ipcRenderer.on('window:always-on-top-changed', (_event: any, isPinned: boolean) => {
-      if (pinBtn) {
-        pinBtn.style.color = isPinned ? '#00a884' : '#8696a0';
-      }
+      pinBtn.style.color = isPinned ? '#00a884' : '#8696a0';
     });
+  }
 
-    minBtn?.addEventListener('click', () => {
+  if (minBtn) {
+    minBtn.addEventListener('click', () => {
       ipcRenderer.send('window:minimize');
     });
+  }
 
-    closeBtn?.addEventListener('click', () => {
+  if (maxBtn) {
+    maxBtn.addEventListener('click', () => {
+      ipcRenderer.send('window:maximize');
+    });
+
+    ipcRenderer.on('window:maximized-changed', (_event: any, isMaximized: boolean) => {
+      const maxSvg = document.getElementById('max-icon-svg');
+      if (maxSvg) {
+        if (isMaximized) {
+          maxSvg.setAttribute('style', 'transform: rotate(180deg); width: 12px; height: 12px;');
+          maxSvg.innerHTML = '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>';
+        } else {
+          maxSvg.removeAttribute('style');
+          maxSvg.setAttribute('style', 'width: 12px; height: 12px;');
+          maxSvg.innerHTML = '<rect width="18" height="18" x="3" y="3" rx="2"/>';
+        }
+      }
+    });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
       ipcRenderer.send('window:close');
     });
+  }
+}
 
-    // Style close button hover
-    closeBtn?.addEventListener('mouseenter', () => {
-      closeBtn.style.backgroundColor = '#ea4335';
-      closeBtn.style.color = '#ffffff';
-    });
-    closeBtn?.addEventListener('mouseleave', () => {
-      closeBtn.style.backgroundColor = 'transparent';
-      closeBtn.style.color = '#8696a0';
-    });
-
-    // Style pin button hover
-    pinBtn?.addEventListener('mouseenter', () => {
-      pinBtn.style.color = '#e9edef';
-    });
-    pinBtn?.addEventListener('mouseleave', () => {
-      ipcRenderer.invoke('window:get-always-on-top').then((isPinned: boolean) => {
-        pinBtn.style.color = isPinned ? '#00a884' : '#8696a0';
-      });
-    });
-
-    // Style min button hover
-    minBtn?.addEventListener('mouseenter', () => {
-      minBtn.style.color = '#e9edef';
-    });
-    minBtn?.addEventListener('mouseleave', () => {
-      minBtn.style.color = '#8696a0';
+function injectCallTitlebar() {
+  ipcRenderer.invoke('account:get-name-for-session').then((accountName: string) => {
+    injectUnifiedTitlebar({
+      title: 'WhatsApp Call',
+      badge: accountName,
+      iconType: 'call',
+      controls: ['pin', 'min', 'close']
     });
   });
 }
@@ -606,6 +710,21 @@ const isWhatsApp = window.location.hostname.includes('whatsapp.com');
 
 if (!isWhatsApp) {
   contextBridge.exposeInMainWorld('electronAPI', api);
+  
+  // Expose DOMContentLoaded listener to inject unified titlebar for DevTools window
+  window.addEventListener('DOMContentLoaded', () => {
+    const isDevTools = !!document.querySelector('meta[name="is-devtools"]');
+    if (isDevTools) {
+      const accountNameMeta = document.querySelector('meta[name="account-name"]');
+      const accountName = accountNameMeta ? decodeURIComponent(accountNameMeta.getAttribute('content') || '') : 'Account';
+      injectUnifiedTitlebar({
+        title: 'DevTools',
+        badge: accountName,
+        iconType: 'devtools',
+        controls: ['min', 'max', 'close']
+      });
+    }
+  });
 } else {
   setupWhatsAppIntegration();
   if (window.location.pathname.includes('/call')) {
