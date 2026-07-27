@@ -44,6 +44,7 @@ if (!gotTheLock) {
 }
 
 const TITLEBAR_HEIGHT = 28;
+let disclaimerOpen = false;
 const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36';
 
@@ -722,13 +723,17 @@ function updateActiveViewBounds() {
   const activeView = accountViews.get(activeAccountId);
 
   if (activeView) {
-    const viewWidth = settingsOpen ? Math.max(0, width - DRAWER_WIDTH) : width;
-    activeView.setBounds({
-      x: 0,
-      y: TITLEBAR_HEIGHT,
-      width: Math.max(0, viewWidth),
-      height: Math.max(0, height - TITLEBAR_HEIGHT),
-    });
+    if (disclaimerOpen) {
+      activeView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+    } else {
+      const viewWidth = settingsOpen ? Math.max(0, width - DRAWER_WIDTH) : width;
+      activeView.setBounds({
+        x: 0,
+        y: TITLEBAR_HEIGHT,
+        width: Math.max(0, viewWidth),
+        height: Math.max(0, height - TITLEBAR_HEIGHT),
+      });
+    }
   }
 
   // 2. Retain debounced update as a trailing fallback to ensure final layout settle
@@ -743,13 +748,17 @@ function updateActiveViewBounds() {
     const aView = accountViews.get(activeAccountId);
 
     if (aView) {
-      const vWidth = settingsOpen ? Math.max(0, w - DRAWER_WIDTH) : w;
-      aView.setBounds({
-        x: 0,
-        y: TITLEBAR_HEIGHT,
-        width: Math.max(0, vWidth),
-        height: Math.max(0, h - TITLEBAR_HEIGHT),
-      });
+      if (disclaimerOpen) {
+        aView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+      } else {
+        const vWidth = settingsOpen ? Math.max(0, w - DRAWER_WIDTH) : w;
+        aView.setBounds({
+          x: 0,
+          y: TITLEBAR_HEIGHT,
+          width: Math.max(0, vWidth),
+          height: Math.max(0, h - TITLEBAR_HEIGHT),
+        });
+      }
     }
     resizeTimeout = null;
   }, 50); // 50ms debounce to prevent sizing race conditions
@@ -1137,6 +1146,12 @@ function animateSettingsTransition(targetOpen: boolean) {
 ipcMain.on('settings:toggle', (_event, isOpen: boolean) => {
   console.log('IPC Received: settings:toggle, isOpen:', isOpen);
   animateSettingsTransition(isOpen);
+});
+
+ipcMain.on('disclaimer:toggle', (_event, isOpen: boolean) => {
+  console.log('IPC Received: disclaimer:toggle, isOpen:', isOpen);
+  disclaimerOpen = isOpen;
+  updateActiveViewBounds();
 });
 
 ipcMain.handle('account:get-all', () => accounts);

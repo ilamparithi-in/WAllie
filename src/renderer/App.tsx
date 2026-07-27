@@ -33,6 +33,9 @@ export const App: React.FC = () => {
     // Load initial global settings
     window.electronAPI.getGlobalSettings().then((settings) => {
       setGlobalSettings(settings);
+      if (!settings.disclaimerAccepted) {
+        window.electronAPI.toggleDisclaimer(true);
+      }
     });
 
     const unsubscribeGlobalSettings = window.electronAPI.onGlobalSettingsChanged((settings) => {
@@ -116,6 +119,7 @@ export const App: React.FC = () => {
     const success = await window.electronAPI.saveGlobalSettings(updatedSettings);
     if (success) {
       setGlobalSettings(updatedSettings);
+      window.electronAPI.toggleDisclaimer(false);
     }
   };
 
@@ -223,7 +227,10 @@ export const App: React.FC = () => {
         onClose={handleCloseSettings} 
         initialPage={settingsInitialPage}
         initialAccountId={settingsInitialAccountId}
-        onShowDisclaimer={() => setShowDisclaimerForce(true)}
+        onShowDisclaimer={() => {
+          setShowDisclaimerForce(true);
+          window.electronAPI.toggleDisclaimer(true);
+        }}
       />
 
       {/* Custom Protocol Account Switcher Prompt */}
@@ -314,16 +321,16 @@ export const App: React.FC = () => {
                   The Application is provided "AS IS", without warranty of any kind, express or implied. Under no circumstances shall the developer, contributors, or copyright holders of WAllie be liable for any direct, indirect, incidental, special, consequential, or punitive damages, including but not limited to:
                 </p>
                 <ul className="list-disc pl-5 mt-1.5 space-y-1">
-                  <li>Suspension, restriction, or banning of your WhatsApp account(s) due to the use of this client.</li>
+                  <li>Any issues with your connection to or availability of the WhatsApp Web service.</li>
                   <li>Data loss, corruption, or leakages.</li>
                   <li>Any damages resulting from software errors, crashes, or security vulnerabilities.</li>
                 </ul>
               </div>
 
               <div>
-                <h4 className="font-bold text-[#e9edef] mb-1">4. Terms of Service Compliance</h4>
+                <h4 className="font-bold text-[#e9edef] mb-1">4. Terms of Service</h4>
                 <p>
-                  WhatsApp actively prohibits the use of unofficial clients, wrappers, or automation tools. By logging into your accounts using this Application, you acknowledge the risk that your accounts may be flagged or terminated by WhatsApp. You assume full and sole responsibility for compliance with WhatsApp’s official Terms of Service.
+                  WAllie acts strictly as a web wrapper for the official WhatsApp Web application. The Application does not contain any automated bots, scraping scripts, spamming features, or policy-violating tools. Users are solely responsible for ensuring their usage of the application complies with WhatsApp's Terms of Service.
                 </p>
               </div>
 
@@ -346,7 +353,7 @@ export const App: React.FC = () => {
                     className="mt-0.5 w-4 h-4 rounded border-[#2c3943] bg-[#111b21] text-[#00a884] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#00a884]"
                   />
                   <span className="text-[11px] text-[#8696a0] group-hover:text-[#e9edef] transition-colors leading-normal select-text">
-                    I acknowledge that using this client carries the risk of account suspension by WhatsApp, and I agree that the developer of this application is not responsible for any operations, actions, or consequences.
+                    I acknowledge that WAllie is an unofficial wrapper for WhatsApp Web, and I agree that the developer of this application is not responsible for any operations, actions, or consequences of my usage.
                   </span>
                 </label>
 
@@ -373,7 +380,10 @@ export const App: React.FC = () => {
             ) : (
               <div className="flex justify-end border-t border-[#2c3943]/60 pt-4">
                 <button
-                  onClick={() => setShowDisclaimerForce(false)}
+                  onClick={() => {
+                    setShowDisclaimerForce(false);
+                    window.electronAPI.toggleDisclaimer(false);
+                  }}
                   className="px-6 py-2 rounded-lg text-xs font-semibold bg-[#00a884] hover:bg-[#00c298] text-[#111b21] transition-all duration-200 shadow-md cursor-pointer"
                 >
                   Close Disclaimer

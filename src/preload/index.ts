@@ -70,6 +70,7 @@ export interface ElectronAPI {
 
   // Settings & View toggle
   toggleSettings: (isOpen: boolean) => void;
+  toggleDisclaimer: (isOpen: boolean) => void;
   resetZoom: () => void;
   toggleDevTools: () => void;
 
@@ -148,6 +149,7 @@ const api: ElectronAPI = {
     ipcRenderer.invoke('extension:install-webstore', accountId, urlOrId),
 
   toggleSettings: (isOpen: boolean) => ipcRenderer.send('settings:toggle', isOpen),
+  toggleDisclaimer: (isOpen: boolean) => ipcRenderer.send('disclaimer:toggle', isOpen),
   resetZoom: () => ipcRenderer.send('zoom:reset'),
   toggleDevTools: () => ipcRenderer.send('devtools:toggle'),
 

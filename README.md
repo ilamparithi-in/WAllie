@@ -4,15 +4,7 @@
 
 **WAllie** is a lightweight, feature-rich, and highly customizable desktop WhatsApp client designed specifically for Linux. Built on Electron, React, and TypeScript, it addresses common shortcomings of unofficial wrappers by providing complete account session isolation and native integration with the Linux desktop ecosystem.
 
-```
-+---------------------------------------------------------------------------------------+
-|  [💬 Primary] [💼 Work] [➕]                                             [⚙] [_][□][X]  | (28px Clean Titlebar)
-+---------------------------------------------------------------------------------------+
-|                                                                                       |
-|                     WhatsApp Web View (Active WebContentsView)                        |
-|                                                                                       |
-+---------------------------------------------------------------------------------------+
-```
+<insert image here>
 
 ---
 
@@ -131,8 +123,8 @@ npm run dev
 **WAllie is an unofficial, third-party client wrapper for WhatsApp Web.** 
 
 - **No Affiliation**: This project is not affiliated, associated, authorized, endorsed by, or in any way officially connected with WhatsApp LLC, Meta Platforms, Inc., or any of their subsidiaries or affiliates. The official WhatsApp website can be found at [https://whatsapp.com](https://whatsapp.com).
-- **Limitation of Liability**: All operations and actions performed on this client are the sole responsibility of the user. The developers and contributors of this application are not liable for any account restrictions, suspensions, data loss, or other damages arising from the use of this software.
-- **Terms of Service**: WhatsApp policies prohibit the use of unofficial clients. Using this software carries a risk of account suspension. Use at your own risk.
+- **Limitation of Liability**: All operations and actions performed on this client are the sole responsibility of the user. The developers and contributors of this application are not liable for any data loss, settings disruptions, or other issues arising from the use of this software.
+- **Terms of Service**: WAllie is a standard client wrapper that loads the official WhatsApp Web interface. It does not use any automation, spamming, or scraping APIs. You are responsible for ensuring your usage adheres to WhatsApp's Terms of Service.
 
 ---
 
