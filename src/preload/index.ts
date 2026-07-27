@@ -1,43 +1,7 @@
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
+import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification } from '../shared/types';
 
-export interface ExtensionInfo {
-  id: string;
-  name: string;
-  version: string;
-  path: string;
-  enabled: boolean;
-  source?: 'webstore' | 'developer';
-}
-
-export interface AccountInfo {
-  id: string;
-  name: string;
-  unreadCount: number;
-  partition: string;
-  loggedIn?: boolean;
-  extensions?: ExtensionInfo[];
-  emoji?: string;
-  settings?: {
-    cameraEnabled: boolean;
-    micEnabled: boolean;
-    notificationsEnabled: boolean;
-    geolocationEnabled?: boolean;
-    clipboardReadEnabled?: boolean;
-    customCss?: string;
-    selectedTheme?: string;
-  };
-}
-
-export interface GlobalSettings {
-  closeToTray: boolean;
-  hardwareAcceleration: boolean;
-  preloadAccountIds?: string[];
-  showDevToolsToggle?: boolean;
-  notificationLoggingEnabled?: boolean;
-  extensionDevMode?: boolean;
-  startMinimized?: boolean;
-  disclaimerAccepted?: boolean;
-}
+export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification };
 
 export interface ElectronAPI {
   // Window controls
@@ -84,11 +48,9 @@ export interface ElectronAPI {
   updateAccountSettings: (accountId: string, settings: { cameraEnabled: boolean; micEnabled: boolean; notificationsEnabled: boolean }) => Promise<boolean>;
 
   // Notification history & CSS controls
-  getNotificationHistory: () => Promise<any[]>;
+  getNotificationHistory: () => Promise<HistoricalNotification[]>;
   clearNotificationHistory: () => Promise<boolean>;
   saveCss: (accountId: string, customCss: string, selectedTheme: string) => Promise<boolean>;
-// ... rest matches original
-
 
   // Custom protocol controls
   onProtocolReceived: (callback: (url: string) => void) => () => void;
@@ -101,7 +63,7 @@ export interface ElectronAPI {
   onMaximizedStateChanged: (callback: (isMaximized: boolean) => void) => () => void;
   onZoomChanged: (callback: (zoomPercent: number) => void) => () => void;
   onTriggerRename: (callback: (accountId: string) => void) => () => void;
-  onNotificationHistoryChanged: (callback: (history: any[]) => void) => () => void;
+  onNotificationHistoryChanged: (callback: (history: HistoricalNotification[]) => void) => () => void;
   onSettingsCloseRequest: (callback: () => void) => () => void;
   onGlobalSettingsChanged: (callback: (settings: GlobalSettings) => void) => () => void;
   onDownloadProgress: (
@@ -253,6 +215,17 @@ const api: ElectronAPI = {
 async function resolveIconToBase64(url: string): Promise<string | null> {
   if (!url) return null;
   if (url.startsWith('data:')) return url;
+  // Only fetch avatars from WhatsApp's own CDN
+  try {
+    const parsedUrl = new URL(url);
+    const isWhatsApp = parsedUrl.hostname.endsWith('.whatsapp.net') || parsedUrl.hostname.endsWith('.whatsapp.com');
+    if (!isWhatsApp) {
+      console.warn('Blocked non-WhatsApp avatar URL:', parsedUrl.hostname);
+      return null;
+    }
+  } catch {
+    return null;
+  }
   try {
     const response = await fetch(url);
     const blob = await response.blob();
@@ -293,9 +266,6 @@ function setupWhatsAppIntegration() {
     },
     onNotificationClicked: (callback: (tag: string) => void) => {
       onClickCallback = callback;
-    },
-    createLogEntry: (data: { title: string; body: string }) => {
-      ipcRenderer.send('notification:create-log-entry', data);
     }
   });
 
@@ -305,7 +275,7 @@ function setupWhatsAppIntegration() {
     }
   });
 
-  // Inject the custom Notification class and the MutationObserver message tracker into the Main World (worldId 0)
+  // Inject the custom Notification class into the Main World (worldId 0)
   webFrame.executeJavaScriptInIsolatedWorld(0, [{
     code: `
       (() => {
@@ -373,130 +343,12 @@ function setupWhatsAppIntegration() {
 
         window.Notification = CustomNotification;
 
-        // MutationObserver based message deletion and edit tracker
-        const messageStore = new Map();
-        const deletionPhrases = [
-          'message was deleted',
-          'message deleted',
-          'mensaje fue eliminado',
-          'mensaje eliminado',
-          'mensagem foi apagada',
-          'mensagem apagada',
-          'message a été supprimé',
-          'nachricht wurde gelöscht',
-          'messaggio è stato eliminato',
-          'bericht is verwijderd',
-          'इस संदेश को हटा दिया गया था',
-          'इस संदेश को हटा दिया गया',
-          'تم حذف هذه الرسالة'
-        ];
-
-        function isDeletionText(t) {
-          const clean = t.toLowerCase();
-          return deletionPhrases.some(phrase => clean.includes(phrase));
+        if (window.ServiceWorkerRegistration && window.ServiceWorkerRegistration.prototype) {
+          window.ServiceWorkerRegistration.prototype.showNotification = function(title, options = {}) {
+            new CustomNotification(title, options);
+            return Promise.resolve();
+          };
         }
-
-        function scanMessages() {
-          const msgElements = document.querySelectorAll('[data-id]');
-          
-          // Prevent memory leaks
-          if (messageStore.size > 2000) {
-            const keys = Array.from(messageStore.keys());
-            for (let i = 0; i < 500; i++) {
-              messageStore.delete(keys[i]);
-            }
-          }
-
-          for (const msgEl of msgElements) {
-            const id = msgEl.getAttribute('data-id');
-            if (!id) continue;
-
-            const textEl = msgEl.querySelector('.copyable-text');
-            let text = '';
-            let sender = '';
-
-            if (textEl) {
-              text = textEl.textContent || '';
-              const preText = textEl.getAttribute('data-pre-plain-text');
-              if (preText) {
-                const match = preText.match(/]\\s*([^:]+):/);
-                if (match) {
-                  sender = match[1].trim();
-                }
-              }
-            } else {
-              const selectable = msgEl.querySelector('.selectable-text');
-              if (selectable) {
-                text = selectable.textContent || '';
-              } else {
-                text = msgEl.textContent || '';
-              }
-            }
-
-            text = text.trim();
-            if (!text) continue;
-
-            // Extract sender name from DOM layout if data-pre-plain-text wasn't available
-            if (!sender) {
-              const container = msgEl.closest('.message-in, .message-out');
-              if (container) {
-                if (container.classList.contains('message-out')) {
-                  sender = 'You';
-                } else {
-                  const nameEl = container.querySelector('span[dir="auto"]');
-                  if (nameEl && nameEl.textContent) {
-                    sender = nameEl.textContent.trim();
-                  }
-                }
-              }
-            }
-
-            if (!sender) {
-              sender = 'Contact';
-            }
-
-            if (messageStore.has(id)) {
-              const prev = messageStore.get(id);
-              if (prev.text !== text) {
-                const wasDeletion = isDeletionText(text);
-                const prevWasDeletion = isDeletionText(prev.text);
-
-                if (wasDeletion && !prevWasDeletion) {
-                  // Message was deleted
-                  if (window.__walinux_ipc) {
-                    window.__walinux_ipc.createLogEntry({
-                      title: '⚠️ [Deleted] ' + (prev.sender || sender),
-                      body: 'Original: "' + prev.text + '"'
-                    });
-                  }
-                } else if (!wasDeletion && !prevWasDeletion) {
-                  // Message was edited
-                  if (window.__walinux_ipc) {
-                    window.__walinux_ipc.createLogEntry({
-                      title: '✏️ [Edited] ' + (prev.sender || sender),
-                      body: 'Original: "' + prev.text + '"\\nEdited: "' + text + '"'
-                    });
-                  }
-                }
-              }
-            }
-
-            messageStore.set(id, { text, sender, timestamp: Date.now() });
-          }
-        }
-
-        // Start observing DOM changes for messages
-        const observer = new MutationObserver(() => {
-          scanMessages();
-        });
-        observer.observe(document.body, {
-          childList: true,
-          subtree: true,
-          characterData: true
-        });
-
-        // Initial scan
-        scanMessages();
       })();
     `
   }]);

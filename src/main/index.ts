@@ -45,47 +45,11 @@ if (!gotTheLock) {
 
 const TITLEBAR_HEIGHT = 28;
 let disclaimerOpen = false;
+const CHROME_VERSION = process.versions.chrome || '132.0.0.0';
 const DEFAULT_USER_AGENT =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36';
+  `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`;
 
-interface ExtensionInfo {
-  id: string;
-  name: string;
-  version: string;
-  path: string;
-  enabled: boolean;
-  source?: 'webstore' | 'developer';
-}
-
-interface Account {
-  id: string;
-  name: string;
-  partition: string;
-  unreadCount: number;
-  loggedIn: boolean;
-  extensions: ExtensionInfo[];
-  emoji?: string;
-  settings?: {
-    cameraEnabled: boolean;
-    micEnabled: boolean;
-    notificationsEnabled: boolean;
-    geolocationEnabled?: boolean;
-    clipboardReadEnabled?: boolean;
-    customCss?: string;
-    selectedTheme?: string;
-  };
-}
-
-interface GlobalSettings {
-  closeToTray: boolean;
-  hardwareAcceleration: boolean;
-  preloadAccountIds?: string[];
-  showDevToolsToggle?: boolean;
-  notificationLoggingEnabled?: boolean;
-  extensionDevMode?: boolean;
-  startMinimized?: boolean;
-  disclaimerAccepted?: boolean;
-}
+import { Account, GlobalSettings, ExtensionInfo, HistoricalNotification, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -93,6 +57,18 @@ let tray: Tray | null = null;
 // Settings & Accounts configuration files
 const ACCOUNTS_FILE = path.join(app.getPath('userData'), 'accounts.json');
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
+
+// Safe directory deletion helper — only allows deletion within userData/extensions/
+const EXTENSIONS_BASE = path.join(app.getPath('userData'), 'extensions');
+
+function safeDeleteExtensionDir(extPath: string): void {
+  const resolved = path.resolve(extPath);
+  if (!resolved.startsWith(EXTENSIONS_BASE + path.sep) && resolved !== EXTENSIONS_BASE) {
+    console.error(`Refusing to delete path outside extensions directory: ${resolved}`);
+    return;
+  }
+  fs.rmSync(resolved, { recursive: true, force: true });
+}
 
 // Helper to load settings
 function loadSettings(): GlobalSettings {
@@ -198,15 +174,7 @@ function loadAccounts(): Account[] {
       unreadCount: 0,
       loggedIn: false,
       extensions: [],
-      settings: {
-        cameraEnabled: true,
-        micEnabled: true,
-        notificationsEnabled: true,
-        geolocationEnabled: false,
-        clipboardReadEnabled: false,
-        customCss: '',
-        selectedTheme: 'none',
-      },
+      settings: DEFAULT_ACCOUNT_SETTINGS,
     },
   ];
 }
@@ -221,15 +189,7 @@ function saveAccounts() {
       loggedIn,
       extensions,
       emoji: emoji || '',
-      settings: settings || {
-        cameraEnabled: true,
-        micEnabled: true,
-        notificationsEnabled: true,
-        geolocationEnabled: false,
-        clipboardReadEnabled: false,
-        customCss: '',
-        selectedTheme: 'none',
-      },
+      settings: settings || DEFAULT_ACCOUNT_SETTINGS,
     }));
     fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(dataToSave, null, 2), 'utf8');
   } catch (error) {
@@ -256,6 +216,73 @@ function crxToZip(crxBuffer: Buffer): Buffer {
     throw new Error(`Unsupported CRX version: ${version}`);
   }
   return crxBuffer.subarray(zipOffset);
+}
+
+// Display a warning dialog showing extension permissions before loading
+async function showExtensionPermissionWarning(
+  parentWindow: BrowserWindow,
+  manifestPath: string,
+  extensionName: string
+): Promise<boolean> {
+  try {
+    const manifestContent = fs.readFileSync(manifestPath, 'utf8');
+    const manifest = JSON.parse(manifestContent);
+    
+    const permissions: string[] = [
+      ...(manifest.permissions || []),
+      ...(manifest.optional_permissions || []),
+    ];
+    const hostPermissions: string[] = [
+      ...(manifest.host_permissions || []),
+    ];
+    
+    // Check content_scripts hosts
+    const contentScriptHosts: string[] = [];
+    if (manifest.content_scripts) {
+      for (const cs of manifest.content_scripts) {
+        if (cs.matches) {
+          contentScriptHosts.push(...cs.matches);
+        }
+      }
+    }
+    
+    const dangerousPermissions = ['<all_urls>', 'cookies', 'webRequest', 'webRequestBlocking', 'debugger', 'proxy', 'nativeMessaging'];
+    const hasDangerous = permissions.some(p => dangerousPermissions.includes(p)) ||
+                         hostPermissions.some(h => h === '<all_urls>' || h === '*://*/*');
+    
+    let detail = '';
+    if (permissions.length > 0) {
+      detail += `Permissions: ${permissions.join(', ')}\n`;
+    }
+    if (hostPermissions.length > 0) {
+      detail += `Host access: ${hostPermissions.join(', ')}\n`;
+    }
+    if (contentScriptHosts.length > 0) {
+      detail += `Content scripts on: ${contentScriptHosts.join(', ')}\n`;
+    }
+    if (!detail) {
+      detail = 'This extension requests no special permissions.';
+    }
+    
+    const warningPrefix = hasDangerous
+      ? '⚠️ WARNING: This extension requests powerful permissions that could access your WhatsApp data.\n\n'
+      : '';
+    
+    const choice = await dialog.showMessageBox(parentWindow, {
+      type: hasDangerous ? 'warning' : 'question',
+      buttons: ['Cancel', 'Install Anyway'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Extension Permissions',
+      message: `Install "${extensionName}"?`,
+      detail: warningPrefix + detail + '\n\nOnly install extensions you trust.',
+    });
+    
+    return choice.response === 1;
+  } catch (err) {
+    console.error('Failed to parse extension manifest for permissions check:', err);
+    return true; // Allow if we can't parse (already validated manifest.json exists)
+  }
 }
 
 // Accounts state load
@@ -287,16 +314,14 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
     // Permission Request Handler (Camera, Mic, Notifications, Geolocation, Clipboard-Read)
     accountSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
       const url = details.requestingUrl;
-      const isWA = url.includes('whatsapp.com') || url.includes('whatsapp.net');
+      let isWA = false;
+      try {
+        const hostname = new URL(url).hostname;
+        isWA = hostname === 'web.whatsapp.com' || hostname.endsWith('.whatsapp.com') || hostname.endsWith('.whatsapp.net');
+      } catch {}
       if (isWA) {
         const targetAccount = accounts.find((a) => a.partition === account.partition);
-        const settings = targetAccount?.settings || {
-          cameraEnabled: true,
-          micEnabled: true,
-          notificationsEnabled: true,
-          geolocationEnabled: false,
-          clipboardReadEnabled: false
-        };
+        const settings = targetAccount?.settings || DEFAULT_ACCOUNT_SETTINGS;
 
         if (permission === 'notifications') {
           callback(settings.notificationsEnabled);
@@ -334,16 +359,14 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
 
     // Permission Check Handler
     accountSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
-      const isWA = requestingOrigin.includes('whatsapp.com') || requestingOrigin.includes('whatsapp.net');
+      let isWA = false;
+      try {
+        const hostname = new URL(requestingOrigin).hostname;
+        isWA = hostname === 'web.whatsapp.com' || hostname.endsWith('.whatsapp.com') || hostname.endsWith('.whatsapp.net');
+      } catch {}
       if (isWA) {
         const targetAccount = accounts.find((a) => a.partition === account.partition);
-        const settings = targetAccount?.settings || {
-          cameraEnabled: true,
-          micEnabled: true,
-          notificationsEnabled: true,
-          geolocationEnabled: false,
-          clipboardReadEnabled: false
-        };
+        const settings = targetAccount?.settings || DEFAULT_ACCOUNT_SETTINGS;
 
         if (permission === 'notifications') {
           return settings.notificationsEnabled;
@@ -573,7 +596,7 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
             preload: path.join(__dirname, '../preload/index.cjs'),
             contextIsolation: true,
             nodeIntegration: false,
-            sandbox: false,
+            sandbox: true,
             backgroundThrottling: false, // Prevent video/audio calls lagging when blurred
           }
         }
@@ -977,7 +1000,7 @@ async function removeAccountLogic(id: string): Promise<boolean> {
   if (account.extensions && account.extensions.length > 0) {
     for (const ext of account.extensions) {
       try {
-        fs.rmSync(ext.path, { recursive: true, force: true });
+        safeDeleteExtensionDir(ext.path);
       } catch (err) {
         console.error(`Failed to delete extension directory ${ext.path}:`, err);
       }
@@ -1332,7 +1355,7 @@ ipcMain.handle('extension:import', async (_event, accountId: string, importType:
 
     const manifestPath = path.join(targetDir, 'manifest.json');
     if (!fs.existsSync(manifestPath)) {
-      fs.rmSync(targetDir, { recursive: true, force: true });
+      safeDeleteExtensionDir(targetDir);
       throw new Error('Missing manifest.json inside the extension');
     }
 
@@ -1346,6 +1369,13 @@ ipcMain.handle('extension:import', async (_event, accountId: string, importType:
       path: targetDir,
       enabled: true,
     };
+
+    // Show permission warning
+    const userApproved = await showExtensionPermissionWarning(mainWindow, manifestPath, newExtension.name);
+    if (!userApproved) {
+      safeDeleteExtensionDir(targetDir);
+      return null;
+    }
 
     const account = accounts.find((a) => a.id === accountId);
     if (account) {
@@ -1369,7 +1399,7 @@ ipcMain.handle('extension:import', async (_event, accountId: string, importType:
     console.error('Failed to import extension:', err);
     if (fs.existsSync(targetDir)) {
       try {
-        fs.rmSync(targetDir, { recursive: true, force: true });
+        safeDeleteExtensionDir(targetDir);
       } catch (_) {}
     }
     dialog.showErrorBox('Extension Import Error', err.message || 'An unknown error occurred during import.');
@@ -1423,7 +1453,7 @@ ipcMain.handle('extension:install-webstore', async (_event, accountId: string, u
   const targetDir = path.join(app.getPath('userData'), 'extensions', accountId, extensionId);
 
   try {
-    const downloadUrl = `https://clients2.google.com/service/update2/crx?response=redirect&os=linux&arch=x86-64&os_arch=x86-64&prod=chromecrx&prodchannel=unknown&prodversion=132.0.0.0&acceptformat=crx3&x=id%3D${extensionId}%26uc`;
+    const downloadUrl = `https://clients2.google.com/service/update2/crx?response=redirect&os=linux&arch=x86-64&os_arch=x86-64&prod=chromecrx&prodchannel=unknown&prodversion=${CHROME_VERSION}&acceptformat=crx3&x=id%3D${extensionId}%26uc`;
     
     const response = await fetch(downloadUrl, {
       headers: {
@@ -1441,7 +1471,7 @@ ipcMain.handle('extension:install-webstore', async (_event, accountId: string, u
     const zipBuffer = crxToZip(crxBuffer);
 
     if (fs.existsSync(targetDir)) {
-      fs.rmSync(targetDir, { recursive: true, force: true });
+      safeDeleteExtensionDir(targetDir);
     }
     fs.mkdirSync(targetDir, { recursive: true });
 
@@ -1450,7 +1480,7 @@ ipcMain.handle('extension:install-webstore', async (_event, accountId: string, u
 
     const manifestPath = path.join(targetDir, 'manifest.json');
     if (!fs.existsSync(manifestPath)) {
-      fs.rmSync(targetDir, { recursive: true, force: true });
+      safeDeleteExtensionDir(targetDir);
       throw new Error('Manifest.json not found inside downloaded extension.');
     }
 
@@ -1465,6 +1495,15 @@ ipcMain.handle('extension:install-webstore', async (_event, accountId: string, u
       enabled: true,
       source: 'webstore'
     };
+
+    // Show permission warning
+    if (mainWindow) {
+      const userApproved = await showExtensionPermissionWarning(mainWindow, manifestPath, newExtension.name);
+      if (!userApproved) {
+        safeDeleteExtensionDir(targetDir);
+        return null;
+      }
+    }
 
     const account = accounts.find((a) => a.id === accountId);
     if (account) {
@@ -1553,7 +1592,7 @@ ipcMain.handle('extension:remove', async (_event, accountId: string, extensionId
 
   // Delete extension files
   try {
-    fs.rmSync(ext.path, { recursive: true, force: true });
+    safeDeleteExtensionDir(ext.path);
   } catch (err) {
     console.error(`Failed to delete extension files at ${ext.path}:`, err);
   }
@@ -1579,6 +1618,19 @@ if (gotTheLock) {
       app.setAsDefaultProtocolClient('whatsapp');
       app.setAsDefaultProtocolClient('wallie');
     }
+
+    // Content Security Policy for the main renderer window (React UI)
+    // Only applies to defaultSession — WhatsApp partitions are unaffected
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:*"
+          ]
+        }
+      });
+    });
 
     createMainWindow();
     createTray();
@@ -1877,16 +1929,6 @@ async function getAccountStorageSizes(partition: string) {
   };
 }
 
-interface HistoricalNotification {
-  id: string;
-  accountId: string;
-  accountName: string;
-  title: string;
-  body: string;
-  icon: string;
-  timestamp: number;
-}
-
 const NOTIFICATION_HISTORY_FILE = path.join(app.getPath('userData'), 'notification_history.json');
 const MAX_NOTIFICATIONS = 100;
 
@@ -2036,7 +2078,7 @@ ipcMain.handle('account:save-css', (_event, accountId: string, customCss: string
   const account = accounts.find((a) => a.id === accountId);
   if (account) {
     if (!account.settings) {
-      account.settings = { cameraEnabled: true, micEnabled: true, notificationsEnabled: true };
+      account.settings = { ...DEFAULT_ACCOUNT_SETTINGS };
     }
     account.settings.customCss = customCss;
     account.settings.selectedTheme = selectedTheme;
@@ -2080,6 +2122,10 @@ function toggleDevToolsForAccount(accountId: string) {
       partition: account.partition,
       contextIsolation: true,
       nodeIntegration: false,
+      // sandbox: false is intentional — the DevTools window loads a custom HTML page
+      // with a unified titlebar that requires the preload script. Enabling sandbox
+      // breaks element inspection and network request display. The attack surface is
+      // minimal since only our own data:text/html content is loaded.
       sandbox: false,
     },
   });
