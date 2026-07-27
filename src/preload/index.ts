@@ -6,6 +6,7 @@ export interface ExtensionInfo {
   version: string;
   path: string;
   enabled: boolean;
+  source?: 'webstore' | 'developer';
 }
 
 export interface AccountInfo {
@@ -32,6 +33,7 @@ export interface GlobalSettings {
   preloadAccountIds?: string[];
   showDevToolsToggle?: boolean;
   notificationLoggingEnabled?: boolean;
+  extensionDevMode?: boolean;
 }
 
 export interface ElectronAPI {
@@ -59,6 +61,8 @@ export interface ElectronAPI {
   importExtension: (accountId: string, importType: 'folder' | 'archive') => Promise<ExtensionInfo | null>;
   toggleExtension: (accountId: string, extensionId: string, enabled: boolean) => Promise<boolean>;
   removeExtension: (accountId: string, extensionId: string) => Promise<boolean>;
+  openWebStore: (accountId: string) => void;
+  installWebStoreExtension: (accountId: string, urlOrId: string) => Promise<ExtensionInfo | null>;
 
   // Settings & View toggle
   toggleSettings: (isOpen: boolean) => void;
@@ -78,6 +82,8 @@ export interface ElectronAPI {
   getNotificationHistory: () => Promise<any[]>;
   clearNotificationHistory: () => Promise<boolean>;
   saveCss: (accountId: string, customCss: string, selectedTheme: string) => Promise<boolean>;
+// ... rest matches original
+
 
   // Custom protocol controls
   onProtocolReceived: (callback: (url: string) => void) => () => void;
@@ -129,6 +135,10 @@ const api: ElectronAPI = {
     ipcRenderer.invoke('extension:toggle', accountId, extensionId, enabled),
   removeExtension: (accountId: string, extensionId: string) =>
     ipcRenderer.invoke('extension:remove', accountId, extensionId),
+  openWebStore: (accountId: string) =>
+    ipcRenderer.send('webstore:open', accountId),
+  installWebStoreExtension: (accountId: string, urlOrId: string) =>
+    ipcRenderer.invoke('extension:install-webstore', accountId, urlOrId),
 
   toggleSettings: (isOpen: boolean) => ipcRenderer.send('settings:toggle', isOpen),
   resetZoom: () => ipcRenderer.send('zoom:reset'),
@@ -772,10 +782,139 @@ function injectCallTitlebar() {
 
 const isWhatsApp = window.location.hostname.includes('whatsapp.com');
 
+async function setupWebStoreInjection() {
+  try {
+    const targetAccountId = await ipcRenderer.invoke('webstore:get-target-account-id');
+    if (!targetAccountId) return;
+
+    let lastUrl = '';
+    let isInstalling = false;
+
+    setInterval(async () => {
+      const url = window.location.href;
+      if (url === lastUrl && document.getElementById('wallie-cws-btn')) {
+        return;
+      }
+      lastUrl = url;
+
+      const match = url.match(/\/detail\/[^/]+\/([a-p]{32})/);
+      if (!match) {
+        const existing = document.getElementById('wallie-cws-btn');
+        if (existing) existing.remove();
+        return;
+      }
+
+      const extensionId = match[1];
+      const isInstalled = await ipcRenderer.invoke('webstore:check-installed', targetAccountId, extensionId);
+      
+      createOrUpdateWebStoreButton(targetAccountId, extensionId, isInstalled);
+    }, 1000);
+
+    function createOrUpdateWebStoreButton(accountId: string, extensionId: string, isInstalled: boolean) {
+      let btn = document.getElementById('wallie-cws-btn');
+      if (!btn) {
+        btn = document.createElement('div');
+        btn.id = 'wallie-cws-btn';
+        document.body.appendChild(btn);
+      }
+
+      btn.className = '';
+      
+      Object.assign(btn.style, {
+        position: 'fixed',
+        top: '76px',
+        right: '24px',
+        zIndex: '999999',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: '13px',
+        fontWeight: '700',
+        padding: '10px 18px',
+        borderRadius: '20px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        transition: 'all 0.2s ease-in-out',
+        border: '1px solid rgba(255,255,255,0.1)',
+        userSelect: 'none'
+      });
+
+      if (isInstalled) {
+        btn.innerText = 'Installed ✓';
+        btn.classList.add('disabled');
+        Object.assign(btn.style, {
+          backgroundColor: '#202c33',
+          color: '#8696a0',
+          cursor: 'not-allowed',
+          transform: 'none'
+        });
+        btn.onclick = null;
+      } else {
+        btn.innerText = 'Install in WAllie';
+        Object.assign(btn.style, {
+          backgroundColor: '#00a884',
+          color: '#111b21',
+          cursor: 'pointer'
+        });
+        
+        btn.onmouseenter = () => {
+          if (!isInstalling) {
+            btn!.style.backgroundColor = '#00c298';
+            btn!.style.transform = 'translateY(-2px)';
+          }
+        };
+        btn.onmouseleave = () => {
+          if (!isInstalling) {
+            btn!.style.backgroundColor = '#00a884';
+            btn!.style.transform = 'none';
+          }
+        };
+
+        btn.onclick = async () => {
+          if (isInstalling) return;
+          isInstalling = true;
+          
+          btn!.innerText = 'Installing...';
+          Object.assign(btn!.style, {
+            backgroundColor: '#202c33',
+            color: '#e9edef',
+            cursor: 'wait',
+            transform: 'none'
+          });
+
+          try {
+            const result = await ipcRenderer.invoke('extension:install-webstore', accountId, extensionId);
+            isInstalling = false;
+            if (result) {
+              createOrUpdateWebStoreButton(accountId, extensionId, true);
+            } else {
+              showErrorState();
+            }
+          } catch (err) {
+            isInstalling = false;
+            showErrorState();
+          }
+        };
+      }
+
+      function showErrorState() {
+        btn!.innerText = 'Failed. Try Again';
+        Object.assign(btn!.style, {
+          backgroundColor: '#ea4335',
+          color: '#ffffff',
+          cursor: 'pointer'
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[walinux] Failed to setup webstore injection:', err);
+  }
+}
+
 if (!isWhatsApp) {
   contextBridge.exposeInMainWorld('electronAPI', api);
   
-  // Expose DOMContentLoaded listener to inject unified titlebar for DevTools window
   window.addEventListener('DOMContentLoaded', () => {
     const isDevTools = !!document.querySelector('meta[name="is-devtools"]');
     if (isDevTools) {
@@ -789,6 +928,10 @@ if (!isWhatsApp) {
       });
     }
   });
+
+  if (window.location.hostname === 'chromewebstore.google.com') {
+    setupWebStoreInjection();
+  }
 } else {
   setupWhatsAppIntegration();
   if (window.location.pathname.includes('/call')) {
@@ -797,3 +940,4 @@ if (!isWhatsApp) {
 }
 
 export {};
+

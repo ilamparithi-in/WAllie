@@ -3,10 +3,10 @@ import { Minus, Square, Copy, X, Settings, Plus, MessageSquare, RotateCw, Code }
 import type { AccountInfo } from '../../preload';
 
 interface TitlebarProps {
-  onOpenSettings: () => void;
+  onToggleSettings: () => void;
 }
 
-export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
+export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings }) => {
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [activeId, setActiveId] = useState<string>('default');
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
@@ -269,7 +269,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onOpenSettings }) => {
 
         {/* Settings Button */}
         <button
-          onClick={onOpenSettings}
+          onClick={onToggleSettings}
           title="Settings (Extensions, CSS, Storage, History)"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"

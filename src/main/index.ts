@@ -53,6 +53,7 @@ interface ExtensionInfo {
   version: string;
   path: string;
   enabled: boolean;
+  source?: 'webstore' | 'developer';
 }
 
 interface Account {
@@ -79,6 +80,7 @@ interface GlobalSettings {
   preloadAccountIds?: string[];
   showDevToolsToggle?: boolean;
   notificationLoggingEnabled?: boolean;
+  extensionDevMode?: boolean;
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -119,6 +121,7 @@ function loadSettings(): GlobalSettings {
         preloadAccountIds,
         showDevToolsToggle: !!parsed.showDevToolsToggle,
         notificationLoggingEnabled: !!parsed.notificationLoggingEnabled,
+        extensionDevMode: !!parsed.extensionDevMode,
       };
     }
   } catch (error) {
@@ -130,6 +133,7 @@ function loadSettings(): GlobalSettings {
     preloadAccountIds: [],
     showDevToolsToggle: false,
     notificationLoggingEnabled: false,
+    extensionDevMode: false,
   };
 }
 
@@ -257,6 +261,9 @@ const devtoolsWindows = new Map<string, BrowserWindow>();
 
 // Keep track of which sessions have been configured to avoid duplicate handlers
 const configuredSessions = new Set<string>();
+
+// Map of webstore browser WebContents ID to target account ID
+const webstoreWindows = new Map<number, string>();
 
 async function createAccountView(account: Account): Promise<WebContentsView> {
   const accountSession = session.fromPartition(account.partition);
@@ -691,10 +698,16 @@ function pauseAllMedia() {
 
 
 
+let animationInterval: NodeJS.Timeout | null = null;
 let resizeTimeout: NodeJS.Timeout | null = null;
 
 function updateActiveViewBounds() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  if (animationInterval) {
+    clearInterval(animationInterval);
+    animationInterval = null;
+  }
 
   // 1. Immediately update bounds synchronously for a live, lag-free resize experience
   const [width, height] = mainWindow.getContentSize();
@@ -1049,10 +1062,61 @@ ipcMain.handle('account:get-name-for-session', (event) => {
 let settingsOpen = false;
 const DRAWER_WIDTH = 450;
 
+function animateSettingsTransition(targetOpen: boolean) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  if (animationInterval) {
+    clearInterval(animationInterval);
+    animationInterval = null;
+  }
+
+  const duration = 300; // ms
+  const fps = 60;
+  const stepTime = Math.floor(1000 / fps); // ~16.6ms
+  const totalSteps = Math.floor(duration / stepTime);
+  let step = 0;
+
+  const [w, h] = mainWindow.getContentSize();
+  const activeView = accountViews.get(activeAccountId);
+  if (!activeView) return;
+
+  const startWidth = targetOpen ? w : w - DRAWER_WIDTH;
+  const endWidth = targetOpen ? w - DRAWER_WIDTH : w;
+  const widthDiff = endWidth - startWidth;
+
+  // Immediately update target layout variable
+  settingsOpen = targetOpen;
+
+  animationInterval = setInterval(() => {
+    step++;
+    if (step >= totalSteps) {
+      if (animationInterval) {
+        clearInterval(animationInterval);
+        animationInterval = null;
+      }
+      updateActiveViewBounds();
+      return;
+    }
+
+    // Ease-in-out quadratic interpolation
+    const t = step / totalSteps;
+    const factor = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const currentWidth = Math.round(startWidth + widthDiff * factor);
+
+    if (mainWindow && !mainWindow.isDestroyed() && activeView) {
+      activeView.setBounds({
+        x: 0,
+        y: TITLEBAR_HEIGHT,
+        width: Math.max(0, currentWidth),
+        height: Math.max(0, h - TITLEBAR_HEIGHT),
+      });
+    }
+  }, stepTime);
+}
+
 ipcMain.on('settings:toggle', (_event, isOpen: boolean) => {
   console.log('IPC Received: settings:toggle, isOpen:', isOpen);
-  settingsOpen = isOpen;
-  updateActiveViewBounds();
+  animateSettingsTransition(isOpen);
 });
 
 ipcMain.handle('account:get-all', () => accounts);
@@ -1250,6 +1314,126 @@ ipcMain.handle('extension:import', async (_event, accountId: string, importType:
       } catch (_) {}
     }
     dialog.showErrorBox('Extension Import Error', err.message || 'An unknown error occurred during import.');
+    throw err;
+  }
+
+  return null;
+});
+
+// Chrome Web Store Sandboxed Window and Installer Handlers
+ipcMain.on('webstore:open', (_event, accountId: string) => {
+  const cwsWin = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.cjs'),
+      partition: 'persist:webstore',
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+
+  cwsWin.removeMenu();
+
+  webstoreWindows.set(cwsWin.webContents.id, accountId);
+
+  cwsWin.webContents.on('destroyed', () => {
+    webstoreWindows.delete(cwsWin.webContents.id);
+  });
+
+  cwsWin.loadURL('https://chromewebstore.google.com/');
+});
+
+ipcMain.handle('webstore:get-target-account-id', (event) => {
+  return webstoreWindows.get(event.sender.id) || null;
+});
+
+ipcMain.handle('webstore:check-installed', (_event, accountId: string, extensionId: string) => {
+  const account = accounts.find((a) => a.id === accountId);
+  if (!account || !account.extensions) return false;
+  return account.extensions.some((ext) => ext.id === extensionId);
+});
+
+ipcMain.handle('extension:install-webstore', async (_event, accountId: string, urlOrId: string) => {
+  const match = urlOrId.match(/([a-p]{32})/i);
+  if (!match) {
+    throw new Error('Invalid Chrome Web Store URL or Extension ID.');
+  }
+  const extensionId = match[1].toLowerCase();
+  const targetDir = path.join(app.getPath('userData'), 'extensions', accountId, extensionId);
+
+  try {
+    const downloadUrl = `https://clients2.google.com/service/update2/crx?response=redirect&os=linux&arch=x86-64&os_arch=x86-64&prod=chromecrx&prodchannel=unknown&prodversion=132.0.0.0&acceptformat=crx3&x=id%3D${extensionId}%26uc`;
+    
+    const response = await fetch(downloadUrl, {
+      headers: {
+        'User-Agent': DEFAULT_USER_AGENT,
+        'Referer': `https://chrome.google.com/webstore/detail/${extensionId}?hl=en`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download from Chrome Web Store (HTTP ${response.status})`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const crxBuffer = Buffer.from(arrayBuffer);
+    const zipBuffer = crxToZip(crxBuffer);
+
+    if (fs.existsSync(targetDir)) {
+      fs.rmSync(targetDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(targetDir, { recursive: true });
+
+    const zip = new AdmZip(zipBuffer);
+    zip.extractAllTo(targetDir, true);
+
+    const manifestPath = path.join(targetDir, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) {
+      fs.rmSync(targetDir, { recursive: true, force: true });
+      throw new Error('Manifest.json not found inside downloaded extension.');
+    }
+
+    const manifestContent = fs.readFileSync(manifestPath, 'utf8');
+    const manifest = JSON.parse(manifestContent);
+
+    const newExtension: ExtensionInfo = {
+      id: extensionId,
+      name: manifest.name || 'Unnamed Extension',
+      version: manifest.version || '1.0.0',
+      path: targetDir,
+      enabled: true,
+      source: 'webstore'
+    };
+
+    const account = accounts.find((a) => a.id === accountId);
+    if (account) {
+      if (!account.extensions) {
+        account.extensions = [];
+      }
+      // Overwrite extension entry in array if present
+      account.extensions = account.extensions.filter((ext) => ext.id !== extensionId);
+      account.extensions.push(newExtension);
+      saveAccounts();
+
+      const view = accountViews.get(accountId);
+      if (view) {
+        const accountSession = session.fromPartition(account.partition);
+        const loadedExts = accountSession.getAllExtensions();
+        const matched = loadedExts.find((e) => e.id === extensionId || path.resolve(e.path) === path.resolve(targetDir));
+        if (matched) {
+          accountSession.removeExtension(matched.id);
+        }
+        await accountSession.loadExtension(targetDir);
+      }
+
+      mainWindow?.webContents.send('account:list-changed', accounts, activeAccountId);
+      return newExtension;
+    }
+  } catch (err: any) {
+    console.error(`Failed to install Chrome Web Store extension ${extensionId}:`, err);
+    dialog.showErrorBox('Extension Install Error', err.message || 'An unknown error occurred during download.');
     throw err;
   }
 

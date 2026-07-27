@@ -68,9 +68,12 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const handleOpenSettings = () => {
-    setIsSettingsOpen(true);
-    window.electronAPI?.toggleSettings(true);
+  const handleToggleSettings = () => {
+    setIsSettingsOpen((prev) => {
+      const next = !prev;
+      window.electronAPI?.toggleSettings(next);
+      return next;
+    });
   };
 
   const handleCloseSettings = () => {
@@ -81,7 +84,7 @@ export const App: React.FC = () => {
   return (
     <div className="h-screen w-screen flex flex-col bg-[#111b21] overflow-hidden select-none">
       {/* Custom Titlebar (28px) */}
-      <Titlebar onOpenSettings={handleOpenSettings} />
+      <Titlebar onToggleSettings={handleToggleSettings} />
 
       {/* Main Container Area: The Electron WebContentsView will overlay this area below the titlebar */}
       <main className="flex-1 w-full relative bg-[#111b21]">

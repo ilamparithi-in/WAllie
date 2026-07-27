@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw } from 'lucide-react';
+import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw, FolderOpen } from 'lucide-react';
 import type { AccountInfo, GlobalSettings } from '../../preload';
 
 interface SettingsModalProps {
@@ -15,6 +15,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [showImportDropdown, setShowImportDropdown] = useState<boolean>(false);
+  const [webstoreUrlOrId, setWebstoreUrlOrId] = useState<string>('');
+  const [isInstallingWebStore, setIsInstallingWebStore] = useState<boolean>(false);
 
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null);
   const [storageSizes, setStorageSizes] = useState<{
@@ -26,6 +28,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [isLoadingStorage, setIsLoadingStorage] = useState<boolean>(false);
   const [isClearing, setIsClearing] = useState<boolean>(false);
   const [accountsNeedingReload, setAccountsNeedingReload] = useState<string[]>([]);
+  const [lastSubPage, setLastSubPage] = useState<PageType | null>(null);
+
+  useEffect(() => {
+    if (activePage !== 'main') {
+      setLastSubPage(activePage);
+    }
+  }, [activePage]);
 
   // Custom CSS live state and debounce ref
   const [customCss, setCustomCss] = useState<string>('');
@@ -40,6 +49,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   const handleToggleGlobalSetting = async (key: keyof GlobalSettings, value: any) => {
     if (!globalSettings) return;
+    if (key === 'extensionDevMode' && value === true) {
+      const confirmEnable = window.confirm(
+        "Warning: Developer Mode allows loading unpacked extensions from your computer.\n\n" +
+        "Only load extensions if you fully trust their source, as they can access your WhatsApp messages and session data.\n\n" +
+        "Do you want to enable Developer Mode?"
+      );
+      if (!confirmEnable) return;
+    }
     const updated = { ...globalSettings, [key]: value };
     setStorageSizes(null); // Force recalculation if anything changes
     setGlobalSettings(updated);
@@ -281,6 +298,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     }
   };
 
+  const handleBrowseWebStore = () => {
+    if (!selectedAccountId) return;
+    window.electronAPI?.openWebStore(selectedAccountId);
+  };
+
+  const handleInstallWebStoreExtension = async () => {
+    if (!selectedAccountId || !webstoreUrlOrId.trim()) return;
+    setIsInstallingWebStore(true);
+    try {
+      await window.electronAPI?.installWebStoreExtension(selectedAccountId, webstoreUrlOrId.trim());
+      setWebstoreUrlOrId('');
+    } catch (err) {
+      console.error('Install webstore extension error:', err);
+    } finally {
+      setIsInstallingWebStore(false);
+    }
+  };
+
   return (
     <div
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
@@ -321,8 +356,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         </div>
 
         {/* Modal Body / Drawer Content */}
-        <div className="flex-grow p-4 overflow-y-auto text-xs text-[#d1d7db] bg-[#111b21]">
-          {activePage === 'main' && (
+        <div className="flex-grow relative overflow-hidden bg-[#111b21]">
+          {/* Main Menu Page */}
+          <div className={`absolute inset-0 p-4 overflow-y-auto transition-transform duration-300 ease-in-out flex flex-col ${
+            activePage === 'main' ? 'translate-x-0' : '-translate-x-full pointer-events-none'
+          }`}>
             <div className="flex flex-col space-y-2 select-text pb-4">
               <button
                 onClick={() => setActivePage('general')}
@@ -445,9 +483,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
-          {activePage === 'general' && (
+          {/* Details Sub-pages Container */}
+          <div className={`absolute inset-0 p-4 overflow-y-auto transition-transform duration-300 ease-in-out bg-[#111b21] ${
+            activePage !== 'main' ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+          }`}>
+            {(() => {
+              const subPage = activePage !== 'main' ? activePage : lastSubPage;
+              return (
+                <>
+                  {subPage === 'general' && (
               <div className="space-y-5">
                 {/* Global Behavior Settings */}
                 <div>
@@ -522,7 +568,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             )}
 
-            {activePage === 'preload' && (
+            {subPage === 'preload' && (
               <div className="space-y-5">
                 <div>
                   <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
@@ -577,7 +623,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             )}
 
-            {activePage === 'permissions' && (
+            {subPage === 'permissions' && (
               <div className="space-y-5">
                 <div>
                   <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
@@ -681,63 +727,112 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             )}
 
-            {activePage === 'extensions' && (
+            {subPage === 'extensions' && (
               <div className="flex flex-col h-full">
                 {/* Extensions Header with Switcher & Import Dropdown */}
-                <div className="flex items-center justify-between mb-4 border-b border-[#222d34] pb-3 flex-shrink-0 relative">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-xs text-[#e9edef]">Target Account:</span>
-                    <select
-                      value={selectedAccountId}
-                      onChange={(e) => setSelectedAccountId(e.target.value)}
-                      className="bg-[#202c33] text-[#e9edef] px-2 py-1 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884]"
-                    >
-                      {accounts.map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.name}
-                        </option>
-                      ))}
-                    </select>
+                <div className="flex items-center justify-between mb-3 border-b border-[#222d34] pb-3 flex-shrink-0 relative">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-xs text-[#e9edef]">Target Account:</span>
+                      <select
+                        value={selectedAccountId}
+                        onChange={(e) => setSelectedAccountId(e.target.value)}
+                        className="bg-[#202c33] text-[#e9edef] px-2 py-1 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884]"
+                      >
+                        {accounts.map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-xs text-[#e9edef]">Developer Mode:</span>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={globalSettings?.extensionDevMode ?? false}
+                          onChange={() => handleToggleGlobalSetting('extensionDevMode', !(globalSettings?.extensionDevMode))}
+                          className="sr-only peer"
+                        />
+                        <div className="w-7 h-4 bg-[#202c33] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#8696a0] after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#00a884] peer-checked:after:bg-[#111b21] peer-checked:after:border-[#00a884]"></div>
+                      </label>
+                    </div>
                   </div>
 
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowImportDropdown(!showImportDropdown)}
-                      disabled={isImporting || !selectedAccountId}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00a884] text-[#111b21] hover:bg-[#00c298] disabled:opacity-50 font-bold rounded transition-colors text-[11px]"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Import Extension</span>
-                    </button>
+                  {globalSettings?.extensionDevMode && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowImportDropdown(!showImportDropdown)}
+                        disabled={isImporting || !selectedAccountId}
+                        className="flex items-center justify-center p-2 bg-[#00a884] text-[#111b21] hover:bg-[#00c298] disabled:opacity-50 rounded transition-colors"
+                        title="Import Local Extension (Folder, ZIP, or CRX)"
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                      </button>
 
-                    {showImportDropdown && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-40"
-                          onClick={() => setShowImportDropdown(false)}
-                        />
-                        <div className="absolute right-0 mt-1 w-44 bg-[#202c33] border border-[#374248] rounded shadow-xl z-50 text-[11px] py-1">
-                          <button
-                            onClick={() => {
-                              setShowImportDropdown(false);
-                              handleImportExtension('folder');
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-[#182229] text-[#e9edef] transition-colors"
-                          >
-                            Unpacked Folder...
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowImportDropdown(false);
-                              handleImportExtension('archive');
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-[#182229] text-[#e9edef] transition-colors"
-                          >
-                            ZIP / CRX File...
-                          </button>
-                        </div>
-                      </>
-                    )}
+                      {showImportDropdown && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setShowImportDropdown(false)}
+                          />
+                          <div className="absolute right-0 mt-1 w-44 bg-[#202c33] border border-[#374248] rounded shadow-xl z-50 text-[11px] py-1">
+                            <button
+                              onClick={() => {
+                                setShowImportDropdown(false);
+                                handleImportExtension('folder');
+                              }}
+                              className="w-full text-left px-3 py-2 hover:bg-[#182229] text-[#e9edef] transition-colors"
+                            >
+                              Unpacked Folder...
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowImportDropdown(false);
+                                handleImportExtension('archive');
+                              }}
+                              className="w-full text-left px-3 py-2 hover:bg-[#182229] text-[#e9edef] transition-colors"
+                            >
+                              ZIP / CRX File...
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Chrome Web Store Installer Card */}
+                <div className="mb-4 bg-[#182229] border border-[#222d34] rounded-lg p-3 flex-shrink-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-semibold text-xs text-[#e9edef]">Chrome Web Store</div>
+                    <button
+                      onClick={handleBrowseWebStore}
+                      disabled={!selectedAccountId}
+                      className="text-[#00a884] hover:text-[#00c298] disabled:opacity-50 text-[10px] font-bold transition-colors flex items-center gap-1"
+                    >
+                      <Puzzle className="w-3 h-3" />
+                      <span>Browse Web Store...</span>
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Paste Chrome Web Store URL or 32-character Extension ID..."
+                      value={webstoreUrlOrId}
+                      onChange={(e) => setWebstoreUrlOrId(e.target.value)}
+                      disabled={isInstallingWebStore || !selectedAccountId}
+                      className="flex-1 bg-[#202c33] text-[#e9edef] px-3 py-1.5 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] disabled:opacity-50"
+                    />
+                    <button
+                      onClick={handleInstallWebStoreExtension}
+                      disabled={isInstallingWebStore || !webstoreUrlOrId.trim() || !selectedAccountId}
+                      className="px-3 py-1.5 bg-[#00a884] text-[#111b21] hover:bg-[#00c298] disabled:opacity-50 font-bold rounded transition-colors text-[11px]"
+                    >
+                      {isInstallingWebStore ? 'Installing...' : 'Install'}
+                    </button>
                   </div>
                 </div>
 
@@ -762,15 +857,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                             <Puzzle className="w-4 h-4" />
                           </div>
                           <div className="min-w-0">
-                            <div className="font-semibold text-xs text-[#e9edef] truncate">
+                            <div className="font-semibold text-xs text-[#e9edef] truncate flex items-center gap-1.5">
                               {ext.name}
+                              {ext.source === 'webstore' ? (
+                                <span className="text-[9px] bg-[#00a884]/15 text-[#00a884] border border-[#00a884]/20 px-1.5 py-0.5 rounded font-semibold select-none">
+                                  Web Store
+                                </span>
+                              ) : (
+                                <span className="text-[9px] bg-[#eab308]/15 text-[#eab308] border border-[#eab308]/20 px-1.5 py-0.5 rounded font-semibold select-none">
+                                  Developer
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10px] text-[#8696a0] mt-0.5 flex items-center gap-2">
                               <span>v{ext.version}</span>
                               <span className="text-[#374248]">•</span>
                               <span
                                 className="truncate max-w-[120px] font-mono text-[9px] bg-[#111b21] px-1 py-0.5 rounded"
-                                title={ext.path}
+                                title={globalSettings?.extensionDevMode ? ext.path : undefined}
                               >
                                 ID: {ext.id}
                               </span>
@@ -804,7 +908,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             )}
 
-            {activePage === 'css' && (
+            {subPage === 'css' && (
               <div className="flex flex-col h-full space-y-4">
                 <div className="flex-shrink-0 flex items-center justify-between border-b border-[#222d34] pb-3">
                   <div className="flex items-center gap-2">
@@ -874,7 +978,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             )}
 
-            {activePage === 'storage' && (
+            {subPage === 'storage' && (
               <div className="flex flex-col h-full space-y-4">
                 {/* Account selector header */}
                 <div className="flex items-center gap-2 border-b border-[#222d34] pb-3 flex-shrink-0">
@@ -973,7 +1077,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             )}
 
-            {activePage === 'notifications' && (
+            {subPage === 'notifications' && (
               <div className="flex flex-col h-full space-y-4">
                 {globalSettings?.notificationLoggingEnabled === false && (
                   <div className="flex-shrink-0 bg-[#ea4335]/15 border border-[#ea4335]/30 text-[#ea4335] px-3 py-2 rounded text-[11px] leading-normal">
@@ -1081,7 +1185,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 </div>
               </div>
             )}
-          </div>
+          </>
+        );
+      })()}
+    </div>
+  </div>
 
           {/* Reload required card */}
           {selectedAccountId && accountsNeedingReload.includes(selectedAccountId) && (
