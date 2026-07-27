@@ -2,6 +2,8 @@ import { app, BrowserWindow, WebContentsView, ipcMain, Tray, Menu, nativeImage, 
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import AdmZip from 'adm-zip';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -10,6 +12,7 @@ const __dirname = path.dirname(__filename);
 // Memory & CPU Optimization flags
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('disable-features', 'TranslateUI');
 
 let pendingProtocolUrl: string | null = null;
 
@@ -122,9 +125,9 @@ function loadSettings(): GlobalSettings {
 }
 
 // Helper to save settings
-function saveSettings(settings: GlobalSettings) {
+async function saveSettings(settings: GlobalSettings) {
   try {
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+    await fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
   } catch (error) {
     console.error('Failed to save settings configuration:', error);
   }
@@ -180,7 +183,7 @@ function loadAccounts(): Account[] {
 }
 
 // Helper to save accounts
-function saveAccounts() {
+async function saveAccounts() {
   try {
     const dataToSave = accounts.map(({ id, name, partition, loggedIn, extensions, settings, emoji }) => ({
       id,
@@ -191,7 +194,7 @@ function saveAccounts() {
       emoji: emoji || '',
       settings: settings || DEFAULT_ACCOUNT_SETTINGS,
     }));
-    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(dataToSave, null, 2), 'utf8');
+    await fs.promises.writeFile(ACCOUNTS_FILE, JSON.stringify(dataToSave, null, 2), 'utf8');
   } catch (error) {
     console.error('Failed to save accounts configuration:', error);
   }
@@ -521,20 +524,6 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
     });
   }
 
-  // Load all enabled extensions for this account's session
-  if (account.extensions && account.extensions.length > 0) {
-    for (const ext of account.extensions) {
-      if (ext.enabled) {
-        try {
-          console.log(`Loading extension for account ${account.id}: ${ext.name} from ${ext.path}`);
-          await accountSession.loadExtension(ext.path);
-        } catch (err) {
-          console.error(`Failed to load extension ${ext.name} from ${ext.path}:`, err);
-        }
-      }
-    }
-  }
-
   const view = new WebContentsView({
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.cjs'),
@@ -544,7 +533,25 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
       backgroundThrottling: true, // Memory & CPU optimization
       sandbox: true,
       webSecurity: true,
+      v8CacheOptions: 'bypassHeatCheck',
+      spellcheck: false,
     },
+  });
+
+  // Defer extension loading until after WhatsApp's initial DOM renders
+  view.webContents.once('dom-ready', async () => {
+    if (account.extensions && account.extensions.length > 0) {
+      for (const ext of account.extensions) {
+        if (ext.enabled) {
+          try {
+            console.log(`Loading extension for account ${account.id}: ${ext.name} from ${ext.path}`);
+            await accountSession.loadExtension(ext.path);
+          } catch (err) {
+            console.error(`Failed to load extension ${ext.name} from ${ext.path}:`, err);
+          }
+        }
+      }
+    }
   });
 
   view.webContents.setUserAgent(DEFAULT_USER_AGENT);
@@ -694,14 +701,13 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
   });
   view.webContents.on('page-title-updated', checkLoginStatus);
 
-  // Also setup a light interval to catch fast scans / login actions
   const intervalId = setInterval(() => {
     if (view.webContents.isDestroyed() || account.loggedIn) {
       clearInterval(intervalId);
       return;
     }
     checkLoginStatus();
-  }, 2500);
+  }, 8000);
 
   return view;
 }
@@ -709,9 +715,10 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
 const callWindows = new Set<BrowserWindow>();
 
 function pauseAllMedia() {
-  for (const [id, view] of accountViews.entries()) {
+  const activeView = accountViews.get(activeAccountId);
+  if (activeView && !activeView.webContents.isDestroyed()) {
     try {
-      view.webContents.executeJavaScript(`
+      activeView.webContents.executeJavaScript(`
         (() => {
           try {
             document.querySelectorAll('video, audio').forEach(el => {
@@ -793,6 +800,9 @@ async function switchActiveAccount(newAccountId: string) {
   const currentView = accountViews.get(activeAccountId);
   if (currentView) {
     mainWindow.contentView.removeChildView(currentView);
+    if (!currentView.webContents.isDestroyed()) {
+      currentView.webContents.setFrameRate(5);
+    }
   }
 
   activeAccountId = newAccountId;
@@ -808,6 +818,9 @@ async function switchActiveAccount(newAccountId: string) {
 
   if (targetView) {
     mainWindow.contentView.addChildView(targetView);
+    if (!targetView.webContents.isDestroyed()) {
+      targetView.webContents.setFrameRate(60);
+    }
     updateActiveViewBounds();
 
     // Inject Custom CSS theme if applicable
@@ -834,6 +847,9 @@ async function initializeAccountsLoad() {
       if (account.id !== activeAccountId && !accountViews.has(account.id) && preloadIds.includes(account.id)) {
         createAccountView(account).then((view) => {
           accountViews.set(account.id, view);
+          if (!view.webContents.isDestroyed()) {
+            view.webContents.setFrameRate(5);
+          }
           console.log(`Preloaded account: ${account.name} (${account.id})`);
         }).catch((err) => {
           console.error(`Failed to preload account ${account.name}:`, err);
@@ -1122,48 +1138,12 @@ function animateSettingsTransition(targetOpen: boolean) {
     animationInterval = null;
   }
 
-  const duration = 300; // ms
-  const fps = 60;
-  const stepTime = Math.floor(1000 / fps); // ~16.6ms
-  const totalSteps = Math.floor(duration / stepTime);
-  let step = 0;
-
-  const [w, h] = mainWindow.getContentSize();
-  const activeView = accountViews.get(activeAccountId);
-  if (!activeView) return;
-
-  const startWidth = targetOpen ? w : w - DRAWER_WIDTH;
-  const endWidth = targetOpen ? w - DRAWER_WIDTH : w;
-  const widthDiff = endWidth - startWidth;
-
-  // Immediately update target layout variable
   settingsOpen = targetOpen;
 
-  animationInterval = setInterval(() => {
-    step++;
-    if (step >= totalSteps) {
-      if (animationInterval) {
-        clearInterval(animationInterval);
-        animationInterval = null;
-      }
-      updateActiveViewBounds();
-      return;
-    }
-
-    // Ease-in-out quadratic interpolation
-    const t = step / totalSteps;
-    const factor = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    const currentWidth = Math.round(startWidth + widthDiff * factor);
-
-    if (mainWindow && !mainWindow.isDestroyed() && activeView) {
-      activeView.setBounds({
-        x: 0,
-        y: TITLEBAR_HEIGHT,
-        width: Math.max(0, currentWidth),
-        height: Math.max(0, h - TITLEBAR_HEIGHT),
-      });
-    }
-  }, stepTime);
+  // Immediately set final bounds — the CSS transition on the renderer side
+  // handles the visual animation of the settings drawer sliding in/out.
+  // We just need to resize the WebContentsView to make room.
+  updateActiveViewBounds();
 }
 
 ipcMain.on('settings:toggle', (_event, isOpen: boolean) => {
@@ -1649,6 +1629,18 @@ if (gotTheLock) {
       app.quit();
     }
   });
+
+  app.on('before-quit', () => {
+    // Flush notification history immediately before exit
+    if (notificationHistoryCache && historyFlushTimeout) {
+      clearTimeout(historyFlushTimeout);
+      try {
+        fs.writeFileSync(NOTIFICATION_HISTORY_FILE, JSON.stringify(notificationHistoryCache, null, 2), 'utf8');
+      } catch (err) {
+        console.error('Failed to flush notification history on quit:', err);
+      }
+    }
+  });
 }
 
 // Zoom helper functions
@@ -1881,12 +1873,29 @@ function getPartitionDirName(partition: string): string {
   return partition;
 }
 
+const execAsync = promisify(exec);
+
+// Cache storage sizes per partition for 30 seconds
+const storageSizeCache = new Map<string, { sizes: { cache: number; localStorage: number; indexedDb: number; cookies: number }; timestamp: number }>();
+const STORAGE_CACHE_TTL = 30000; // 30 seconds
+
 async function calculatePathSize(itemPath: string): Promise<number> {
   try {
     const stats = await fs.promises.stat(itemPath);
     if (stats.isFile()) {
       return stats.size;
     }
+    
+    // Fast path: use native du -sb on Linux
+    try {
+      const { stdout } = await execAsync(`du -sb "${itemPath}" 2>/dev/null`);
+      const match = stdout.trim().match(/^(\d+)/);
+      if (match) {
+        return parseInt(match[1], 10);
+      }
+    } catch {}
+
+    // Fallback path: standard walk
     if (stats.isDirectory()) {
       const files = await fs.promises.readdir(itemPath);
       const sizes = await Promise.all(
@@ -1901,6 +1910,12 @@ async function calculatePathSize(itemPath: string): Promise<number> {
 }
 
 async function getAccountStorageSizes(partition: string) {
+  // Check cache first
+  const cached = storageSizeCache.get(partition);
+  if (cached && Date.now() - cached.timestamp < STORAGE_CACHE_TTL) {
+    return cached.sizes;
+  }
+
   const partitionDirName = getPartitionDirName(partition);
   const partitionDir = path.join(app.getPath('userData'), 'Partitions', partitionDirName);
 
@@ -1909,57 +1924,79 @@ async function getAccountStorageSizes(partition: string) {
   const indexedDbDirs = ['IndexedDB'];
   const cookiesFiles = ['Cookies', 'Cookies-journal'];
 
-  const cachePromises = cacheDirs.map((dir) => calculatePathSize(path.join(partitionDir, dir)));
-  const localStoragePromises = localStorageDirs.map((dir) => calculatePathSize(path.join(partitionDir, dir)));
-  const indexedDbPromises = indexedDbDirs.map((dir) => calculatePathSize(path.join(partitionDir, dir)));
-  const cookiesPromises = cookiesFiles.map((file) => calculatePathSize(path.join(partitionDir, file)));
-
   const [cacheSizes, localStorageSizes, indexedDbSizes, cookiesSizes] = await Promise.all([
-    Promise.all(cachePromises),
-    Promise.all(localStoragePromises),
-    Promise.all(indexedDbPromises),
-    Promise.all(cookiesPromises),
+    Promise.all(cacheDirs.map((dir) => calculatePathSize(path.join(partitionDir, dir)))),
+    Promise.all(localStorageDirs.map((dir) => calculatePathSize(path.join(partitionDir, dir)))),
+    Promise.all(indexedDbDirs.map((dir) => calculatePathSize(path.join(partitionDir, dir)))),
+    Promise.all(cookiesFiles.map((file) => calculatePathSize(path.join(partitionDir, file)))),
   ]);
 
-  return {
+  const sizes = {
     cache: cacheSizes.reduce((a, b) => a + b, 0),
     localStorage: localStorageSizes.reduce((a, b) => a + b, 0),
     indexedDb: indexedDbSizes.reduce((a, b) => a + b, 0),
     cookies: cookiesSizes.reduce((a, b) => a + b, 0),
   };
+
+  storageSizeCache.set(partition, { sizes, timestamp: Date.now() });
+  return sizes;
 }
 
 const NOTIFICATION_HISTORY_FILE = path.join(app.getPath('userData'), 'notification_history.json');
 const MAX_NOTIFICATIONS = 100;
 
-function loadNotificationHistory(): HistoricalNotification[] {
-  try {
-    if (fs.existsSync(NOTIFICATION_HISTORY_FILE)) {
-      const data = fs.readFileSync(NOTIFICATION_HISTORY_FILE, 'utf8');
-      return JSON.parse(data);
+// In-memory notification history with debounced disk persistence
+let notificationHistoryCache: HistoricalNotification[] | null = null;
+let historyFlushTimeout: NodeJS.Timeout | null = null;
+const HISTORY_FLUSH_DELAY = 5000; // 5 seconds
+
+function getNotificationHistory(): HistoricalNotification[] {
+  if (notificationHistoryCache === null) {
+    // Cold load from disk
+    try {
+      if (fs.existsSync(NOTIFICATION_HISTORY_FILE)) {
+        const data = fs.readFileSync(NOTIFICATION_HISTORY_FILE, 'utf8');
+        notificationHistoryCache = JSON.parse(data);
+      }
+    } catch (error) {
+      console.error('Failed to load notification history:', error);
     }
-  } catch (error) {
-    console.error('Failed to load notification history:', error);
+    if (!notificationHistoryCache) {
+      notificationHistoryCache = [];
+    }
   }
-  return [];
+  return notificationHistoryCache;
 }
 
-function saveNotificationHistory(history: HistoricalNotification[]) {
-  try {
-    fs.writeFileSync(NOTIFICATION_HISTORY_FILE, JSON.stringify(history, null, 2), 'utf8');
-  } catch (error) {
-    console.error('Failed to save notification history:', error);
+function scheduleHistoryFlush() {
+  if (historyFlushTimeout) {
+    clearTimeout(historyFlushTimeout);
   }
+  historyFlushTimeout = setTimeout(async () => {
+    historyFlushTimeout = null;
+    if (notificationHistoryCache) {
+      try {
+        await fs.promises.writeFile(NOTIFICATION_HISTORY_FILE, JSON.stringify(notificationHistoryCache, null, 2), 'utf8');
+      } catch (error) {
+        console.error('Failed to flush notification history to disk:', error);
+      }
+    }
+  }, HISTORY_FLUSH_DELAY);
 }
 
 function logNotificationToHistory(notif: HistoricalNotification) {
-  const history = loadNotificationHistory();
+  const history = getNotificationHistory();
   history.unshift(notif);
   if (history.length > MAX_NOTIFICATIONS) {
     history.splice(MAX_NOTIFICATIONS);
   }
-  saveNotificationHistory(history);
+  scheduleHistoryFlush();
   mainWindow?.webContents.send('notification:history-changed', history);
+}
+
+function clearNotificationHistoryCache() {
+  notificationHistoryCache = [];
+  scheduleHistoryFlush();
 }
 
 // IPC Handlers for Storage Management
@@ -2033,6 +2070,9 @@ ipcMain.handle('account:clear-storage', async (_event, accountId: string, type: 
       }
       console.log(`Selective IndexedDB clear initiated for account: ${accountId}`);
     }
+
+    // Invalidate cached storage size
+    storageSizeCache.delete(account.partition);
 
     // Note: Automatic reload removed. Handled via "Reload page" card in settings frontend.
     return true;
@@ -2328,12 +2368,11 @@ ipcMain.on('notification:close-request', (_event, tag: string) => {
 
 // Notification History IPC Handlers
 ipcMain.handle('notification:get-history', () => {
-  return loadNotificationHistory();
+  return getNotificationHistory();
 });
 
 ipcMain.handle('notification:clear-history', () => {
-  saveNotificationHistory([]);
-  mainWindow?.webContents.send('notification:history-changed', []);
+  clearNotificationHistoryCache();
   return true;
 });
 

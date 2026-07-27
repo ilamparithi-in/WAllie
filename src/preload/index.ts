@@ -655,16 +655,10 @@ async function setupWebStoreInjection() {
     const targetAccountId = await ipcRenderer.invoke('webstore:get-target-account-id');
     if (!targetAccountId) return;
 
-    let lastUrl = '';
     let isInstalling = false;
 
-    setInterval(async () => {
+    async function checkAndUpdateButton() {
       const url = window.location.href;
-      if (url === lastUrl && document.getElementById('wallie-cws-btn')) {
-        return;
-      }
-      lastUrl = url;
-
       const match = url.match(/\/detail\/[^/]+\/([a-p]{32})/);
       if (!match) {
         const existing = document.getElementById('wallie-cws-btn');
@@ -676,7 +670,32 @@ async function setupWebStoreInjection() {
       const isInstalled = await ipcRenderer.invoke('webstore:check-installed', targetAccountId, extensionId);
       
       createOrUpdateWebStoreButton(targetAccountId, extensionId, isInstalled);
-    }, 1000);
+    }
+
+    // Listen for SPA navigation events
+    window.addEventListener('popstate', checkAndUpdateButton);
+    
+    // MutationObserver on <title> as a fallback for pushState navigations
+    const titleObserver = new MutationObserver(checkAndUpdateButton);
+    const titleEl = document.querySelector('title');
+    if (titleEl) {
+      titleObserver.observe(titleEl, { childList: true });
+    }
+
+    // Also intercept pushState/replaceState
+    const origPushState = history.pushState;
+    const origReplaceState = history.replaceState;
+    history.pushState = function(...args) {
+      origPushState.apply(this, args);
+      checkAndUpdateButton();
+    };
+    history.replaceState = function(...args) {
+      origReplaceState.apply(this, args);
+      checkAndUpdateButton();
+    };
+
+    // Initial check
+    checkAndUpdateButton();
 
     function createOrUpdateWebStoreButton(accountId: string, extensionId: string, isInstalled: boolean) {
       let btn = document.getElementById('wallie-cws-btn');
