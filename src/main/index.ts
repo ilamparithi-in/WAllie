@@ -24,20 +24,20 @@ if (!gotTheLock) {
       mainWindow.show();
       mainWindow.focus();
 
-      const protocolUrl = commandLine.find(arg => arg.startsWith('whatsapp://') || arg.startsWith('wali://'));
+      const protocolUrl = commandLine.find(arg => arg.startsWith('whatsapp://') || arg.startsWith('wallie://'));
       if (protocolUrl) {
         console.log(`Received protocol URL in second-instance: ${protocolUrl}`);
         mainWindow.webContents.send('protocol:received-url', protocolUrl);
       }
     } else {
-      const protocolUrl = commandLine.find(arg => arg.startsWith('whatsapp://') || arg.startsWith('wali://'));
+      const protocolUrl = commandLine.find(arg => arg.startsWith('whatsapp://') || arg.startsWith('wallie://'));
       if (protocolUrl) {
         pendingProtocolUrl = protocolUrl;
       }
     }
   });
 
-  const startupUrl = process.argv.find(arg => arg.startsWith('whatsapp://') || arg.startsWith('wali://'));
+  const startupUrl = process.argv.find(arg => arg.startsWith('whatsapp://') || arg.startsWith('wallie://'));
   if (startupUrl) {
     pendingProtocolUrl = startupUrl;
   }
@@ -354,6 +354,22 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
 
     // Screen Sharing / Display Media Request Handler (PipeWire / X11)
     accountSession.setDisplayMediaRequestHandler((request, callback) => {
+      const isWayland = process.platform === 'linux' && (!!process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland');
+
+      if (isWayland) {
+        // On Wayland, desktopCapturer.getSources() triggers a PipeWire picker prematurely.
+        // By passing a placeholder source, we allow Chromium's PipeWire capturer
+        // to directly trigger the system picker once when capturing begins.
+        callback({
+          video: {
+            id: 'screen:0:0',
+            name: 'Entire Screen',
+          } as any,
+          audio: 'loopback',
+        });
+        return;
+      }
+
       desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
         let selected = false;
         const menu = Menu.buildFromTemplate([
@@ -809,6 +825,29 @@ function createMainWindow() {
   // Register zoom shortcuts on main window as well
   registerZoomShortcuts(mainWindow.webContents);
 
+  // Link Delegation for main window: open external links in default browser
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    try {
+      const parsedUrl = new URL(url);
+      const isLocalHost = parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1';
+      const isAppUrl = process.env.VITE_DEV_SERVER_URL 
+        ? url.startsWith(process.env.VITE_DEV_SERVER_URL)
+        : url.startsWith('file://');
+      if (!isAppUrl && !isLocalHost) {
+        event.preventDefault();
+        shell.openExternal(url).catch((err) => console.error('Failed to open external link:', err));
+      }
+    } catch (err) {
+      event.preventDefault();
+      shell.openExternal(url).catch((err) => console.error('Failed to open external link:', err));
+    }
+  });
+
+  mainWindow.webContents.setWindowOpenHandler((details) => {
+    shell.openExternal(details.url).catch((err) => console.error('Failed to open external link:', err));
+    return { action: 'deny' };
+  });
+
   mainWindow.on('resize', updateActiveViewBounds);
   mainWindow.on('maximize', () => {
     console.log('Main window maximized');
@@ -838,7 +877,7 @@ function createTray() {
   const icon = nativeImage.createFromDataURL('data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64'));
 
   tray = new Tray(icon);
-  tray.setToolTip('WhatsApp Linux');
+  tray.setToolTip('WAllie');
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -1034,6 +1073,14 @@ ipcMain.on('account:reload-active', () => {
   if (activeView) {
     console.log(`Reloading active view for account: ${activeAccountId}`);
     activeView.webContents.reload();
+  }
+});
+
+ipcMain.on('account:reload', (_event, accountId: string) => {
+  const view = accountViews.get(accountId);
+  if (view) {
+    console.log(`Reloading view for account: ${accountId}`);
+    view.webContents.reload();
   }
 });
 
@@ -1283,11 +1330,11 @@ if (gotTheLock) {
       if (process.argv.length >= 2) {
         const execArgs = [path.resolve(process.argv[1])];
         app.setAsDefaultProtocolClient('whatsapp', process.execPath, execArgs);
-        app.setAsDefaultProtocolClient('wali', process.execPath, execArgs);
+        app.setAsDefaultProtocolClient('wallie', process.execPath, execArgs);
       }
     } else {
       app.setAsDefaultProtocolClient('whatsapp');
-      app.setAsDefaultProtocolClient('wali');
+      app.setAsDefaultProtocolClient('wallie');
     }
 
     createMainWindow();
@@ -1691,7 +1738,6 @@ ipcMain.handle('account:clear-storage', async (_event, accountId: string, type: 
           } catch (err) {
             console.error('Failed to run selective IndexedDB clear:', err);
           }
-          view.webContents.reload();
         };
 
         if (view.webContents.isLoading()) {
@@ -1703,13 +1749,7 @@ ipcMain.handle('account:clear-storage', async (_event, accountId: string, type: 
       console.log(`Selective IndexedDB clear initiated for account: ${accountId}`);
     }
 
-    // Reload the view if it exists to refresh database connections (only for non-media types, since media reloads itself after script runs)
-    if (type !== 'media') {
-      const view = accountViews.get(accountId);
-      if (view) {
-        view.webContents.reload();
-      }
-    }
+    // Note: Automatic reload removed. Handled via "Reload page" card in settings frontend.
     return true;
   } catch (error) {
     console.error(`Failed to clear storage for account ${accountId} (type: ${type}):`, error);
@@ -1733,11 +1773,7 @@ ipcMain.handle('account:update-settings', (_event, accountId: string, settings: 
     account.settings = settings;
     saveAccounts();
 
-    // Reload active view to apply permissions changes immediately
-    const view = accountViews.get(accountId);
-    if (view) {
-      view.webContents.reload();
-    }
+    // Note: Automatic reload removed. Handled via "Reload page" card in settings frontend.
     
     // Broadcast list changed to synchronize renderer states
     mainWindow?.webContents.send('account:list-changed', accounts, activeAccountId);

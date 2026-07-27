@@ -1,5 +1,5 @@
-appId: dev.ilamparithi.wali
-productName: WALi - Linux Client for WhatsApp
+appId: dev.ilamparithi.wallie
+productName: WAllie
 directories:
   output: dist-pack
   buildResources: build
@@ -15,11 +15,14 @@ linux:
     - AppImage
     - flatpak
   desktop:
-    Name: WALi - Linux Client for WhatsApp
-    Comment: Lightweight WhatsApp Web client for Linux
+    Name: WAllie
+    Comment: Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
     Categories: Network;InstantMessaging;Chat;
-    MimeType: x-scheme-handler/whatsapp;
+    MimeType: x-scheme-handler/whatsapp;x-scheme-handler/wallie;
 protocols:
   - name: whatsapp
     schemes:
       - whatsapp
+  - name: wallie
+    schemes:
+      - wallie

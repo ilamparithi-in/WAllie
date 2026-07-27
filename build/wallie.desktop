@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=WAllie
+Comment=Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
+Exec=wallie %u
+Icon=wallie
+Type=Application
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+MimeType=x-scheme-handler/whatsapp;x-scheme-handler/wallie;
+StartupWMClass=wallie

@@ -1,9 +1,17 @@
 {
-  "name": "whatsapp-linux",
+  "name": "wallie",
   "version": "1.0.0",
   "type": "module",
-  "description": "Lightweight, multi-account WhatsApp Web client for Linux with Chrome extensions support",
+  "description": "Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support",
   "main": "dist/main/index.js",
+  "homepage": "https://github.com/ilamparithi-in/WAllie",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ilamparithi-in/WAllie.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ilamparithi-in/WAllie/issues"
+  },
   "scripts": {
     "build:preload": "tsc src/preload/index.ts --module commonjs --target es2020 --outDir dist/preload && mv dist/preload/index.js dist/preload/index.cjs",
     "dev": "npm run build:preload && vite",
@@ -19,7 +27,7 @@
     "multi-account",
     "chrome-extensions"
   ],
-  "author": "",
+  "author": "Ilamparithi M",
   "license": "MIT",
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",

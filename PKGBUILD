@@ -1,10 +1,10 @@
 # Maintainer: Ilamparithi Murali (ilamparithi-in) <ilamparithi.in@gmail.com>
-pkgname=wali
+pkgname=wallie
 pkgver=1.0.0
 pkgrel=1
-pkgdesc="Lightweight, multi-account WhatsApp Web client for Linux with Chrome extensions support"
+pkgdesc="Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support"
 arch=('x86_64')
-url="https://github.com/ilamparithi-in/WALi"
+url="https://github.com/ilamparithi-in/WAllie"
 license=('MIT')
 depends=('electron')
 makedepends=('npm' 'nodejs')

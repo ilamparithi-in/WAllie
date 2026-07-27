@@ -52,6 +52,7 @@ export interface ElectronAPI {
   removeAccount: (id: string) => Promise<boolean>;
   renameAccount: (id: string, name: string) => Promise<boolean>;
   reloadActiveAccount: () => void;
+  reloadAccount: (accountId: string) => void;
   showAccountContextMenu: (accountId: string) => void;
 
   // Extension controls
@@ -119,6 +120,7 @@ const api: ElectronAPI = {
   removeAccount: (id: string) => ipcRenderer.invoke('account:remove', id),
   renameAccount: (id: string, name: string) => ipcRenderer.invoke('account:rename', id, name),
   reloadActiveAccount: () => ipcRenderer.send('account:reload-active'),
+  reloadAccount: (accountId: string) => ipcRenderer.send('account:reload', accountId),
   showAccountContextMenu: (accountId: string) => ipcRenderer.send('account:context-menu', accountId),
 
   importExtension: (accountId: string, importType: 'folder' | 'archive') =>
@@ -697,6 +699,65 @@ function injectUnifiedTitlebar(options: {
   }
 }
 
+function monitorCallBlankScreen() {
+  let callWasActive = false;
+  let blankCounter = 0;
+  let initialBlankTicks = 0;
+
+  const interval = setInterval(() => {
+    if (!document.body) return;
+
+    // Detect active call components
+    const hasVideo = document.querySelector('video') !== null;
+    const hasAudio = document.querySelector('audio') !== null;
+    const hasCanvas = document.querySelector('canvas') !== null;
+    
+    // Check for common call controls (buttons or SVGs with aria-labels or titles)
+    const callControls = document.querySelectorAll(
+      '[data-testid*="call"], [data-testid*="hangup"], [data-testid*="micro"], [data-testid*="video"], [data-testid*="screen"]'
+    );
+    const hasCallControls = callControls.length > 0;
+    
+    const isCallActive = hasVideo || hasAudio || hasCanvas || hasCallControls;
+
+    if (isCallActive) {
+      callWasActive = true;
+      blankCounter = 0;
+      return;
+    }
+
+    if (callWasActive) {
+      // Check if a survey is shown by searching for keywords
+      const bodyText = (document.body.innerText || '').toLowerCase();
+      const hasSurveyKeywords = ['how was', 'rate', 'feedback', 'quality', 'survey', 'stars', 'opinion'].some(
+        (keyword) => bodyText.includes(keyword)
+      );
+
+      if (!hasSurveyKeywords) {
+        blankCounter++;
+        if (blankCounter >= 3) { // 3 consecutive checks (~600ms) of blank screen
+          console.log('[walinux] Call ended and screen is blank, closing window immediately.');
+          clearInterval(interval);
+          window.close();
+        }
+      } else {
+        blankCounter = 0; // Reset if user is prompted with the survey
+      }
+    } else {
+      // Safe guard for calls that never load or get stuck on initialization
+      initialBlankTicks++;
+      if (initialBlankTicks >= 50) { // 50 * 200ms = 10 seconds
+        const bodyText = (document.body.innerText || '').trim();
+        if (bodyText.length < 10 && document.querySelectorAll('button').length === 0) {
+          console.log('[walinux] Call failed to load (remained blank for 10s), closing window.');
+          clearInterval(interval);
+          window.close();
+        }
+      }
+    }
+  }, 200);
+}
+
 function injectCallTitlebar() {
   ipcRenderer.invoke('account:get-name-for-session').then((accountName: string) => {
     injectUnifiedTitlebar({
@@ -705,6 +766,7 @@ function injectCallTitlebar() {
       iconType: 'call',
       controls: ['pin', 'min', 'close']
     });
+    monitorCallBlankScreen();
   });
 }
 

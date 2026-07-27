@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users } from 'lucide-react';
+import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw } from 'lucide-react';
 import type { AccountInfo, GlobalSettings } from '../../preload';
 
 interface SettingsModalProps {
@@ -25,6 +25,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   } | null>(null);
   const [isLoadingStorage, setIsLoadingStorage] = useState<boolean>(false);
   const [isClearing, setIsClearing] = useState<boolean>(false);
+  const [accountsNeedingReload, setAccountsNeedingReload] = useState<string[]>([]);
 
   // Custom CSS live state and debounce ref
   const [customCss, setCustomCss] = useState<string>('');
@@ -81,6 +82,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
     try {
       await window.electronAPI.updateAccountSettings(selectedAccountId, updatedSettings);
+      setAccountsNeedingReload((prev) =>
+        prev.includes(selectedAccountId) ? prev : [...prev, selectedAccountId]
+      );
     } catch (err) {
       console.error('Failed to update account permission:', err);
     }
@@ -115,6 +119,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       const success = await window.electronAPI.clearStorage(selectedAccountId, type);
       if (success) {
         fetchStorageSizes(selectedAccountId);
+        setAccountsNeedingReload((prev) =>
+          prev.includes(selectedAccountId) ? prev : [...prev, selectedAccountId]
+        );
       }
     } catch (err) {
       console.error('Clear storage error:', err);
@@ -407,6 +414,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   <div className="text-[10px] text-[#8696a0] mt-0.5">View and search desktop alert logs</div>
                 </div>
               </button>
+
+              {/* About Section */}
+              <div className="mt-6 pt-4 border-t border-[#222d34]/60 text-center select-text">
+                <div className="text-sm font-bold text-[#e9edef] tracking-wide">WAllie</div>
+                <div className="text-[10px] text-[#8696a0] mt-1 leading-normal max-w-[320px] mx-auto">
+                  Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
+                </div>
+                <div className="text-[9px] text-[#8696a0] mt-1">
+                  Version 1.0.0 • MIT License • By Ilamparithi M
+                </div>
+                <div className="flex items-center justify-center gap-3 mt-3">
+                  <a
+                    href="https://github.com/ilamparithi-in/WAllie"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#00a884] hover:text-[#00c298] transition-colors underline font-medium text-[11px]"
+                  >
+                    Leave a star! ⭐
+                  </a>
+                  <span className="text-[#374248]">•</span>
+                  <a
+                    href="https://pseudosmp.github.io/donate"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#00a884] hover:text-[#00c298] transition-colors underline font-medium text-[11px]"
+                  >
+                    Donate 💖
+                  </a>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1045,6 +1082,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             )}
           </div>
+
+          {/* Reload required card */}
+          {selectedAccountId && accountsNeedingReload.includes(selectedAccountId) && (
+            <div className="p-3.5 bg-[#202c33] border-t border-[#00a884] flex items-center justify-between flex-shrink-0 animate-in slide-in-from-bottom duration-250 select-none">
+              <div className="flex items-center gap-2.5">
+                <RotateCw className="w-4 h-4 text-[#00a884]" />
+                <div>
+                  <div className="font-semibold text-[#e9edef] text-[11px]">Reload required</div>
+                  <div className="text-[10px] text-[#8696a0] mt-0.5">Please reload the page to apply your changes.</div>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  window.electronAPI.reloadAccount(selectedAccountId);
+                  setAccountsNeedingReload((prev) => prev.filter((id) => id !== selectedAccountId));
+                }}
+                className="px-3.5 py-1.5 bg-[#00a884] hover:bg-[#00c298] text-[#111b21] font-bold rounded transition-colors text-[11px] whitespace-nowrap shadow-sm"
+              >
+                Reload Page
+              </button>
+            </div>
+          )}
         </div>
   );
 };
