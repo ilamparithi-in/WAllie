@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Titlebar } from './components/Titlebar';
 import { SettingsModal } from './components/SettingsModal';
-import { Download, CheckCircle, XCircle, X } from 'lucide-react';
+import { Download, CheckCircle, XCircle, X, Shield } from 'lucide-react';
 
-import type { AccountInfo } from '../preload';
+import type { AccountInfo, GlobalSettings } from '../preload';
 
 interface DownloadState {
   id: number;
@@ -20,9 +20,24 @@ export const App: React.FC = () => {
   const [downloads, setDownloads] = useState<DownloadState[]>([]);
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
   const [promptAccounts, setPromptAccounts] = useState<AccountInfo[]>([]);
+  const [settingsInitialPage, setSettingsInitialPage] = useState<'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | undefined>(undefined);
+  const [settingsInitialAccountId, setSettingsInitialAccountId] = useState<string | undefined>(undefined);
+
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null);
+  const [showDisclaimerForce, setShowDisclaimerForce] = useState(false);
+  const [disclaimerChecked, setDisclaimerChecked] = useState(false);
 
   useEffect(() => {
     if (!window.electronAPI) return;
+
+    // Load initial global settings
+    window.electronAPI.getGlobalSettings().then((settings) => {
+      setGlobalSettings(settings);
+    });
+
+    const unsubscribeGlobalSettings = window.electronAPI.onGlobalSettingsChanged((settings) => {
+      setGlobalSettings(settings);
+    });
 
     const unsubscribeDownload = window.electronAPI.onDownloadProgress((data) => {
       setDownloads((prev) => {
@@ -59,12 +74,21 @@ export const App: React.FC = () => {
       }
     });
 
+    const unsubscribeOpenManage = window.electronAPI.onOpenManageAccounts((accountId) => {
+      setSettingsInitialPage('accounts');
+      setSettingsInitialAccountId(accountId);
+      setIsSettingsOpen(true);
+      window.electronAPI?.toggleSettings(true);
+    });
+
     window.electronAPI.signalProtocolReady();
 
     return () => {
+      unsubscribeGlobalSettings?.();
       unsubscribeDownload?.();
       unsubscribeCloseRequest?.();
       unsubscribeProtocol?.();
+      unsubscribeOpenManage?.();
     };
   }, []);
 
@@ -78,20 +102,57 @@ export const App: React.FC = () => {
 
   const handleCloseSettings = () => {
     setIsSettingsOpen(false);
+    setSettingsInitialPage(undefined);
+    setSettingsInitialAccountId(undefined);
     window.electronAPI?.toggleSettings(false);
   };
+
+  const handleAcceptDisclaimer = async () => {
+    if (!globalSettings) return;
+    const updatedSettings = {
+      ...globalSettings,
+      disclaimerAccepted: true
+    };
+    const success = await window.electronAPI.saveGlobalSettings(updatedSettings);
+    if (success) {
+      setGlobalSettings(updatedSettings);
+    }
+  };
+
+  const handleDeclineDisclaimer = () => {
+    window.electronAPI?.closeWindow();
+  };
+
+  if (globalSettings === null) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#111b21] text-[#8696a0] text-sm gap-2 font-sans select-none">
+        <div className="w-8 h-8 rounded-full border-2 border-[#00a884] border-t-transparent animate-spin" />
+        <span>Loading configurations...</span>
+      </div>
+    );
+  }
+
+  const isDisclaimerAccepted = !!globalSettings.disclaimerAccepted;
+  const showDisclaimerOverlay = !isDisclaimerAccepted || showDisclaimerForce;
+  const isFirstLaunchMode = !isDisclaimerAccepted;
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#111b21] overflow-hidden select-none">
       {/* Custom Titlebar (28px) */}
-      <Titlebar onToggleSettings={handleToggleSettings} />
+      <Titlebar onToggleSettings={handleToggleSettings} isDisclaimerAccepted={isDisclaimerAccepted} />
 
       {/* Main Container Area: The Electron WebContentsView will overlay this area below the titlebar */}
       <main className="flex-1 w-full relative bg-[#111b21]">
         {/* Placeholder background state when loading view */}
         <div className="absolute inset-0 flex flex-col items-center justify-center text-[#8696a0] text-sm gap-2">
-          <div className="w-8 h-8 rounded-full border-2 border-[#00a884] border-t-transparent animate-spin" />
-          <span>Connecting to WhatsApp Web...</span>
+          {isDisclaimerAccepted ? (
+            <>
+              <div className="w-8 h-8 rounded-full border-2 border-[#00a884] border-t-transparent animate-spin" />
+              <span>Connecting to WhatsApp Web...</span>
+            </>
+          ) : (
+            <span>Please review and accept the legal disclaimer to proceed.</span>
+          )}
         </div>
       </main>
 
@@ -157,7 +218,13 @@ export const App: React.FC = () => {
       )}
 
       {/* Settings Modal Drawer */}
-      <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={handleCloseSettings} 
+        initialPage={settingsInitialPage}
+        initialAccountId={settingsInitialAccountId}
+        onShowDisclaimer={() => setShowDisclaimerForce(true)}
+      />
 
       {/* Custom Protocol Account Switcher Prompt */}
       {pendingUrl && (
@@ -208,6 +275,111 @@ export const App: React.FC = () => {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Legal Disclaimer Modal Overlay */}
+      {showDisclaimerOverlay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b141a]/95 select-text font-sans p-4 bg-[radial-gradient(ellipse_at_center,rgba(0,168,132,0.12),transparent_70%)] animate-in fade-in duration-300">
+          <div className="bg-[#222e35]/95 backdrop-blur-md border border-[#2c3943]/80 w-full max-w-2xl rounded-2xl shadow-2xl p-7 flex flex-col max-h-[90vh] overflow-hidden transform scale-100 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-full bg-[#00a884]/15 border border-[#00a884]/30 flex items-center justify-center text-[#00a884] mx-auto mb-3">
+                <Shield className="w-6 h-6" />
+              </div>
+              <h2 className="text-lg font-bold text-[#e9edef] tracking-wide">Legal Disclaimer</h2>
+              <p className="text-[11px] text-[#8696a0] mt-0.5">WAllie - Unofficial WhatsApp Desktop Client</p>
+            </div>
+
+            {/* Scrollable Terms Content */}
+            <div className="flex-1 overflow-y-auto bg-[#111b21]/70 border border-[#222d34] rounded-xl p-5 my-4 text-xs text-[#8696a0] leading-relaxed space-y-4 pr-3 select-text">
+              <div>
+                <h4 className="font-bold text-[#e9edef] mb-1">1. Acceptance of Terms</h4>
+                <p>
+                  By using WAllie (the "Application"), you agree to be bound by this legal disclaimer. If you do not agree to these terms, you must immediately decline and terminate the use of this Application.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-[#e9edef] mb-1">2. Unofficial Client Status</h4>
+                <p>
+                  WAllie is an unofficial, third-party client for WhatsApp. It is not affiliated, associated, authorized, endorsed by, or in any way officially connected with WhatsApp LLC, Meta Platforms, Inc., or any of their affiliates. The official WhatsApp service can be found at <a href="https://whatsapp.com" target="_blank" rel="noopener noreferrer" className="text-[#00a884] hover:underline">https://whatsapp.com</a>. "WhatsApp" and all related trademarks, names, and logos are the property of Meta Platforms, Inc.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-[#e9edef] mb-1">3. Limitation of Liability</h4>
+                <p>
+                  The Application is provided "AS IS", without warranty of any kind, express or implied. Under no circumstances shall the developer, contributors, or copyright holders of WAllie be liable for any direct, indirect, incidental, special, consequential, or punitive damages, including but not limited to:
+                </p>
+                <ul className="list-disc pl-5 mt-1.5 space-y-1">
+                  <li>Suspension, restriction, or banning of your WhatsApp account(s) due to the use of this client.</li>
+                  <li>Data loss, corruption, or leakages.</li>
+                  <li>Any damages resulting from software errors, crashes, or security vulnerabilities.</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-[#e9edef] mb-1">4. Terms of Service Compliance</h4>
+                <p>
+                  WhatsApp actively prohibits the use of unofficial clients, wrappers, or automation tools. By logging into your accounts using this Application, you acknowledge the risk that your accounts may be flagged or terminated by WhatsApp. You assume full and sole responsibility for compliance with WhatsApp’s official Terms of Service.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-[#e9edef] mb-1">5. Third-Party Extensions & Custom CSS</h4>
+                <p>
+                  WAllie allows the loading of third-party Chrome extensions and custom stylesheets (CSS). The developer of this Application has no control over, and assumes no responsibility for, the code, privacy policies, or actions of any third-party extensions or custom scripts you choose to import. You are solely responsible for verifying the safety of any custom code or extension you load.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            {isFirstLaunchMode ? (
+              <div className="space-y-4">
+                <label className="flex items-start gap-3 cursor-pointer group mt-1 select-none text-left">
+                  <input
+                    type="checkbox"
+                    checked={disclaimerChecked}
+                    onChange={(e) => setDisclaimerChecked(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-[#2c3943] bg-[#111b21] text-[#00a884] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#00a884]"
+                  />
+                  <span className="text-[11px] text-[#8696a0] group-hover:text-[#e9edef] transition-colors leading-normal select-text">
+                    I acknowledge that using this client carries the risk of account suspension by WhatsApp, and I agree that the developer of this application is not responsible for any operations, actions, or consequences.
+                  </span>
+                </label>
+
+                <div className="flex gap-3 justify-end border-t border-[#2c3943]/60 pt-4">
+                  <button
+                    onClick={handleDeclineDisclaimer}
+                    className="px-5 py-2 rounded-lg text-xs font-semibold bg-[#2a3942] hover:bg-[#3d4f5c] text-[#ea4335] hover:text-[#ff6b6b] transition-all duration-200 cursor-pointer"
+                  >
+                    Decline & Exit
+                  </button>
+                  <button
+                    onClick={handleAcceptDisclaimer}
+                    disabled={!disclaimerChecked}
+                    className={`px-6 py-2 rounded-lg text-xs font-bold text-[#111b21] transition-all duration-200 flex items-center gap-1.5 shadow-lg ${
+                      disclaimerChecked
+                        ? 'bg-[#00a884] hover:bg-[#00c298] hover:shadow-[#00a884]/20 cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0'
+                        : 'bg-[#00a884]/40 text-[#111b21]/50 cursor-not-allowed'
+                    }`}
+                  >
+                    Accept & Continue
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-end border-t border-[#2c3943]/60 pt-4">
+                <button
+                  onClick={() => setShowDisclaimerForce(false)}
+                  className="px-6 py-2 rounded-lg text-xs font-semibold bg-[#00a884] hover:bg-[#00c298] text-[#111b21] transition-all duration-200 shadow-md cursor-pointer"
+                >
+                  Close Disclaimer
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

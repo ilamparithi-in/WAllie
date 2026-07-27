@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw, FolderOpen } from 'lucide-react';
+import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw, FolderOpen, User, Trash2 } from 'lucide-react';
 import type { AccountInfo, GlobalSettings } from '../../preload';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialPage?: PageType;
+  initialAccountId?: string;
+  onShowDisclaimer: () => void;
 }
 
-type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions';
+type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts';
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialPage, initialAccountId, onShowDisclaimer }) => {
   const [activePage, setActivePage] = useState<PageType>('main');
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
@@ -62,6 +65,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setGlobalSettings(updated);
     try {
       await window.electronAPI.saveGlobalSettings(updated);
+      if (key === 'hardwareAcceleration' && value === false) {
+        const confirmRestart = window.confirm(
+          "Hardware acceleration has been disabled. A restart is required to apply this change.\n\nDo you want to restart the application now?"
+        );
+        if (confirmRestart) {
+          window.electronAPI.relaunchApp();
+        }
+      }
     } catch (err) {
       console.error('Failed to save global settings:', err);
     }
@@ -266,6 +277,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen) {
+      if (initialPage) {
+        setActivePage(initialPage);
+      }
+      if (initialAccountId) {
+        setSelectedAccountId(initialAccountId);
+      }
+    }
+  }, [isOpen, initialPage, initialAccountId]);
+
   const extensions = selectedAccount?.extensions || [];
 
   const handleImportExtension = async (importType: 'folder' | 'archive') => {
@@ -295,6 +317,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       await window.electronAPI.removeExtension(selectedAccountId, extId);
     } catch (err) {
       console.error('Remove extension error:', err);
+    }
+  };
+
+  const handleDeleteAccount = async (id: string) => {
+    try {
+      await window.electronAPI.removeAccount(id);
+    } catch (err) {
+      console.error('Failed to remove account:', err);
     }
   };
 
@@ -344,6 +374,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 {activePage === 'css' && 'Custom CSS & Themes'}
                 {activePage === 'storage' && 'Storage & Cache'}
                 {activePage === 'notifications' && 'Notification History'}
+                {activePage === 'accounts' && 'Manage Accounts'}
               </span>
             </button>
           )}
@@ -362,6 +393,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             activePage === 'main' ? 'translate-x-0' : '-translate-x-full pointer-events-none'
           }`}>
             <div className="flex flex-col space-y-2 select-text pb-4">
+              <button
+                onClick={() => setActivePage('accounts')}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
+                  <User className="w-4 h-4" />
+                </div>
+                <div className="flex-grow min-w-0">
+                  <div className="font-semibold text-[#e9edef] text-[12px]">Manage Accounts</div>
+                  <div className="text-[10px] text-[#8696a0] mt-0.5">Customize account names and emojis</div>
+                </div>
+              </button>
+
               <button
                 onClick={() => setActivePage('general')}
                 className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
@@ -462,6 +506,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 <div className="text-[9px] text-[#8696a0] mt-1">
                   Version 1.0.0 • MIT License • By Ilamparithi M
                 </div>
+                <div className="mt-1.5">
+                  <button
+                    onClick={onShowDisclaimer}
+                    className="text-[#00a884] hover:text-[#00c298] transition-colors underline font-medium text-[10px] cursor-pointer bg-transparent border-none p-0 outline-none"
+                  >
+                    View Legal Disclaimer
+                  </button>
+                </div>
                 <div className="flex items-center justify-center gap-3 mt-3">
                   <a
                     href="https://github.com/ilamparithi-in/WAllie"
@@ -494,13 +546,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               return (
                 <>
                   {subPage === 'general' && (
-              <div className="space-y-5">
+              <div className="space-y-5 subpage-animate">
                 {/* Global Behavior Settings */}
                 <div>
                   <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
                     <SettingsIcon className="w-4 h-4 text-[#00a884]" />
-                    <span>General Behavior</span>
+                    <span>General Settings</span>
                   </h3>
+                  <p className="text-[11px] text-[#8696a0] mt-2 mb-4 leading-relaxed">
+                    Configure global behavior, system tray preferences, and hardware acceleration.
+                  </p>
                   <div className="mt-2 space-y-2">
                     <label className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
                       <div>
@@ -513,6 +568,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                         type="checkbox"
                         checked={globalSettings?.closeToTray ?? true}
                         onChange={(e) => handleToggleGlobalSetting('closeToTray', e.target.checked)}
+                        className="accent-[#00a884]"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
+                      <div>
+                        <div className="font-medium text-[#e9edef]">Start Minimized</div>
+                        <div className="text-[11px] text-[#8696a0]">
+                          Start application minimized to the system tray on launch
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={globalSettings?.startMinimized ?? false}
+                        onChange={(e) => handleToggleGlobalSetting('startMinimized', e.target.checked)}
                         className="accent-[#00a884]"
                       />
                     </label>
@@ -569,7 +639,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             )}
 
             {subPage === 'preload' && (
-              <div className="space-y-5">
+              <div className="space-y-5 subpage-animate">
                 <div>
                   <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
                     <Users className="w-4 h-4 text-[#00a884]" />
@@ -587,7 +657,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   ) : (
                     <div className="bg-[#182229] border border-[#222d34] rounded-lg divide-y divide-[#222d34]/60">
                       {accounts.map((acc) => {
-                        const isPreloaded = globalSettings?.preloadAccountIds?.includes(acc.id) ?? false;
+                        const isPreloaded = globalSettings?.preloadAccountIds
+                          ? globalSettings.preloadAccountIds.includes(acc.id)
+                          : acc.id === 'acc_default';
                         return (
                           <label
                             key={acc.id}
@@ -595,7 +667,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                           >
                             <div className="flex flex-col min-w-0 pr-4">
                               <span className="font-medium text-[#e9edef] text-[12px] truncate">
-                                {acc.name}
+                                {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
                               </span>
                               <span className="text-[10px] text-[#8696a0] truncate mt-0.5">
                                 {acc.id}
@@ -606,7 +678,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                               checked={isPreloaded}
                               onChange={(e) => {
                                 if (!globalSettings) return;
-                                const currentIds = globalSettings.preloadAccountIds || [];
+                                const currentIds = globalSettings.preloadAccountIds || ['acc_default'];
                                 const updatedIds = e.target.checked
                                   ? [...currentIds, acc.id]
                                   : currentIds.filter((id) => id !== acc.id);
@@ -623,8 +695,175 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             )}
 
+            {subPage === 'accounts' && (
+              <div className="space-y-5 subpage-animate">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-[#00a884]" />
+                    <span>Manage Accounts</span>
+                  </h3>
+                  <p className="text-[11px] text-[#8696a0] mt-2 mb-4 leading-relaxed">
+                    Set custom names and emojis, configure startup preloading, delete accounts, or jump to profile-specific settings.
+                  </p>
+
+                  <div className="space-y-3">
+                    {accounts.map((acc) => (
+                      <div key={acc.id} className="p-3 bg-[#182229] border border-[#222d34] rounded-lg space-y-3">
+                        {/* Row 1: Name and Emoji inputs */}
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <span className="font-semibold text-xs text-[#e9edef] block truncate">
+                              {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
+                            </span>
+                            <span className="text-[10px] text-[#8696a0] block truncate">{acc.id}</span>
+                          </div>
+                          
+                          {/* Name Input */}
+                          <input
+                            type="text"
+                            value={acc.name}
+                            onChange={async (e) => {
+                              const newName = e.target.value;
+                              setAccounts(prev => prev.map(a => a.id === acc.id ? { ...a, name: newName } : a));
+                              await window.electronAPI.renameAccount(acc.id, newName);
+                            }}
+                            placeholder="Account Name"
+                            className="bg-[#202c33] text-[#e9edef] px-2 py-1 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] w-28"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-2 border-t border-[#222d34]/60">
+                          <span className="text-[11px] text-[#8696a0]">Emoji:</span>
+                          
+                          {/* Emoji Input */}
+                          <input
+                            type="text"
+                            value={acc.emoji || ''}
+                            onChange={async (e) => {
+                              const emoji = e.target.value;
+                              setAccounts(prev => prev.map(a => a.id === acc.id ? { ...a, emoji } : a));
+                              await window.electronAPI.updateAccountEmoji(acc.id, emoji);
+                            }}
+                            placeholder="Emoji"
+                            maxLength={8}
+                            className="bg-[#202c33] text-[#e9edef] px-2 py-1 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] w-14 text-center"
+                          />
+
+                          {/* Quick Emoji selection */}
+                          <div className="flex gap-1 overflow-x-auto no-scrollbar">
+                            {['💬', '🏢', '🏠', '👥', '💼', '🔔', '🚀', '🟢', '🔵', '🔴'].map(em => (
+                              <button
+                                key={em}
+                                onClick={async () => {
+                                  setAccounts(prev => prev.map(a => a.id === acc.id ? { ...a, emoji: em } : a));
+                                  await window.electronAPI.updateAccountEmoji(acc.id, em);
+                                }}
+                                className={`text-[12px] p-1 rounded hover:bg-[#202c33] transition-colors ${acc.emoji === em ? 'bg-[#202c33] border border-[#00a884]/40' : ''}`}
+                              >
+                                {em}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Row 2: Action Buttons */}
+                        <div className="flex items-center gap-1.5 pt-2 border-t border-[#222d34]/60">
+                          <span className="text-[10px] text-[#8696a0] mr-1">Actions:</span>
+                          <button
+                            onClick={() => handleDeleteAccount(acc.id)}
+                            disabled={accounts.length <= 1}
+                            className={`p-1.5 rounded hover:bg-[#202c33] transition-colors ${
+                              accounts.length <= 1 ? 'text-[#374248] cursor-not-allowed' : 'text-[#ea4335] hover:text-[#ff5c4c]'
+                            }`}
+                            title={accounts.length <= 1 ? "Cannot delete the last remaining account" : "Delete Account"}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedAccountId(acc.id);
+                              setActivePage('storage');
+                            }}
+                            className="p-1.5 rounded hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors"
+                            title="Storage Usage"
+                          >
+                            <Database className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedAccountId(acc.id);
+                              setActivePage('permissions');
+                            }}
+                            className="p-1.5 rounded hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors"
+                            title="Browser Permissions"
+                          >
+                            <Shield className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedAccountId(acc.id);
+                              setActivePage('extensions');
+                            }}
+                            className="p-1.5 rounded hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors"
+                            title="Chrome Extensions"
+                          >
+                            <Puzzle className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedAccountId(acc.id);
+                              setActivePage('css');
+                            }}
+                            className="p-1.5 rounded hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors"
+                            title="Custom CSS / Theme"
+                          >
+                            <Palette className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedAccountId(acc.id);
+                              setNotifAccountFilter(acc.id);
+                              setActivePage('notifications');
+                            }}
+                            className="p-1.5 rounded hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors"
+                            title="Notification History"
+                          >
+                            <Bell className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Row 3: Load account on launch checkbox */}
+                        <div className="flex items-center justify-between pt-2 border-t border-[#222d34]/60">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={
+                                globalSettings?.preloadAccountIds
+                                  ? globalSettings.preloadAccountIds.includes(acc.id)
+                                  : acc.id === 'acc_default'
+                              }
+                              onChange={(e) => {
+                                if (!globalSettings) return;
+                                const currentIds = globalSettings.preloadAccountIds || ['acc_default'];
+                                const updatedIds = e.target.checked
+                                  ? [...currentIds, acc.id]
+                                  : currentIds.filter((id) => id !== acc.id);
+                                handleToggleGlobalSetting('preloadAccountIds', updatedIds);
+                              }}
+                              className="accent-[#00a884] w-3.5 h-3.5 cursor-pointer rounded"
+                            />
+                            <span className="text-[11px] text-[#e9edef] font-medium">Load account on launch</span>
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {subPage === 'permissions' && (
-              <div className="space-y-5">
+              <div className="space-y-4 subpage-animate">
                 <div>
                   <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
                     <Shield className="w-4 h-4 text-[#00a884]" />
@@ -633,115 +872,126 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   <p className="text-[11px] text-[#8696a0] mt-2 mb-4 leading-relaxed">
                     Configure web feature permissions for each account. Disabling unused permissions prevents scripts from accessing sensitive resources.
                   </p>
-
-                  <div className="p-3 bg-[#182229] border border-[#222d34] rounded-lg space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-[#222d34]/60">
-                      <span className="font-semibold text-xs text-[#e9edef]">Select Target Account:</span>
-                      <select
-                        value={selectedAccountId}
-                        onChange={(e) => setSelectedAccountId(e.target.value)}
-                        className="bg-[#202c33] text-[#e9edef] px-2 py-1 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884]"
-                      >
-                        {accounts.map((acc) => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {selectedAccount && (
-                      <div className="space-y-3 pt-1">
-                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-                          <div>
-                            <div className="font-medium text-[#e9edef] text-[11px]">Push Notifications</div>
-                            <div className="text-[10px] text-[#8696a0] mt-0.5">Allow WhatsApp to show desktop notifications</div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={selectedAccount.settings?.notificationsEnabled ?? true}
-                            onChange={(e) => handleToggleAccountPermission('notificationsEnabled', e.target.checked)}
-                            className="accent-[#00a884] w-4 h-4 cursor-pointer"
-                          />
-                        </label>
-
-                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-                          <div>
-                            <div className="font-medium text-[#e9edef] text-[11px]">Camera Access</div>
-                            <div className="text-[10px] text-[#8696a0] mt-0.5">Allow video capture for video calls</div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={selectedAccount.settings?.cameraEnabled ?? true}
-                            onChange={(e) => handleToggleAccountPermission('cameraEnabled', e.target.checked)}
-                            className="accent-[#00a884] w-4 h-4 cursor-pointer"
-                          />
-                        </label>
-
-                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-                          <div>
-                            <div className="font-medium text-[#e9edef] text-[11px]">Microphone Access</div>
-                            <div className="text-[10px] text-[#8696a0] mt-0.5">Allow audio capture for voice calls</div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={selectedAccount.settings?.micEnabled ?? true}
-                            onChange={(e) => handleToggleAccountPermission('micEnabled', e.target.checked)}
-                            className="accent-[#00a884] w-4 h-4 cursor-pointer"
-                          />
-                        </label>
-
-                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-                          <div>
-                            <div className="font-medium text-[#e9edef] text-[11px]">Geolocation Access</div>
-                            <div className="text-[10px] text-[#8696a0] mt-0.5">Allow sharing current location inside chats</div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={selectedAccount.settings?.geolocationEnabled ?? false}
-                            onChange={(e) => handleToggleAccountPermission('geolocationEnabled', e.target.checked)}
-                            className="accent-[#00a884] w-4 h-4 cursor-pointer"
-                          />
-                        </label>
-
-                        <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-                          <div>
-                            <div className="font-medium text-[#e9edef] text-[11px]">Clipboard Access (Read)</div>
-                            <div className="text-[10px] text-[#8696a0] mt-0.5">Allow pages to read text and files from your system clipboard</div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={selectedAccount.settings?.clipboardReadEnabled ?? false}
-                            onChange={(e) => handleToggleAccountPermission('clipboardReadEnabled', e.target.checked)}
-                            className="accent-[#00a884] w-4 h-4 cursor-pointer"
-                          />
-                        </label>
-
-                        <div className="text-[10px] text-[#8696a0] italic text-center pt-2 border-t border-[#222d34]/60">
-                          * Toggling browser permissions reloads the account webview to apply changes.
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </div>
+
+                {/* Unified Account Selector Banner */}
+                <div className="flex items-center justify-between p-3 bg-[#182229] border border-[#222d34] rounded-lg">
+                  <span className="font-semibold text-xs text-[#e9edef]">Target Account:</span>
+                  <select
+                    value={selectedAccountId}
+                    onChange={(e) => setSelectedAccountId(e.target.value)}
+                    className="bg-[#202c33] text-[#e9edef] px-3 py-1.5 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] cursor-pointer font-medium"
+                  >
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedAccount && (
+                  <div className="p-3 bg-[#182229] border border-[#222d34] rounded-lg space-y-3">
+                    <div className="space-y-3">
+                      <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+                        <div>
+                          <div className="font-medium text-[#e9edef] text-[11px]">Push Notifications</div>
+                          <div className="text-[10px] text-[#8696a0] mt-0.5">Allow WhatsApp to show desktop notifications</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedAccount.settings?.notificationsEnabled ?? true}
+                          onChange={(e) => handleToggleAccountPermission('notificationsEnabled', e.target.checked)}
+                          className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+                        <div>
+                          <div className="font-medium text-[#e9edef] text-[11px]">Camera Access</div>
+                          <div className="text-[10px] text-[#8696a0] mt-0.5">Allow video capture for video calls</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedAccount.settings?.cameraEnabled ?? true}
+                          onChange={(e) => handleToggleAccountPermission('cameraEnabled', e.target.checked)}
+                          className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+                        <div>
+                          <div className="font-medium text-[#e9edef] text-[11px]">Microphone Access</div>
+                          <div className="text-[10px] text-[#8696a0] mt-0.5">Allow audio capture for voice calls</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedAccount.settings?.micEnabled ?? true}
+                          onChange={(e) => handleToggleAccountPermission('micEnabled', e.target.checked)}
+                          className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+                        <div>
+                          <div className="font-medium text-[#e9edef] text-[11px]">Geolocation Access</div>
+                          <div className="text-[10px] text-[#8696a0] mt-0.5">Allow sharing current location inside chats</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedAccount.settings?.geolocationEnabled ?? false}
+                          onChange={(e) => handleToggleAccountPermission('geolocationEnabled', e.target.checked)}
+                          className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+                        <div>
+                          <div className="font-medium text-[#e9edef] text-[11px]">Clipboard Access (Read)</div>
+                          <div className="text-[10px] text-[#8696a0] mt-0.5">Allow pages to read text and files from your system clipboard</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedAccount.settings?.clipboardReadEnabled ?? false}
+                          onChange={(e) => handleToggleAccountPermission('clipboardReadEnabled', e.target.checked)}
+                          className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+
+                      <div className="text-[10px] text-[#8696a0] italic text-center pt-2 border-t border-[#222d34]/60">
+                        * Toggling browser permissions reloads the account webview to apply changes.
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             {subPage === 'extensions' && (
-              <div className="flex flex-col h-full">
-                {/* Extensions Header with Switcher & Import Dropdown */}
-                <div className="flex items-center justify-between mb-3 border-b border-[#222d34] pb-3 flex-shrink-0 relative">
+              <div className="flex flex-col h-full space-y-4 subpage-animate">
+                <div className="flex-shrink-0">
+                  <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
+                    <Puzzle className="w-4 h-4 text-[#00a884]" />
+                    <span>Chrome Extensions</span>
+                  </h3>
+                  <p className="text-[11px] text-[#8696a0] mt-2 mb-3 leading-relaxed">
+                    Manage helper extensions, load unpacked directories, or install directly from the Chrome Web Store.
+                  </p>
+                </div>
+
+                {/* Unified Account Selector Banner */}
+                <div className="flex items-center justify-between p-3 bg-[#182229] border border-[#222d34] rounded-lg mb-4 flex-shrink-0 relative">
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-xs text-[#e9edef]">Target Account:</span>
                       <select
                         value={selectedAccountId}
                         onChange={(e) => setSelectedAccountId(e.target.value)}
-                        className="bg-[#202c33] text-[#e9edef] px-2 py-1 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884]"
+                        className="bg-[#202c33] text-[#e9edef] px-3 py-1.5 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] cursor-pointer font-medium"
                       >
                         {accounts.map((acc) => (
                           <option key={acc.id} value={acc.id}>
-                            {acc.name}
+                            {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
                           </option>
                         ))}
                       </select>
@@ -909,22 +1159,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             )}
 
             {subPage === 'css' && (
-              <div className="flex flex-col h-full space-y-4">
-                <div className="flex-shrink-0 flex items-center justify-between border-b border-[#222d34] pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-xs text-[#e9edef]">Account CSS:</span>
-                    <select
-                      value={selectedAccountId}
-                      onChange={(e) => setSelectedAccountId(e.target.value)}
-                      className="bg-[#202c33] text-[#e9edef] px-2 py-1 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884]"
-                    >
-                      {accounts.map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <div className="flex flex-col h-full space-y-4 subpage-animate">
+                <div className="flex-shrink-0">
+                  <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
+                    <Palette className="w-4 h-4 text-[#00a884]" />
+                    <span>Custom CSS & Themes</span>
+                  </h3>
+                  <p className="text-[11px] text-[#8696a0] mt-2 mb-3 leading-relaxed">
+                    Inject custom stylesheets or select preset themes to customize the appearance of each account.
+                  </p>
+                </div>
+
+                {/* Unified Account Selector Banner */}
+                <div className="flex items-center justify-between p-3 bg-[#182229] border border-[#222d34] rounded-lg mb-4 flex-shrink-0">
+                  <span className="font-semibold text-xs text-[#e9edef]">Target Account:</span>
+                  <select
+                    value={selectedAccountId}
+                    onChange={(e) => setSelectedAccountId(e.target.value)}
+                    className="bg-[#202c33] text-[#e9edef] px-3 py-1.5 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] cursor-pointer font-medium"
+                  >
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="flex-shrink-0 space-y-2">
@@ -979,18 +1238,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             )}
 
             {subPage === 'storage' && (
-              <div className="flex flex-col h-full space-y-4">
-                {/* Account selector header */}
-                <div className="flex items-center gap-2 border-b border-[#222d34] pb-3 flex-shrink-0">
+              <div className="flex flex-col h-full space-y-4 subpage-animate">
+                <div className="flex-shrink-0">
+                  <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
+                    <Database className="w-4 h-4 text-[#00a884]" />
+                    <span>Storage & Cache</span>
+                  </h3>
+                  <p className="text-[11px] text-[#8696a0] mt-2 mb-3 leading-relaxed">
+                    Inspect disk usage, clear application caches, or remove local storage data.
+                  </p>
+                </div>
+
+                {/* Unified Account Selector Banner */}
+                <div className="flex items-center justify-between p-3 bg-[#182229] border border-[#222d34] rounded-lg mb-4 flex-shrink-0">
                   <span className="font-semibold text-xs text-[#e9edef]">Target Account:</span>
                   <select
                     value={selectedAccountId}
                     onChange={(e) => setSelectedAccountId(e.target.value)}
-                    className="bg-[#202c33] text-[#e9edef] px-2 py-1 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884]"
+                    className="bg-[#202c33] text-[#e9edef] px-3 py-1.5 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] cursor-pointer font-medium"
                   >
                     {accounts.map((acc) => (
                       <option key={acc.id} value={acc.id}>
-                        {acc.name}
+                        {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
                       </option>
                     ))}
                   </select>
@@ -1078,10 +1347,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             )}
 
             {subPage === 'notifications' && (
-              <div className="flex flex-col h-full space-y-4">
+              <div className="flex flex-col h-full space-y-4 subpage-animate">
+                <div className="flex-shrink-0">
+                  <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
+                    <Bell className="w-4 h-4 text-[#00a884]" />
+                    <span>Notification History</span>
+                  </h3>
+                  <p className="text-[11px] text-[#8696a0] mt-2 mb-3 leading-relaxed">
+                    Browse, filter, and search through logs of desktop notifications, message edits, and deletions.
+                  </p>
+                </div>
+
                 {globalSettings?.notificationLoggingEnabled === false && (
-                  <div className="flex-shrink-0 bg-[#ea4335]/15 border border-[#ea4335]/30 text-[#ea4335] px-3 py-2 rounded text-[11px] leading-normal">
-                    ⚠️ Notification logging is currently disabled. Go to the <strong>General</strong> tab to enable it so notifications, edits, and deletions can be recorded.
+                  <div className="flex-shrink-0 bg-[#ea4335]/15 border border-[#ea4335]/30 text-[#ea4335] px-3 py-2 rounded text-[11px] leading-normal font-medium">
+                    ⚠️ Notification logging is currently disabled. Go to the{' '}
+                    <button
+                      onClick={() => setActivePage('general')}
+                      className="underline font-semibold hover:text-[#ff5c4c] transition-colors cursor-pointer"
+                    >
+                      General settings page
+                    </button>{' '}
+                    to enable it so notifications, edits, and deletions can be recorded.
                   </div>
                 )}
                 <div className="flex-shrink-0 flex items-center justify-between gap-3 border-b border-[#222d34] pb-3">
@@ -1101,7 +1387,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                       <option value="all">All Accounts</option>
                       {accounts.map((acc) => (
                         <option key={acc.id} value={acc.id}>
-                          {acc.name}
+                          {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
                         </option>
                       ))}
                     </select>

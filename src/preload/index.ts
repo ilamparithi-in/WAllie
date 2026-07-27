@@ -16,6 +16,7 @@ export interface AccountInfo {
   partition: string;
   loggedIn?: boolean;
   extensions?: ExtensionInfo[];
+  emoji?: string;
   settings?: {
     cameraEnabled: boolean;
     micEnabled: boolean;
@@ -34,6 +35,8 @@ export interface GlobalSettings {
   showDevToolsToggle?: boolean;
   notificationLoggingEnabled?: boolean;
   extensionDevMode?: boolean;
+  startMinimized?: boolean;
+  disclaimerAccepted?: boolean;
 }
 
 export interface ElectronAPI {
@@ -53,6 +56,7 @@ export interface ElectronAPI {
   addAccount: (name?: string) => Promise<AccountInfo>;
   removeAccount: (id: string) => Promise<boolean>;
   renameAccount: (id: string, name: string) => Promise<boolean>;
+  updateAccountEmoji: (id: string, emoji: string) => Promise<boolean>;
   reloadActiveAccount: () => void;
   reloadAccount: (accountId: string) => void;
   showAccountContextMenu: (accountId: string) => void;
@@ -109,6 +113,8 @@ export interface ElectronAPI {
       totalBytes?: number;
     }) => void
   ) => () => void;
+  relaunchApp: () => void;
+  onOpenManageAccounts: (callback: (accountId: string) => void) => () => void;
 }
 
 const api: ElectronAPI = {
@@ -125,6 +131,7 @@ const api: ElectronAPI = {
   addAccount: (name?: string) => ipcRenderer.invoke('account:add', name),
   removeAccount: (id: string) => ipcRenderer.invoke('account:remove', id),
   renameAccount: (id: string, name: string) => ipcRenderer.invoke('account:rename', id, name),
+  updateAccountEmoji: (id: string, emoji: string) => ipcRenderer.invoke('account:update-emoji', id, emoji),
   reloadActiveAccount: () => ipcRenderer.send('account:reload-active'),
   reloadAccount: (accountId: string) => ipcRenderer.send('account:reload', accountId),
   showAccountContextMenu: (accountId: string) => ipcRenderer.send('account:context-menu', accountId),
@@ -154,6 +161,7 @@ const api: ElectronAPI = {
   getNotificationHistory: () => ipcRenderer.invoke('notification:get-history'),
   clearNotificationHistory: () => ipcRenderer.invoke('notification:clear-history'),
   saveCss: (accountId, customCss, selectedTheme) => ipcRenderer.invoke('account:save-css', accountId, customCss, selectedTheme),
+  relaunchApp: () => ipcRenderer.send('app:relaunch'),
 
   onProtocolReceived: (callback) => {
     const subscription = (_event: unknown, url: string) => callback(url);
@@ -203,6 +211,12 @@ const api: ElectronAPI = {
     const subscription = () => callback();
     ipcRenderer.on('settings:close-request', subscription);
     return () => ipcRenderer.removeListener('settings:close-request', subscription);
+  },
+
+  onOpenManageAccounts: (callback) => {
+    const subscription = (_event: unknown, accountId: string) => callback(accountId);
+    ipcRenderer.on('settings:open-manage-accounts', subscription);
+    return () => ipcRenderer.removeListener('settings:open-manage-accounts', subscription);
   },
 
   onGlobalSettingsChanged: (callback) => {

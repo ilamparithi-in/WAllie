@@ -63,6 +63,7 @@ interface Account {
   unreadCount: number;
   loggedIn: boolean;
   extensions: ExtensionInfo[];
+  emoji?: string;
   settings?: {
     cameraEnabled: boolean;
     micEnabled: boolean;
@@ -81,6 +82,8 @@ interface GlobalSettings {
   showDevToolsToggle?: boolean;
   notificationLoggingEnabled?: boolean;
   extensionDevMode?: boolean;
+  startMinimized?: boolean;
+  disclaimerAccepted?: boolean;
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -112,7 +115,7 @@ function loadSettings(): GlobalSettings {
           }
         }
         if (!Array.isArray(preloadAccountIds)) {
-          preloadAccountIds = [];
+          preloadAccountIds = ['acc_default'];
         }
       }
       return {
@@ -122,6 +125,8 @@ function loadSettings(): GlobalSettings {
         showDevToolsToggle: !!parsed.showDevToolsToggle,
         notificationLoggingEnabled: !!parsed.notificationLoggingEnabled,
         extensionDevMode: !!parsed.extensionDevMode,
+        startMinimized: !!parsed.startMinimized,
+        disclaimerAccepted: !!parsed.disclaimerAccepted,
       };
     }
   } catch (error) {
@@ -130,10 +135,12 @@ function loadSettings(): GlobalSettings {
   return {
     closeToTray: true,
     hardwareAcceleration: true,
-    preloadAccountIds: [],
+    preloadAccountIds: ['acc_default'],
     showDevToolsToggle: false,
     notificationLoggingEnabled: false,
     extensionDevMode: false,
+    startMinimized: false,
+    disclaimerAccepted: false,
   };
 }
 
@@ -206,12 +213,13 @@ function loadAccounts(): Account[] {
 // Helper to save accounts
 function saveAccounts() {
   try {
-    const dataToSave = accounts.map(({ id, name, partition, loggedIn, extensions, settings }) => ({
+    const dataToSave = accounts.map(({ id, name, partition, loggedIn, extensions, settings, emoji }) => ({
       id,
       name,
       partition,
       loggedIn,
       extensions,
+      emoji: emoji || '',
       settings: settings || {
         cameraEnabled: true,
         micEnabled: true,
@@ -781,6 +789,28 @@ async function switchActiveAccount(newAccountId: string) {
   mainWindow.webContents.send('account:list-changed', accounts, activeAccountId);
 }
 
+// Helper to initialize and preload WhatsApp accounts
+async function initializeAccountsLoad() {
+  // Initialize initial active view
+  await switchActiveAccount(activeAccountId);
+
+  // Preload remaining accounts in the background if configured
+  const preloadIds = globalSettings.preloadAccountIds || [];
+  if (preloadIds.length > 0) {
+    console.log('Preloading configured accounts in the background...', preloadIds);
+    for (const account of accounts) {
+      if (account.id !== activeAccountId && !accountViews.has(account.id) && preloadIds.includes(account.id)) {
+        createAccountView(account).then((view) => {
+          accountViews.set(account.id, view);
+          console.log(`Preloaded account: ${account.name} (${account.id})`);
+        }).catch((err) => {
+          console.error(`Failed to preload account ${account.name}:`, err);
+        });
+      }
+    }
+  }
+}
+
 let isQuitting = false;
 
 function createMainWindow() {
@@ -814,24 +844,14 @@ function createMainWindow() {
 
   mainWindow.once('ready-to-show', async () => {
     console.log('Main window ready-to-show, activeAccountId:', activeAccountId);
-    mainWindow?.show();
-    // Initialize initial active view
-    await switchActiveAccount(activeAccountId);
-
-    // Preload remaining accounts in the background if configured
-    const preloadIds = globalSettings.preloadAccountIds || [];
-    if (preloadIds.length > 0) {
-      console.log('Preloading configured accounts in the background...', preloadIds);
-      for (const account of accounts) {
-        if (account.id !== activeAccountId && !accountViews.has(account.id) && preloadIds.includes(account.id)) {
-          createAccountView(account).then((view) => {
-            accountViews.set(account.id, view);
-            console.log(`Preloaded account: ${account.name} (${account.id})`);
-          }).catch((err) => {
-            console.error(`Failed to preload account ${account.name}:`, err);
-          });
-        }
-      }
+    if (!globalSettings.startMinimized) {
+      mainWindow?.show();
+    }
+    // Only switch to active account and preload if disclaimer has been accepted
+    if (globalSettings.disclaimerAccepted) {
+      await initializeAccountsLoad();
+    } else {
+      console.log('Legal disclaimer not yet accepted. Deferring account view load.');
     }
   });
 
@@ -1148,6 +1168,12 @@ ipcMain.on('account:reload', (_event, accountId: string) => {
   }
 });
 
+ipcMain.on('app:relaunch', () => {
+  console.log('IPC Received: app:relaunch. Relaunching application.');
+  app.relaunch();
+  app.exit(0);
+});
+
 ipcMain.handle('account:add', async (_event, customName?: string) => {
   const newIndex = accounts.length + 1;
   const newId = `acc_${Date.now()}`;
@@ -1158,6 +1184,7 @@ ipcMain.handle('account:add', async (_event, customName?: string) => {
     unreadCount: 0,
     loggedIn: false,
     extensions: [],
+    emoji: '',
   };
   accounts.push(newAccount);
   saveAccounts();
@@ -1189,6 +1216,17 @@ ipcMain.handle('account:rename', (_event, id: string, newName: string) => {
   return false;
 });
 
+ipcMain.handle('account:update-emoji', (_event, id: string, emoji: string) => {
+  const account = accounts.find((a) => a.id === id);
+  if (account) {
+    account.emoji = emoji;
+    saveAccounts();
+    mainWindow?.webContents.send('account:list-changed', accounts, activeAccountId);
+    return true;
+  }
+  return false;
+});
+
 ipcMain.handle('account:remove', async (_event, id: string) => {
   return await removeAccountLogic(id);
 });
@@ -1202,6 +1240,12 @@ ipcMain.on('account:context-menu', (event, accountId: string) => {
       label: 'Rename Account',
       click: () => {
         mainWindow?.webContents.send('account:trigger-rename', accountId);
+      },
+    },
+    {
+      label: 'Manage Account',
+      click: () => {
+        mainWindow?.webContents.send('settings:open-manage-accounts', accountId);
       },
     },
     { type: 'separator' },
@@ -1944,10 +1988,16 @@ ipcMain.handle('account:clear-storage', async (_event, accountId: string, type: 
 // IPC Handlers for Settings Management
 ipcMain.handle('settings:get-global', () => globalSettings);
 
-ipcMain.handle('settings:save-global', (_event, newSettings: GlobalSettings) => {
+ipcMain.handle('settings:save-global', async (_event, newSettings: GlobalSettings) => {
+  const disclaimerJustAccepted = newSettings.disclaimerAccepted && !globalSettings.disclaimerAccepted;
   globalSettings = newSettings;
   saveSettings(globalSettings);
   mainWindow?.webContents.send('settings:global-changed', globalSettings);
+  
+  if (disclaimerJustAccepted) {
+    console.log('Legal disclaimer accepted. Initializing account views.');
+    await initializeAccountsLoad();
+  }
   return true;
 });
 
@@ -2117,14 +2167,14 @@ ipcMain.on('notification:create', async (event, data: { title: string; body: str
   if (!senderAccount) return;
 
   // 1. Account Branding
-  const brandedTitle = `[${senderAccount.name}] ${data.title}`;
+  const brandedTitle = senderAccount.emoji ? `${senderAccount.emoji} | ${data.title}` : `| ${data.title}`;
 
   // 2. Save to local log history
   if (globalSettings.notificationLoggingEnabled) {
     logNotificationToHistory({
       id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       accountId: senderAccount.id,
-      accountName: senderAccount.name,
+      accountName: senderAccount.emoji ? `${senderAccount.emoji} ${senderAccount.name}` : senderAccount.name,
       title: data.title,
       body: data.body,
       icon: data.icon, // Base64 representation
@@ -2195,7 +2245,7 @@ ipcMain.on('notification:create-log-entry', async (event, data: { title: string;
     logNotificationToHistory({
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       accountId: senderAccount.id,
-      accountName: senderAccount.name,
+      accountName: senderAccount.emoji ? `${senderAccount.emoji} ${senderAccount.name}` : senderAccount.name,
       title: data.title,
       body: data.body,
       icon: '',

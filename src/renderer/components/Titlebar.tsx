@@ -4,9 +4,10 @@ import type { AccountInfo } from '../../preload';
 
 interface TitlebarProps {
   onToggleSettings: () => void;
+  isDisclaimerAccepted?: boolean;
 }
 
-export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings }) => {
+export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaimerAccepted = true }) => {
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [activeId, setActiveId] = useState<string>('default');
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
@@ -162,60 +163,64 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings }) => {
         </div>
 
         {/* Tab List */}
-        <div className="flex items-center h-full gap-0.5 overflow-x-auto no-scrollbar">
-          {accounts.map((account) => {
-            const isActive = account.id === activeId;
-            const isEditing = account.id === editingId;
+        {isDisclaimerAccepted && (
+          <div className="flex items-center h-full gap-0.5 overflow-x-auto no-scrollbar">
+            {accounts.map((account) => {
+              const isActive = account.id === activeId;
+              const isEditing = account.id === editingId;
 
-            return (
-              <div
-                key={account.id}
-                onClick={() => handleSwitchTab(account.id)}
-                onDoubleClick={(e) => handleStartEdit(account, e)}
-                onContextMenu={(e) => handleContextMenu(account.id, e)}
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                className={`group flex items-center gap-1.5 px-2.5 h-[22px] rounded-t text-[11px] font-medium transition-colors cursor-pointer relative ${
-                  isActive
-                    ? 'bg-[#202c33] text-[#e9edef] border-t-2 border-[#00a884]'
-                    : 'text-[#8696a0] hover:bg-[#182229] hover:text-[#d1d7db]'
-                }`}
-                title="Double click to rename, Right-click for options"
-              >
-                {isEditing ? (
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    onBlur={handleSaveEdit}
-                    className="bg-[#111b21] text-[#e9edef] px-1 rounded border border-[#00a884] text-[10px] w-[80px] h-[16px] outline-none"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                ) : (
-                  <span className="truncate max-w-[100px]">{account.name}</span>
-                )}
+              return (
+                <div
+                  key={account.id}
+                  onClick={() => handleSwitchTab(account.id)}
+                  onDoubleClick={(e) => handleStartEdit(account, e)}
+                  onContextMenu={(e) => handleContextMenu(account.id, e)}
+                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                  className={`group flex items-center gap-1.5 px-2.5 h-[22px] rounded-t text-[11px] font-medium transition-colors cursor-pointer relative ${
+                    isActive
+                      ? 'bg-[#202c33] text-[#e9edef] border-t-2 border-[#00a884]'
+                      : 'text-[#8696a0] hover:bg-[#182229] hover:text-[#d1d7db]'
+                  }`}
+                  title="Double click to rename, Right-click for options"
+                >
+                  {isEditing ? (
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onBlur={handleSaveEdit}
+                      className="bg-[#111b21] text-[#e9edef] px-1 rounded border border-[#00a884] text-[10px] w-[80px] h-[16px] outline-none"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span className="truncate max-w-[100px]">
+                      {account.emoji ? `${account.emoji} ` : ''}{account.name}
+                    </span>
+                  )}
 
-                {/* Unread badge */}
-                {!isEditing && account.unreadCount > 0 && (
-                  <span className="bg-[#00a884] text-[#111b21] font-bold text-[9px] px-1 rounded-full min-w-[14px] text-center leading-[13px]">
-                    {account.unreadCount > 99 ? '99+' : account.unreadCount}
-                  </span>
-                )}
-              </div>
-            );
-          })}
+                  {/* Unread badge */}
+                  {!isEditing && account.unreadCount > 0 && (
+                    <span className="bg-[#00a884] text-[#111b21] font-bold text-[9px] px-1 rounded-full min-w-[14px] text-center leading-[13px]">
+                      {account.unreadCount > 99 ? '99+' : account.unreadCount}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
 
-          {/* Add Account Button */}
-          <button
-            onClick={handleAddAccount}
-            title="Add Account Instance"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            className="flex items-center justify-center w-5 h-5 rounded hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors ml-0.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-        </div>
+            {/* Add Account Button */}
+            <button
+              onClick={handleAddAccount}
+              title="Add Account Instance"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              className="flex items-center justify-center w-5 h-5 rounded hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors ml-0.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Drag fill area */}
@@ -229,56 +234,60 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings }) => {
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         className="flex items-center h-full gap-0.5"
       >
-        {/* Zoom Indicator Badge */}
-        {zoomPercent !== 100 && (
-          <button
-            onClick={() => window.electronAPI?.resetZoom()}
-            title="Zoom level active. Click to reset to 100%"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            className={`flex items-center justify-center px-1.5 h-[18px] rounded text-[10px] font-extrabold tracking-wide transition-all duration-200 ${
-              showFlash
-                ? 'bg-[#00a884] text-[#111b21] scale-105 shadow-md'
-                : 'bg-[#202c33] text-[#00a884] hover:bg-[#2a3942] hover:text-[#e9edef]'
-            }`}
-          >
-            {zoomPercent}%
-          </button>
+        {isDisclaimerAccepted && (
+          <>
+            {/* Zoom Indicator Badge */}
+            {zoomPercent !== 100 && (
+              <button
+                onClick={() => window.electronAPI?.resetZoom()}
+                title="Zoom level active. Click to reset to 100%"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                className={`flex items-center justify-center px-1.5 h-[18px] rounded text-[10px] font-extrabold tracking-wide transition-all duration-200 ${
+                  showFlash
+                    ? 'bg-[#00a884] text-[#111b21] scale-105 shadow-md'
+                    : 'bg-[#202c33] text-[#00a884] hover:bg-[#2a3942] hover:text-[#e9edef]'
+                }`}
+              >
+                {zoomPercent}%
+              </button>
+            )}
+
+            {/* Refresh Button */}
+            <button
+              onClick={() => window.electronAPI?.reloadActiveAccount()}
+              title="Refresh WhatsApp Web"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+            </button>
+
+            {/* DevTools Toggle Button */}
+            {showDevTools && (
+              <button
+                onClick={() => window.electronAPI?.toggleDevTools()}
+                title="Toggle Developer Tools"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
+              >
+                <Code className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {/* Settings Button */}
+            <button
+              onClick={onToggleSettings}
+              title="Settings (Extensions, CSS, Storage, History)"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Divider */}
+            <div className="h-3 w-[1px] bg-[#222d34] mx-1" />
+          </>
         )}
-
-        {/* Refresh Button */}
-        <button
-          onClick={() => window.electronAPI?.reloadActiveAccount()}
-          title="Refresh WhatsApp Web"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
-        >
-          <RotateCw className="w-3.5 h-3.5" />
-        </button>
-
-        {/* DevTools Toggle Button */}
-        {showDevTools && (
-          <button
-            onClick={() => window.electronAPI?.toggleDevTools()}
-            title="Toggle Developer Tools"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
-          >
-            <Code className="w-3.5 h-3.5" />
-          </button>
-        )}
-
-        {/* Settings Button */}
-        <button
-          onClick={onToggleSettings}
-          title="Settings (Extensions, CSS, Storage, History)"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
-        >
-          <Settings className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Divider */}
-        <div className="h-3 w-[1px] bg-[#222d34] mx-1" />
 
         {/* Window Controls */}
         <button
