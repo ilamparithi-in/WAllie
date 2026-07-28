@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Titlebar } from './components/Titlebar';
 import { SettingsModal } from './components/SettingsModal';
 import { Download, CheckCircle, XCircle, X, Shield } from 'lucide-react';
@@ -26,6 +26,95 @@ export const App: React.FC = () => {
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null);
   const [showDisclaimerForce, setShowDisclaimerForce] = useState(false);
   const [disclaimerChecked, setDisclaimerChecked] = useState(false);
+
+  const disclaimerRef = useRef<HTMLDivElement>(null);
+  const protocolPromptRef = useRef<HTMLDivElement>(null);
+
+  // Focus trapping for Legal Disclaimer
+  useEffect(() => {
+    if ((!globalSettings?.disclaimerAccepted || showDisclaimerForce) && disclaimerRef.current) {
+      const focusableSelector = 'a[href], button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Tab') {
+          const focusablesArray = Array.from(disclaimerRef.current?.querySelectorAll(focusableSelector) || []) as HTMLElement[];
+          if (focusablesArray.length === 0) {
+            e.preventDefault();
+            return;
+          }
+          const first = focusablesArray[0];
+          const last = focusablesArray[focusablesArray.length - 1];
+          const active = document.activeElement as HTMLElement;
+
+          if (!disclaimerRef.current?.contains(active)) {
+            (e.shiftKey ? last : first).focus();
+            e.preventDefault();
+            return;
+          }
+
+          if (e.shiftKey) {
+            if (active === first) {
+              last.focus();
+              e.preventDefault();
+            }
+          } else {
+            if (active === last) {
+              first.focus();
+              e.preventDefault();
+            }
+          }
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown, true);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown, true);
+      };
+    }
+  }, [globalSettings?.disclaimerAccepted, showDisclaimerForce]);
+
+  // Focus trapping for Protocol Switcher Prompt
+  useEffect(() => {
+    if (pendingUrl && protocolPromptRef.current) {
+      const focusableSelector = 'a[href], button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Tab') {
+          const focusablesArray = Array.from(protocolPromptRef.current?.querySelectorAll(focusableSelector) || []) as HTMLElement[];
+          if (focusablesArray.length === 0) {
+            e.preventDefault();
+            return;
+          }
+          const first = focusablesArray[0];
+          const last = focusablesArray[focusablesArray.length - 1];
+          const active = document.activeElement as HTMLElement;
+
+          if (!protocolPromptRef.current?.contains(active)) {
+            (e.shiftKey ? last : first).focus();
+            e.preventDefault();
+            return;
+          }
+
+          if (e.shiftKey) {
+            if (active === first) {
+              last.focus();
+              e.preventDefault();
+            }
+          } else {
+            if (active === last) {
+              first.focus();
+              e.preventDefault();
+            }
+          }
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown, true);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown, true);
+      };
+    }
+  }, [pendingUrl]);
 
   useEffect(() => {
     if (!window.electronAPI) return;
@@ -185,7 +274,9 @@ export const App: React.FC = () => {
                 </span>
                 <button
                   onClick={() => setDownloads(prev => prev.filter(d => d.id !== dl.id))}
-                  className="p-0.5 text-[#8696a0] hover:text-[#e9edef] rounded hover:bg-[#111b21] transition-colors"
+                  onMouseDown={(e) => e.preventDefault()}
+                  tabIndex={-1}
+                  className="p-0.5 text-[#8696a0] hover:text-[#e9edef] rounded hover:bg-[#111b21] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -241,7 +332,10 @@ export const App: React.FC = () => {
       {/* Custom Protocol Account Switcher Prompt */}
       {pendingUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm select-text font-sans">
-          <div className="bg-[#222e35] border border-[#2c3943] w-[400px] rounded-xl shadow-2xl overflow-hidden flex flex-col p-6 animate-in fade-in duration-200">
+          <div
+            ref={protocolPromptRef}
+            className="bg-[#222e35] border border-[#2c3943] w-[400px] rounded-xl shadow-2xl overflow-hidden flex flex-col p-6 animate-in fade-in duration-200"
+          >
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-[#e9edef] text-sm font-semibold">Open WhatsApp Link</h2>
               <button
@@ -249,7 +343,9 @@ export const App: React.FC = () => {
                   setPendingUrl(null);
                   window.electronAPI.toggleProtocolPrompt(false);
                 }}
-                className="text-[#8696a0] hover:text-[#e9edef] transition-colors"
+                onMouseDown={(e) => e.preventDefault()}
+                tabIndex={-1}
+                className="text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -268,7 +364,8 @@ export const App: React.FC = () => {
                     setPendingUrl(null);
                     window.electronAPI.toggleProtocolPrompt(false);
                   }}
-                  className="flex items-center gap-3 p-3 bg-[#111b21] hover:bg-[#202c33] border border-[#2c3943] hover:border-[#00a884] rounded-lg text-left transition-all duration-200"
+                  onMouseDown={(e) => e.preventDefault()}
+                  className="flex items-center gap-3 p-3 bg-[#111b21] hover:bg-[#202c33] border border-[#2c3943] hover:border-[#00a884] rounded-lg text-left transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
                 >
                   <div className="w-8 h-8 rounded-full bg-[#00a884]/10 border border-[#00a884]/20 flex items-center justify-center text-[#00a884] font-semibold text-xs shrink-0">
                     {account.name.charAt(0).toUpperCase()}
@@ -289,7 +386,8 @@ export const App: React.FC = () => {
                   setPendingUrl(null);
                   window.electronAPI.toggleProtocolPrompt(false);
                 }}
-                className="px-4 py-2 text-xs font-semibold text-[#8696a0] hover:text-[#e9edef] transition-colors"
+                onMouseDown={(e) => e.preventDefault()}
+                className="px-4 py-2 text-xs font-semibold text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
               >
                 Cancel
               </button>
@@ -301,7 +399,10 @@ export const App: React.FC = () => {
       {/* Legal Disclaimer Modal Overlay */}
       {showDisclaimerOverlay && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b141a]/95 select-text font-sans p-4 bg-[radial-gradient(ellipse_at_center,rgba(0,168,132,0.12),transparent_70%)] animate-in fade-in duration-300">
-          <div className="bg-[#222e35]/95 backdrop-blur-md border border-[#2c3943]/80 w-full max-w-2xl rounded-2xl shadow-2xl p-7 flex flex-col max-h-[90vh] overflow-hidden transform scale-100 animate-in zoom-in-95 duration-200">
+          <div
+            ref={disclaimerRef}
+            className="bg-[#222e35]/95 backdrop-blur-md border border-[#2c3943]/80 w-full max-w-2xl rounded-2xl shadow-2xl p-7 flex flex-col max-h-[90vh] overflow-hidden transform scale-100 animate-in zoom-in-95 duration-200"
+          >
             {/* Header */}
             <div className="text-center">
               <div className="w-12 h-12 rounded-full bg-[#00a884]/15 border border-[#00a884]/30 flex items-center justify-center text-[#00a884] mx-auto mb-3">
@@ -372,14 +473,16 @@ export const App: React.FC = () => {
                 <div className="flex gap-3 justify-end border-t border-[#2c3943]/60 pt-4">
                   <button
                     onClick={handleDeclineDisclaimer}
-                    className="px-5 py-2 rounded-lg text-xs font-semibold bg-[#2a3942] hover:bg-[#3d4f5c] text-[#ea4335] hover:text-[#ff6b6b] transition-all duration-200 cursor-pointer"
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="px-5 py-2 rounded-lg text-xs font-semibold bg-[#2a3942] hover:bg-[#3d4f5c] text-[#ea4335] hover:text-[#ff6b6b] transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#ea4335] focus-visible:outline-none"
                   >
                     Decline & Exit
                   </button>
                   <button
                     onClick={handleAcceptDisclaimer}
+                    onMouseDown={(e) => e.preventDefault()}
                     disabled={!disclaimerChecked}
-                    className={`px-6 py-2 rounded-lg text-xs font-bold text-[#111b21] transition-all duration-200 flex items-center gap-1.5 shadow-lg ${disclaimerChecked
+                    className={`px-6 py-2 rounded-lg text-xs font-bold text-[#111b21] transition-all duration-200 flex items-center gap-1.5 shadow-lg focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none ${disclaimerChecked
                         ? 'bg-[#00a884] hover:bg-[#00c298] hover:shadow-[#00a884]/20 cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0'
                         : 'bg-[#00a884]/40 text-[#111b21]/50 cursor-not-allowed'
                       }`}
@@ -395,7 +498,8 @@ export const App: React.FC = () => {
                     setShowDisclaimerForce(false);
                     window.electronAPI.toggleDisclaimer(false);
                   }}
-                  className="px-6 py-2 rounded-lg text-xs font-semibold bg-[#00a884] hover:bg-[#00c298] text-[#111b21] transition-all duration-200 shadow-md cursor-pointer"
+                  onMouseDown={(e) => e.preventDefault()}
+                  className="px-6 py-2 rounded-lg text-xs font-semibold bg-[#00a884] hover:bg-[#00c298] text-[#111b21] transition-all duration-200 shadow-md cursor-pointer focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
                 >
                   Close Disclaimer
                 </button>

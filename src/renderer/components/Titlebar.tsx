@@ -105,9 +105,18 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
     }
   }, [editingId]);
 
-  const handleMinimize = () => window.electronAPI?.minimizeWindow();
-  const handleMaximize = () => window.electronAPI?.maximizeWindow();
-  const handleClose = () => window.electronAPI?.closeWindow();
+  const handleMinimize = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.blur();
+    window.electronAPI?.minimizeWindow();
+  };
+  const handleMaximize = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.blur();
+    window.electronAPI?.maximizeWindow();
+  };
+  const handleClose = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.blur();
+    window.electronAPI?.closeWindow();
+  };
 
   const handleSwitchTab = (id: string) => {
     if (editingId) return; // Prevent switching when editing tab name
@@ -115,7 +124,8 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
     window.electronAPI?.switchAccount(id);
   };
 
-  const handleAddAccount = async () => {
+  const handleAddAccount = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.blur();
     const newAcc = await window.electronAPI?.addAccount();
     if (newAcc) {
       handleSwitchTab(newAcc.id);
@@ -213,9 +223,11 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
             {/* Add Account Button */}
             <button
               onClick={handleAddAccount}
+              onMouseDown={(e) => e.preventDefault()}
+              tabIndex={-1}
               title="Add Account Instance"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              className="flex items-center justify-center w-5 h-5 rounded hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors ml-0.5"
+              className="flex items-center justify-center w-5 h-5 rounded hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors ml-0.5 focus:outline-none"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -239,10 +251,15 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
             {/* Zoom Indicator Badge */}
             {zoomPercent !== 100 && (
               <button
-                onClick={() => window.electronAPI?.resetZoom()}
+                onClick={(e) => {
+                  window.electronAPI?.resetZoom();
+                  e.currentTarget.blur();
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+                tabIndex={-1}
                 title="Zoom level active. Click to reset to 100%"
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                className={`flex items-center justify-center px-1.5 h-[18px] rounded text-[10px] font-extrabold tracking-wide transition-all duration-200 ${
+                className={`flex items-center justify-center px-1.5 h-[18px] rounded text-[10px] font-extrabold tracking-wide transition-all duration-200 focus:outline-none ${
                   showFlash
                     ? 'bg-[#00a884] text-[#111b21] scale-105 shadow-md'
                     : 'bg-[#202c33] text-[#00a884] hover:bg-[#2a3942] hover:text-[#e9edef]'
@@ -254,10 +271,15 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
 
             {/* Refresh Button */}
             <button
-              onClick={() => window.electronAPI?.reloadActiveAccount()}
+              onClick={(e) => {
+                window.electronAPI?.reloadActiveAccount();
+                e.currentTarget.blur();
+              }}
+              onMouseDown={(e) => e.preventDefault()}
+              tabIndex={-1}
               title="Refresh WhatsApp Web"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
+              className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none"
             >
               <RotateCw className="w-3.5 h-3.5" />
             </button>
@@ -265,10 +287,15 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
             {/* DevTools Toggle Button */}
             {showDevTools && (
               <button
-                onClick={() => window.electronAPI?.toggleDevTools()}
+                onClick={(e) => {
+                  window.electronAPI?.toggleDevTools();
+                  e.currentTarget.blur();
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+                tabIndex={-1}
                 title="Toggle Developer Tools"
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
+                className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none"
               >
                 <Code className="w-3.5 h-3.5" />
               </button>
@@ -276,10 +303,15 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
 
             {/* Settings Button */}
             <button
-              onClick={onToggleSettings}
+              onClick={(e) => {
+                onToggleSettings();
+                e.currentTarget.blur();
+              }}
+              onMouseDown={(e) => e.preventDefault()}
+              tabIndex={-1}
               title="Settings (Extensions, CSS, Storage, History)"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
+              className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none"
             >
               <Settings className="w-3.5 h-3.5" />
             </button>
@@ -292,25 +324,31 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
         {/* Window Controls */}
         <button
           onClick={handleMinimize}
+          onMouseDown={(e) => e.preventDefault()}
+          tabIndex={-1}
           title="Minimize"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
+          className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none"
         >
           <Minus className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={handleMaximize}
+          onMouseDown={(e) => e.preventDefault()}
+          tabIndex={-1}
           title={isMaximized ? 'Restore' : 'Maximize'}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors"
+          className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none"
         >
           {isMaximized ? <Copy className="w-3 h-3 rotate-180" /> : <Square className="w-3 h-3" />}
         </button>
         <button
           onClick={handleClose}
+          onMouseDown={(e) => e.preventDefault()}
+          tabIndex={-1}
           title="Close / Minimize to Tray"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="flex items-center justify-center w-8 h-[28px] hover:bg-[#ea4335] text-[#8696a0] hover:text-white transition-colors"
+          className="flex items-center justify-center w-8 h-[28px] hover:bg-[#ea4335] text-[#8696a0] hover:text-white transition-colors focus:outline-none"
         >
           <X className="w-3.5 h-3.5" />
         </button>

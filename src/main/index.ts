@@ -561,6 +561,9 @@ async function createAccountView(account: Account): Promise<WebContentsView> {
   // Register zoom shortcuts
   registerZoomShortcuts(view.webContents);
 
+  // Register context menu
+  registerContextMenu(view.webContents);
+
   // Link Delegation: Intercept external link clicks
   view.webContents.on('will-navigate', (event, url) => {
     try {
@@ -738,13 +741,68 @@ function pauseAllMedia() {
 
 
 
+function solveCubicBezier(p1x: number, p1y: number, p2x: number, p2y: number) {
+  const cx = 3.0 * p1x;
+  const bx = 3.0 * (p2x - p1x) - cx;
+  const ax = 1.0 - cx - bx;
+
+  const cy = 3.0 * p1y;
+  const by = 3.0 * (p2y - p1y) - cy;
+  const ay = 1.0 - cy - by;
+
+  function sampleCurveX(t: number) {
+    return ((ax * t + bx) * t + cx) * t;
+  }
+
+  function sampleCurveY(t: number) {
+    return ((ay * t + by) * t + cy) * t;
+  }
+
+  function sampleCurveDerivativeX(t: number) {
+    return (3.0 * ax * t + 2.0 * bx) * t + cx;
+  }
+
+  function solveCurveX(x: number, epsilon = 1e-5) {
+    let t2 = x;
+    for (let i = 0; i < 8; i++) {
+      const x2 = sampleCurveX(t2) - x;
+      if (Math.abs(x2) < epsilon) return t2;
+      const d2 = sampleCurveDerivativeX(t2);
+      if (Math.abs(d2) < 1e-6) break;
+      t2 = t2 - x2 / d2;
+    }
+    let t0 = 0.0;
+    let t1 = 1.0;
+    t2 = x;
+    if (t2 < t0) return t0;
+    if (t2 > t1) return t1;
+    while (t0 < t1) {
+      const x2 = sampleCurveX(t2);
+      if (Math.abs(x2 - x) < epsilon) return t2;
+      if (x > x2) t0 = t2;
+      else t1 = t2;
+      t2 = (t1 - t0) * 0.5 + t0;
+    }
+    return t2;
+  }
+
+  return function(x: number) {
+    return sampleCurveY(solveCurveX(x));
+  };
+}
+
+const win10Easing = solveCubicBezier(0.1, 0.9, 0.2, 1);
+
+const DRAWER_WIDTH = 450;
+let settingsOpen = false;
+let settingsDrawerWidth = 0;
 let animationInterval: NodeJS.Timeout | null = null;
 let resizeTimeout: NodeJS.Timeout | null = null;
 
-function updateActiveViewBounds() {
+function updateActiveViewBounds(isFromAnimation = false) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
-  if (animationInterval) {
+  if (animationInterval && !isFromAnimation) {
     clearInterval(animationInterval);
     animationInterval = null;
   }
@@ -757,7 +815,7 @@ function updateActiveViewBounds() {
     if (disclaimerOpen || protocolPromptOpen) {
       activeView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
     } else {
-      const viewWidth = settingsOpen ? Math.max(0, width - DRAWER_WIDTH) : width;
+      const viewWidth = width - settingsDrawerWidth;
       activeView.setBounds({
         x: 0,
         y: TITLEBAR_HEIGHT,
@@ -782,7 +840,7 @@ function updateActiveViewBounds() {
       if (disclaimerOpen || protocolPromptOpen) {
         aView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
       } else {
-        const vWidth = settingsOpen ? Math.max(0, w - DRAWER_WIDTH) : w;
+        const vWidth = w - settingsDrawerWidth;
         aView.setBounds({
           x: 0,
           y: TITLEBAR_HEIGHT,
@@ -823,6 +881,11 @@ async function switchActiveAccount(newAccountId: string) {
       targetView.webContents.setFrameRate(60);
     }
     updateActiveViewBounds();
+    
+    // Automatically focus the active account webview contents
+    if (!targetView.webContents.isDestroyed()) {
+      targetView.webContents.focus();
+    }
 
     // Inject Custom CSS theme if applicable
     injectCustomCssForView(newAccountId, targetView.webContents);
@@ -886,6 +949,9 @@ function createMainWindow() {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
 
+  // Register context menu
+  registerContextMenu(mainWindow.webContents);
+
   // Forward renderer console logs to main process console for debugging
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
     console.log(`[Renderer Console] [Level ${level}] ${message} (at ${sourceId}:${line})`);
@@ -895,12 +961,39 @@ function createMainWindow() {
     console.log('Main window ready-to-show, activeAccountId:', activeAccountId);
     if (!globalSettings.startMinimized) {
       mainWindow?.show();
+    } else {
+      setTimeout(() => {
+        if (Notification.isSupported()) {
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#00a884"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`;
+          const icon = nativeImage.createFromDataURL('data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64'));
+          const notification = new Notification({
+            title: 'WAllie',
+            body: 'WAllie started minimized to the system tray.',
+            icon: icon,
+          });
+          notification.on('click', () => {
+            mainWindow?.show();
+            mainWindow?.focus();
+          });
+          notification.show();
+        }
+      }, 1000);
     }
     // Only switch to active account and preload if disclaimer has been accepted
     if (globalSettings.disclaimerAccepted) {
       await initializeAccountsLoad();
     } else {
       console.log('Legal disclaimer not yet accepted. Deferring account view load.');
+    }
+  });
+
+  // Automatically focus active WebContentsView when main window gets focus
+  mainWindow.on('focus', () => {
+    if (!disclaimerOpen && !protocolPromptOpen && !settingsOpen) {
+      const activeView = accountViews.get(activeAccountId);
+      if (activeView && !activeView.webContents.isDestroyed()) {
+        activeView.webContents.focus();
+      }
     }
   });
 
@@ -945,10 +1038,28 @@ function createMainWindow() {
   });
 
   mainWindow.on('close', (event) => {
-    // Minimize to system tray on window close
     if (mainWindow && !isQuitting) {
-      event.preventDefault();
-      mainWindow.hide();
+      if (globalSettings.closeToTray) {
+        event.preventDefault();
+        mainWindow.hide();
+        if (Notification.isSupported()) {
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#00a884"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`;
+          const icon = nativeImage.createFromDataURL('data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64'));
+          const notification = new Notification({
+            title: 'WAllie',
+            body: 'WAllie minimized to the system tray and is still running.',
+            icon: icon,
+          });
+          notification.on('click', () => {
+            mainWindow?.show();
+            mainWindow?.focus();
+          });
+          notification.show();
+        }
+      } else {
+        isQuitting = true;
+        app.quit();
+      }
     }
   });
 }
@@ -1089,13 +1200,9 @@ ipcMain.on('window:close', (event) => {
   console.log('IPC Received: window:close');
   const win = BrowserWindow.fromWebContents(event.sender);
   if (win) {
-    if (win === mainWindow) {
-      mainWindow.hide();
-    } else {
-      win.close();
-    }
+    win.close();
   } else if (mainWindow) {
-    mainWindow.hide();
+    mainWindow.close();
   }
 });
 ipcMain.handle('window:isMaximized', (event) => {
@@ -1128,9 +1235,6 @@ ipcMain.handle('account:get-name-for-session', (event) => {
   return 'WhatsApp';
 });
 
-let settingsOpen = false;
-const DRAWER_WIDTH = 450;
-
 function animateSettingsTransition(targetOpen: boolean) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
@@ -1141,27 +1245,65 @@ function animateSettingsTransition(targetOpen: boolean) {
 
   settingsOpen = targetOpen;
 
-  // Immediately set final bounds — the CSS transition on the renderer side
-  // handles the visual animation of the settings drawer sliding in/out.
-  // We just need to resize the WebContentsView to make room.
-  updateActiveViewBounds();
+  const startWidth = settingsDrawerWidth;
+  const endWidth = targetOpen ? DRAWER_WIDTH : 0;
+  const duration = 300; // 300ms transition duration
+  const startTime = Date.now();
+
+  animationInterval = setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      if (animationInterval) clearInterval(animationInterval);
+      animationInterval = null;
+      return;
+    }
+
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min(1, elapsed / duration);
+    const easedProgress = win10Easing(progress);
+
+    settingsDrawerWidth = startWidth + (endWidth - startWidth) * easedProgress;
+    updateActiveViewBounds(true);
+
+    if (progress >= 1) {
+      if (animationInterval) clearInterval(animationInterval);
+      animationInterval = null;
+    }
+  }, 8); // Run at ~120 FPS for high-refresh screens
 }
 
 ipcMain.on('settings:toggle', (_event, isOpen: boolean) => {
   console.log('IPC Received: settings:toggle, isOpen:', isOpen);
   animateSettingsTransition(isOpen);
+  if (!isOpen) {
+    const activeView = accountViews.get(activeAccountId);
+    if (activeView && !activeView.webContents.isDestroyed()) {
+      activeView.webContents.focus();
+    }
+  }
 });
 
 ipcMain.on('disclaimer:toggle', (_event, isOpen: boolean) => {
   console.log('IPC Received: disclaimer:toggle, isOpen:', isOpen);
   disclaimerOpen = isOpen;
   updateActiveViewBounds();
+  if (!isOpen) {
+    const activeView = accountViews.get(activeAccountId);
+    if (activeView && !activeView.webContents.isDestroyed()) {
+      activeView.webContents.focus();
+    }
+  }
 });
 
 ipcMain.on('protocol:toggle-prompt', (_event, isOpen: boolean) => {
   console.log('IPC Received: protocol:toggle-prompt, isOpen:', isOpen);
   protocolPromptOpen = isOpen;
   updateActiveViewBounds();
+  if (!isOpen) {
+    const activeView = accountViews.get(activeAccountId);
+    if (activeView && !activeView.webContents.isDestroyed()) {
+      activeView.webContents.focus();
+    }
+  }
 });
 
 ipcMain.on('devtools:toggle-wallie', () => {
@@ -1715,6 +1857,84 @@ function resetZoom(contents: Electron.WebContents) {
 function getActiveWebContents(): Electron.WebContents | null {
   const activeView = accountViews.get(activeAccountId);
   return activeView ? activeView.webContents : null;
+}
+
+function registerContextMenu(webContents: Electron.WebContents) {
+  webContents.on('context-menu', (event, params) => {
+    const menuItems: Electron.MenuItemConstructorOptions[] = [];
+
+    const isEditable = params.isEditable;
+    const hasSelection = !!(params.selectionText && params.selectionText.trim() !== '');
+    const hasLink = !!((params.linkURL && params.linkURL.trim() !== '') || 
+                    (hasSelection && /^(https?:\/\/|www\.)[^\s]+$/i.test(params.selectionText.trim())));
+
+    // Link option
+    if (hasLink) {
+      const rawLink = params.linkURL || params.selectionText.trim();
+      const link = rawLink.startsWith('www.') ? `https://${rawLink}` : rawLink;
+      const maxLength = 40;
+      const truncatedLink = link.length <= maxLength ? link : link.substring(0, maxLength) + '...';
+      menuItems.push({
+        label: `Open ${truncatedLink} in browser`,
+        click: () => {
+          shell.openExternal(link).catch((err) => console.error('Failed to open external link:', err));
+        },
+      });
+    }
+
+    // Search in Google option
+    if (hasSelection) {
+      if (menuItems.length > 0) menuItems.push({ type: 'separator' });
+      menuItems.push({
+        label: 'Search in Google',
+        click: () => {
+          const query = encodeURIComponent(params.selectionText.trim());
+          shell.openExternal(`https://www.google.com/search?q=${query}`).catch((err) => console.error('Failed to open search URL:', err));
+        },
+      });
+    }
+
+    // Standard edit commands
+    const editItems: Electron.MenuItemConstructorOptions[] = [];
+    if (isEditable) {
+      editItems.push({
+        label: 'Cut',
+        role: 'cut',
+        enabled: hasSelection,
+      });
+      editItems.push({
+        label: 'Copy',
+        role: 'copy',
+        enabled: hasSelection,
+      });
+      editItems.push({
+        label: 'Paste',
+        role: 'paste',
+      });
+    } else if (hasSelection) {
+      editItems.push({
+        label: 'Copy',
+        role: 'copy',
+      });
+    }
+
+    if (editItems.length > 0) {
+      if (menuItems.length > 0) menuItems.push({ type: 'separator' });
+      menuItems.push(...editItems);
+    }
+
+    // Select All
+    if (menuItems.length > 0) menuItems.push({ type: 'separator' });
+    menuItems.push({
+      label: 'Select All',
+      role: 'selectAll',
+    });
+
+    const menu = Menu.buildFromTemplate(menuItems);
+    menu.popup({
+      window: BrowserWindow.fromWebContents(webContents) || undefined,
+    });
+  });
 }
 
 function registerZoomShortcuts(contents: Electron.WebContents) {

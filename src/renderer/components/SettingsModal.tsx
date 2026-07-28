@@ -13,7 +13,52 @@ interface SettingsModalProps {
 type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialPage, initialAccountId, onShowDisclaimer }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
   const [activePage, setActivePage] = useState<PageType>('main');
+
+  useEffect(() => {
+    if (isOpen && modalRef.current) {
+      const focusableSelector = 'a[href], button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Tab') {
+          const focusablesArray = Array.from(modalRef.current?.querySelectorAll(focusableSelector) || []) as HTMLElement[];
+          if (focusablesArray.length === 0) {
+            e.preventDefault();
+            return;
+          }
+          const first = focusablesArray[0];
+          const last = focusablesArray[focusablesArray.length - 1];
+          const active = document.activeElement as HTMLElement;
+
+          // If focus is outside the modal, redirect into it
+          if (!modalRef.current?.contains(active)) {
+            (e.shiftKey ? last : first).focus();
+            e.preventDefault();
+            return;
+          }
+
+          if (e.shiftKey) {
+            if (active === first) {
+              last.focus();
+              e.preventDefault();
+            }
+          } else {
+            if (active === last) {
+              first.focus();
+              e.preventDefault();
+            }
+          }
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown, true);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown, true);
+      };
+    }
+  }, [isOpen, activePage]);
+
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [isImporting, setIsImporting] = useState<boolean>(false);
@@ -348,8 +393,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
   return (
     <div
+      ref={modalRef}
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      className={`fixed top-[28px] right-0 bottom-0 z-50 w-[450px] bg-[#111b21] border-l border-[#222d34] shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out select-text ${
+      className={`fixed top-[28px] right-0 bottom-0 z-50 w-[450px] bg-[#111b21] border-l border-[#222d34] shadow-2xl flex flex-col transform transition-transform duration-300 ease-[cubic-bezier(0.1,0.9,0.2,1)] select-text ${
         isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
       }`}
     >
@@ -362,8 +408,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             </div>
           ) : (
             <button
-              onClick={() => setActivePage('main')}
-              className="flex items-center gap-2 text-[#00a884] font-medium text-sm hover:text-[#00c298] transition-colors"
+              onClick={(e) => {
+                setActivePage('main');
+                e.currentTarget.blur();
+              }}
+              onMouseDown={(e) => e.preventDefault()}
+              className="flex items-center gap-2 text-[#00a884] font-medium text-sm hover:text-[#00c298] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
             >
               <ArrowLeft className="w-4 h-4" />
               <span className="text-[#e9edef] font-semibold text-xs">
@@ -379,8 +429,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             </button>
           )}
           <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-[#111b21] text-[#8696a0] hover:text-[#e9edef] transition-colors"
+            onClick={(e) => {
+              onClose();
+              e.currentTarget.blur();
+            }}
+            onMouseDown={(e) => e.preventDefault()}
+            tabIndex={-1}
+            className="p-1 rounded hover:bg-[#111b21] text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
           >
             <X className="w-4 h-4" />
           </button>
@@ -390,12 +445,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
         <div className="flex-grow relative overflow-hidden bg-[#111b21]">
           {/* Main Menu Page */}
           <div className={`absolute inset-0 p-4 overflow-y-auto transition-transform duration-300 ease-in-out flex flex-col ${
-            activePage === 'main' ? 'translate-x-0' : '-translate-x-full pointer-events-none'
+            activePage === 'main' ? 'translate-x-0' : '-translate-x-full pointer-events-none invisible'
           }`}>
             <div className="flex flex-col space-y-2 select-text pb-4">
               <button
                 onClick={() => setActivePage('accounts')}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+                onMouseDown={(e) => e.preventDefault()}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
               >
                 <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
                   <User className="w-4 h-4" />
@@ -408,7 +464,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
               <button
                 onClick={() => setActivePage('general')}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+                onMouseDown={(e) => e.preventDefault()}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
               >
                 <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
                   <SettingsIcon className="w-4 h-4" />
@@ -421,7 +478,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
               <button
                 onClick={() => setActivePage('preload')}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+                onMouseDown={(e) => e.preventDefault()}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
               >
                 <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
                   <Users className="w-4 h-4" />
@@ -434,7 +492,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
               <button
                 onClick={() => setActivePage('permissions')}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+                onMouseDown={(e) => e.preventDefault()}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
               >
                 <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
                   <Shield className="w-4 h-4" />
@@ -447,7 +506,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
               <button
                 onClick={() => setActivePage('extensions')}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+                onMouseDown={(e) => e.preventDefault()}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
               >
                 <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
                   <Puzzle className="w-4 h-4" />
@@ -460,7 +520,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
               <button
                 onClick={() => setActivePage('css')}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+                onMouseDown={(e) => e.preventDefault()}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
               >
                 <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
                   <Palette className="w-4 h-4" />
@@ -473,7 +534,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
               <button
                 onClick={() => setActivePage('storage')}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+                onMouseDown={(e) => e.preventDefault()}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
               >
                 <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
                   <Database className="w-4 h-4" />
@@ -486,7 +548,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
               <button
                 onClick={() => setActivePage('notifications')}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all"
+                onMouseDown={(e) => e.preventDefault()}
+                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
               >
                 <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
                   <Bell className="w-4 h-4" />
@@ -508,14 +571,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                 </div>
                 <div className="mt-1.5 flex flex-col gap-1 items-center">
                   <button
-                    onClick={onShowDisclaimer}
-                    className="text-[#00a884] hover:text-[#00c298] transition-colors underline font-medium text-[10px] cursor-pointer bg-transparent border-none p-0 outline-none"
+                    onClick={(e) => {
+                      onShowDisclaimer();
+                      e.currentTarget.blur();
+                    }}
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="text-[#00a884] hover:text-[#00c298] transition-colors underline font-medium text-[10px] cursor-pointer bg-transparent border-none p-0 focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
                   >
                     View Legal Disclaimer
                   </button>
                   <button
-                    onClick={() => window.electronAPI?.toggleWallieDevTools()}
-                    className="text-[#8696a0] hover:text-[#e9edef] transition-colors underline font-medium text-[10px] cursor-pointer bg-transparent border-none p-0 outline-none"
+                    onClick={(e) => {
+                      window.electronAPI?.toggleWallieDevTools();
+                      e.currentTarget.blur();
+                    }}
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="text-[#8696a0] hover:text-[#e9edef] transition-colors underline font-medium text-[10px] cursor-pointer bg-transparent border-none p-0 focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
                   >
                     Open Wallie DevTools
                   </button>
@@ -545,7 +616,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
           {/* Details Sub-pages Container */}
           <div className={`absolute inset-0 p-4 overflow-y-auto transition-transform duration-300 ease-in-out bg-[#111b21] ${
-            activePage !== 'main' ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+            activePage !== 'main' ? 'translate-x-0' : 'translate-x-full pointer-events-none invisible'
           }`}>
             {(() => {
               const subPage = activePage !== 'main' ? activePage : lastSubPage;
