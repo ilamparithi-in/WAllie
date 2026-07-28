@@ -56,6 +56,8 @@ export interface ElectronAPI {
   onProtocolReceived: (callback: (url: string) => void) => () => void;
   handleProtocolUrl: (accountId: string, url: string) => void;
   signalProtocolReady: () => void;
+  toggleProtocolPrompt: (isOpen: boolean) => void;
+  toggleWallieDevTools: () => void;
 
   // Event listeners
   onAccountListChanged: (callback: (accounts: AccountInfo[], activeId: string) => void) => () => void;
@@ -134,6 +136,8 @@ const api: ElectronAPI = {
   },
   handleProtocolUrl: (accountId, url) => ipcRenderer.send('protocol:handle-url', accountId, url),
   signalProtocolReady: () => ipcRenderer.send('protocol:ready'),
+  toggleProtocolPrompt: (isOpen) => ipcRenderer.send('protocol:toggle-prompt', isOpen),
+  toggleWallieDevTools: () => ipcRenderer.send('devtools:toggle-wallie'),
 
   onAccountListChanged: (callback) => {
     const subscription = (_event: unknown, accounts: AccountInfo[], activeId: string) => callback(accounts, activeId);

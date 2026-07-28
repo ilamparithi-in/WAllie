@@ -506,12 +506,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                 <div className="text-[9px] text-[#8696a0] mt-1">
                   Version 1.0.0 • MIT License • By Ilamparithi M
                 </div>
-                <div className="mt-1.5">
+                <div className="mt-1.5 flex flex-col gap-1 items-center">
                   <button
                     onClick={onShowDisclaimer}
                     className="text-[#00a884] hover:text-[#00c298] transition-colors underline font-medium text-[10px] cursor-pointer bg-transparent border-none p-0 outline-none"
                   >
                     View Legal Disclaimer
+                  </button>
+                  <button
+                    onClick={() => window.electronAPI?.toggleWallieDevTools()}
+                    className="text-[#8696a0] hover:text-[#e9edef] transition-colors underline font-medium text-[10px] cursor-pointer bg-transparent border-none p-0 outline-none"
+                  >
+                    Open Wallie DevTools
                   </button>
                 </div>
                 <div className="flex items-center justify-center gap-3 mt-3">

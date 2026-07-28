@@ -48,6 +48,7 @@ if (!gotTheLock) {
 
 const TITLEBAR_HEIGHT = 28;
 let disclaimerOpen = false;
+let protocolPromptOpen = false;
 const CHROME_VERSION = process.versions.chrome || '132.0.0.0';
 const DEFAULT_USER_AGENT =
   `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`;
@@ -753,7 +754,7 @@ function updateActiveViewBounds() {
   const activeView = accountViews.get(activeAccountId);
 
   if (activeView) {
-    if (disclaimerOpen) {
+    if (disclaimerOpen || protocolPromptOpen) {
       activeView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
     } else {
       const viewWidth = settingsOpen ? Math.max(0, width - DRAWER_WIDTH) : width;
@@ -778,7 +779,7 @@ function updateActiveViewBounds() {
     const aView = accountViews.get(activeAccountId);
 
     if (aView) {
-      if (disclaimerOpen) {
+      if (disclaimerOpen || protocolPromptOpen) {
         aView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
       } else {
         const vWidth = settingsOpen ? Math.max(0, w - DRAWER_WIDTH) : w;
@@ -1155,6 +1156,23 @@ ipcMain.on('disclaimer:toggle', (_event, isOpen: boolean) => {
   console.log('IPC Received: disclaimer:toggle, isOpen:', isOpen);
   disclaimerOpen = isOpen;
   updateActiveViewBounds();
+});
+
+ipcMain.on('protocol:toggle-prompt', (_event, isOpen: boolean) => {
+  console.log('IPC Received: protocol:toggle-prompt, isOpen:', isOpen);
+  protocolPromptOpen = isOpen;
+  updateActiveViewBounds();
+});
+
+ipcMain.on('devtools:toggle-wallie', () => {
+  console.log('IPC Received: devtools:toggle-wallie');
+  if (mainWindow) {
+    if (mainWindow.webContents.isDevToolsOpened()) {
+      mainWindow.webContents.closeDevTools();
+    } else {
+      mainWindow.webContents.openDevTools({ mode: 'detach' });
+    }
+  }
 });
 
 ipcMain.handle('account:get-all', () => accounts);
@@ -1703,6 +1721,24 @@ function registerZoomShortcuts(contents: Electron.WebContents) {
   contents.on('before-input-event', (event, input) => {
     if (input.type === 'keyDown') {
       const isControl = process.platform === 'darwin' ? input.meta : input.control;
+      const isShift = input.shift;
+      const isAlt = input.alt;
+
+      // Intercept devtools keyboard shortcut for main window (Wallie)
+      const isDevToolsShortcut = 
+        (isControl && isShift && (input.key === 'i' || input.key === 'I')) ||
+        (process.platform === 'darwin' && input.meta && isAlt && (input.key === 'i' || input.key === 'I'));
+
+      if (isDevToolsShortcut && mainWindow && contents === mainWindow.webContents) {
+        event.preventDefault();
+        if (mainWindow.webContents.isDevToolsOpened()) {
+          mainWindow.webContents.closeDevTools();
+        } else {
+          mainWindow.webContents.openDevTools({ mode: 'detach' });
+        }
+        return;
+      }
+
       if (isControl) {
         if (input.key === '=' || input.key === '+') {
           const targetContents = getActiveWebContents() || contents;

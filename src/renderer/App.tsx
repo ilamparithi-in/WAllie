@@ -69,11 +69,16 @@ export const App: React.FC = () => {
     const unsubscribeProtocol = window.electronAPI.onProtocolReceived(async (url) => {
       console.log('Renderer received custom protocol URL:', url);
       const accs = await window.electronAPI.getAccounts();
-      if (accs.length <= 1) {
-        window.electronAPI.handleProtocolUrl(accs[0]?.id || 'acc_default', url);
+      const loggedInAccs = accs.filter((a) => a.loggedIn);
+      if (loggedInAccs.length <= 1) {
+        const targetId = loggedInAccs.length === 1
+          ? loggedInAccs[0].id
+          : (await window.electronAPI.getActiveAccountId() || accs[0]?.id || 'acc_default');
+        window.electronAPI.handleProtocolUrl(targetId, url);
       } else {
-        setPromptAccounts(accs);
+        setPromptAccounts(loggedInAccs);
         setPendingUrl(url);
+        window.electronAPI.toggleProtocolPrompt(true);
       }
     });
 
@@ -162,13 +167,13 @@ export const App: React.FC = () => {
 
       {/* Floating Downloads Tracker */}
       {downloads.length > 0 && (
-        <div 
+        <div
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-xs w-72 select-text"
         >
           {downloads.map((dl) => (
-            <div 
-              key={dl.id} 
+            <div
+              key={dl.id}
               className="p-3 bg-[#202c33] border border-[#222d34] rounded-lg shadow-2xl flex flex-col gap-2 transition-all duration-300"
             >
               <div className="flex items-center gap-2">
@@ -178,7 +183,7 @@ export const App: React.FC = () => {
                 <span className="font-semibold text-[11px] text-[#e9edef] truncate flex-1" title={dl.filename}>
                   {dl.filename}
                 </span>
-                <button 
+                <button
                   onClick={() => setDownloads(prev => prev.filter(d => d.id !== dl.id))}
                   className="p-0.5 text-[#8696a0] hover:text-[#e9edef] rounded hover:bg-[#111b21] transition-colors"
                 >
@@ -189,7 +194,7 @@ export const App: React.FC = () => {
               {dl.state === 'progressing' && (
                 <div className="space-y-1">
                   <div className="w-full bg-[#111b21] rounded-full h-1 overflow-hidden">
-                    <div 
+                    <div
                       className="bg-[#00a884] h-1 rounded-full transition-all duration-200"
                       style={{ width: `${dl.percent}%` }}
                     />
@@ -222,9 +227,9 @@ export const App: React.FC = () => {
       )}
 
       {/* Settings Modal Drawer */}
-      <SettingsModal 
-        isOpen={isSettingsOpen} 
-        onClose={handleCloseSettings} 
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={handleCloseSettings}
         initialPage={settingsInitialPage}
         initialAccountId={settingsInitialAccountId}
         onShowDisclaimer={() => {
@@ -239,16 +244,19 @@ export const App: React.FC = () => {
           <div className="bg-[#222e35] border border-[#2c3943] w-[400px] rounded-xl shadow-2xl overflow-hidden flex flex-col p-6 animate-in fade-in duration-200">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-[#e9edef] text-sm font-semibold">Open WhatsApp Link</h2>
-              <button 
-                onClick={() => setPendingUrl(null)}
+              <button
+                onClick={() => {
+                  setPendingUrl(null);
+                  window.electronAPI.toggleProtocolPrompt(false);
+                }}
                 className="text-[#8696a0] hover:text-[#e9edef] transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            
+
             <p className="text-[#8696a0] text-xs leading-relaxed mb-5">
-              An external link wants to open a chat. Select which WhatsApp account you'd like to open this link in:
+              An external link wants to open a chat. <b>The page will be refreshed!</b> Select which WhatsApp account you'd like to open this link in:
             </p>
 
             <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
@@ -258,6 +266,7 @@ export const App: React.FC = () => {
                   onClick={() => {
                     window.electronAPI.handleProtocolUrl(account.id, pendingUrl);
                     setPendingUrl(null);
+                    window.electronAPI.toggleProtocolPrompt(false);
                   }}
                   className="flex items-center gap-3 p-3 bg-[#111b21] hover:bg-[#202c33] border border-[#2c3943] hover:border-[#00a884] rounded-lg text-left transition-all duration-200"
                 >
@@ -276,7 +285,10 @@ export const App: React.FC = () => {
 
             <div className="flex justify-end mt-5 pt-3 border-t border-[#2c3943]">
               <button
-                onClick={() => setPendingUrl(null)}
+                onClick={() => {
+                  setPendingUrl(null);
+                  window.electronAPI.toggleProtocolPrompt(false);
+                }}
                 className="px-4 py-2 text-xs font-semibold text-[#8696a0] hover:text-[#e9edef] transition-colors"
               >
                 Cancel
@@ -367,11 +379,10 @@ export const App: React.FC = () => {
                   <button
                     onClick={handleAcceptDisclaimer}
                     disabled={!disclaimerChecked}
-                    className={`px-6 py-2 rounded-lg text-xs font-bold text-[#111b21] transition-all duration-200 flex items-center gap-1.5 shadow-lg ${
-                      disclaimerChecked
+                    className={`px-6 py-2 rounded-lg text-xs font-bold text-[#111b21] transition-all duration-200 flex items-center gap-1.5 shadow-lg ${disclaimerChecked
                         ? 'bg-[#00a884] hover:bg-[#00c298] hover:shadow-[#00a884]/20 cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0'
                         : 'bg-[#00a884]/40 text-[#111b21]/50 cursor-not-allowed'
-                    }`}
+                      }`}
                   >
                     Accept & Continue
                   </button>
