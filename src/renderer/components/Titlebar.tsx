@@ -168,8 +168,8 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
         className="flex items-center h-full overflow-hidden pl-2 gap-1"
       >
         {/* Branding Icon */}
-        <div className="flex items-center justify-center text-[#00a884] pr-1.5" title="WhatsApp Linux">
-          <MessageSquare className="w-3.5 h-3.5 fill-[#00a884] text-[#111b21]" />
+        <div className="flex items-center justify-center pr-1.5" title="WhatsApp Linux">
+          <img src="./icon.png" alt="WAllie" className="w-4 h-4 object-contain" />
         </div>
 
         {/* Tab List */}

@@ -562,6 +562,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
               {/* About Section */}
               <div className="mt-6 pt-4 border-t border-[#222d34]/60 text-center select-text">
+                <div className="flex justify-center mb-2.5">
+                  <img src="./icon.png" alt="WAllie Logo" className="w-14 h-14 object-contain" />
+                </div>
                 <div className="text-sm font-bold text-[#e9edef] tracking-wide">WAllie</div>
                 <div className="text-[10px] text-[#8696a0] mt-1 leading-normal max-w-[320px] mx-auto">
                   Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support

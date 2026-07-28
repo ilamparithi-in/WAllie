@@ -403,12 +403,11 @@ export const App: React.FC = () => {
             ref={disclaimerRef}
             className="bg-[#222e35]/95 backdrop-blur-md border border-[#2c3943]/80 w-full max-w-2xl rounded-2xl shadow-2xl p-7 flex flex-col max-h-[90vh] overflow-hidden transform scale-100 animate-in zoom-in-95 duration-200"
           >
-            {/* Header */}
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-[#00a884]/15 border border-[#00a884]/30 flex items-center justify-center text-[#00a884] mx-auto mb-3">
-                <Shield className="w-6 h-6" />
-              </div>
-              <h2 className="text-lg font-bold text-[#e9edef] tracking-wide">Legal Disclaimer</h2>
+              <div className="text-center">
+                <div className="w-16 h-16 rounded-2xl bg-[#111b21]/50 border border-[#2c3943]/60 flex items-center justify-center mx-auto mb-3 overflow-hidden p-2.5 shadow-lg">
+                  <img src="./icon.png" alt="WAllie Logo" className="w-full h-full object-contain" />
+                </div>
+                <h2 className="text-lg font-bold text-[#e9edef] tracking-wide">Legal Disclaimer</h2>
               <p className="text-[11px] text-[#8696a0] mt-0.5">WAllie - Unofficial WhatsApp Desktop Client</p>
             </div>
 
