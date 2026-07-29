@@ -216,13 +216,15 @@ const api: ElectronAPI = {
   },
 };
 
+const WHATSAPP_DOMAIN_REGEX = /^([^.\s]+\.)*whatsapp\.(com|net)$/i;
+
 async function resolveIconToBase64(url: string): Promise<string | null> {
   if (!url) return null;
   if (url.startsWith('data:')) return url;
   // Only fetch avatars from WhatsApp's own CDN
   try {
     const parsedUrl = new URL(url);
-    const isWhatsApp = parsedUrl.hostname.endsWith('.whatsapp.net') || parsedUrl.hostname.endsWith('.whatsapp.com');
+    const isWhatsApp = WHATSAPP_DOMAIN_REGEX.test(parsedUrl.hostname);
     if (!isWhatsApp) {
       console.warn('Blocked non-WhatsApp avatar URL:', parsedUrl.hostname);
       return null;
@@ -652,7 +654,7 @@ function injectCallTitlebar() {
   });
 }
 
-const isWhatsApp = window.location.hostname.includes('whatsapp.com');
+const isWhatsApp = WHATSAPP_DOMAIN_REGEX.test(window.location.hostname);
 
 async function setupWebStoreInjection() {
   try {
