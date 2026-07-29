@@ -18,13 +18,13 @@ During audio/video calling and screen-sharing workflows, we identified two main 
 We implemented the following solutions:
 
 1. **Wayland Display Handler Short-Circuit**:
-   - Updated the `setDisplayMediaRequestHandler` in [src/main/index.ts](file:///home/ilam_common/DevHome/GitHub/walinux/src/main/index.ts#L356-L373) to detect if the OS is running under a Wayland session by verifying `process.platform === 'linux'` and checking if environment variables `WAYLAND_DISPLAY` or `XDG_SESSION_TYPE === 'wayland'` are set.
+   - Updated the `setDisplayMediaRequestHandler` in `src/main/index.ts` to detect if the OS is running under a Wayland session by verifying `process.platform === 'linux'` and checking if environment variables `WAYLAND_DISPLAY` or `XDG_SESSION_TYPE === 'wayland'` are set.
    - If Wayland is active, the handler skips querying `desktopCapturer.getSources` and avoids popping up the custom Electron menu. Instead, it immediately calls the handler callback with a placeholder/dummy source `{ id: 'screen:0:0', name: 'Entire Screen' } as any`.
    - Chromium's native PipeWire capturer then handles the request, displaying the system picker exactly once and starting the capture session immediately after the user makes a selection.
    - Preserved the existing custom menu selection logic as a fallback for X11/non-Wayland sessions.
 
 2. **Call Popout Blank Screen Detection & Auto-Close**:
-   - Introduced a lightweight monitoring function `monitorCallBlankScreen` inside the preload script [src/preload/index.ts](file:///home/ilam_common/DevHome/GitHub/walinux/src/preload/index.ts#L702-L760).
+   - Introduced a lightweight monitoring function `monitorCallBlankScreen` inside the preload script `src/preload/index.ts`.
    - Once the call window is opened, the routine polls the DOM every 200ms:
      - **Active Call Detection**: Checks for active media tags (`video`, `audio`, `canvas`) or calling controls (elements matching `hangup`, `micro`, `video`). If found, flags `callWasActive = true`.
      - **Blank Auto-Close**: If the call was once active but has now stopped, checks if call survey keywords (e.g. "how was", "rate", "feedback", "stars") are present in the text content. If no survey keywords are present, it increments a blank check counter. If the screen remains blank for 3 consecutive checks (~600ms), it immediately calls `window.close()`.
