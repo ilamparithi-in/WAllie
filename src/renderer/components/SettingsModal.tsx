@@ -61,6 +61,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   const [isLoadingStorage, setIsLoadingStorage] = useState<boolean>(false);
   const [isClearing, setIsClearing] = useState<boolean>(false);
   const [accountsNeedingReload, setAccountsNeedingReload] = useState<string[]>([]);
+  const initialAccountPermissionsRef = useRef<Map<string, any>>(new Map());
+
+  useEffect(() => {
+    if (isOpen) {
+      accounts.forEach((acc) => {
+        if (!initialAccountPermissionsRef.current.has(acc.id)) {
+          initialAccountPermissionsRef.current.set(acc.id, { ...acc.settings });
+        }
+      });
+    }
+  }, [isOpen, accounts]);
+
   const [lastSubPage, setLastSubPage] = useState<PageType | null>(null);
 
   useEffect(() => {
@@ -138,11 +150,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
       )
     );
 
+    const initialSettings = initialAccountPermissionsRef.current.get(selectedAccountId) || currentSettings;
+
+    const isRestored =
+      (updatedSettings.cameraEnabled ?? true) === (initialSettings.cameraEnabled ?? true) &&
+      (updatedSettings.micEnabled ?? true) === (initialSettings.micEnabled ?? true) &&
+      (updatedSettings.notificationsEnabled ?? true) === (initialSettings.notificationsEnabled ?? true) &&
+      (updatedSettings.geolocationEnabled ?? false) === (initialSettings.geolocationEnabled ?? false) &&
+      (updatedSettings.clipboardReadEnabled ?? false) === (initialSettings.clipboardReadEnabled ?? false);
+
     try {
       await window.electronAPI.updateAccountSettings(selectedAccountId, updatedSettings);
-      setAccountsNeedingReload((prev) =>
-        prev.includes(selectedAccountId) ? prev : [...prev, selectedAccountId]
-      );
+      if (isRestored) {
+        setAccountsNeedingReload((prev) => prev.filter((id) => id !== selectedAccountId));
+      } else {
+        setAccountsNeedingReload((prev) =>
+          prev.includes(selectedAccountId) ? prev : [...prev, selectedAccountId]
+        );
+      }
     } catch (err) {
       console.error('Failed to update account permission:', err);
     }
@@ -636,6 +661,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
               <button
                 onClick={() => {
                   window.electronAPI.reloadAccount(selectedAccountId);
+                  const acc = accounts.find((a) => a.id === selectedAccountId);
+                  if (acc?.settings) {
+                    initialAccountPermissionsRef.current.set(selectedAccountId, { ...acc.settings });
+                  }
                   setAccountsNeedingReload((prev) => prev.filter((id) => id !== selectedAccountId));
                 }}
                 className="px-3.5 py-1.5 bg-[#00a884] hover:bg-[#00c298] text-[#111b21] font-bold rounded transition-colors text-[11px] whitespace-nowrap shadow-sm"

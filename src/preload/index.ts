@@ -31,6 +31,7 @@ export interface ElectronAPI {
   removeExtension: (accountId: string, extensionId: string) => Promise<boolean>;
   openWebStore: (accountId: string) => void;
   installWebStoreExtension: (accountId: string, urlOrId: string) => Promise<ExtensionInfo | null>;
+  checkExtensionUpdates: (accountId?: string) => Promise<{ updatedCount: number; updatedList: string[] }>;
 
   // Settings & View toggle
   toggleSettings: (isOpen: boolean) => void;
@@ -111,6 +112,8 @@ const api: ElectronAPI = {
     ipcRenderer.send('webstore:open', accountId),
   installWebStoreExtension: (accountId: string, urlOrId: string) =>
     ipcRenderer.invoke('extension:install-webstore', accountId, urlOrId),
+  checkExtensionUpdates: (accountId?: string) =>
+    ipcRenderer.invoke('extension:check-updates', accountId),
 
   toggleSettings: (isOpen: boolean) => ipcRenderer.send('settings:toggle', isOpen),
   toggleDisclaimer: (isOpen: boolean) => ipcRenderer.send('disclaimer:toggle', isOpen),

@@ -156,22 +156,47 @@ export async function injectCustomCssForView(accountId: string, webContents: Ele
 }
 
 export function pauseAllMedia() {
-  const activeView = state.accountViews.get(state.activeAccountId);
-  if (activeView && !activeView.webContents.isDestroyed()) {
-    try {
-      activeView.webContents.executeJavaScript(`
-        (() => {
-          try {
-            document.querySelectorAll('video, audio').forEach(el => {
-              if (!el.paused) {
-                el.pause();
-              }
-            });
-          } catch (e) {}
-        })()
-      `).catch(() => {});
-    } catch (e) {
-      // Ignore errors
+  for (const view of state.accountViews.values()) {
+    if (view && !view.webContents.isDestroyed()) {
+      try {
+        view.webContents.executeJavaScript(`
+          (() => {
+            try {
+              document.querySelectorAll('video, audio').forEach(el => {
+                if (!el.paused) {
+                  el.dataset.pausedByCall = 'true';
+                  el.pause();
+                }
+              });
+            } catch (e) {}
+          })()
+        `).catch(() => {});
+      } catch (e) {
+        // Ignore errors
+      }
+    }
+  }
+}
+
+export function resumeMediaAfterCall() {
+  for (const view of state.accountViews.values()) {
+    if (view && !view.webContents.isDestroyed()) {
+      try {
+        view.webContents.executeJavaScript(`
+          (() => {
+            try {
+              document.querySelectorAll('video, audio').forEach(el => {
+                if (el.dataset.pausedByCall === 'true') {
+                  delete el.dataset.pausedByCall;
+                  el.play().catch(() => {});
+                }
+              });
+            } catch (e) {}
+          })()
+        `).catch(() => {});
+      } catch (e) {
+        // Ignore errors
+      }
     }
   }
 }
@@ -316,17 +341,22 @@ export function registerZoomShortcuts(webContents: Electron.WebContents) {
       const isShift = input.shift;
       const isAlt = input.alt;
 
-      // Intercept devtools keyboard shortcut for main window (Wallie)
-      const isDevToolsShortcut = 
-        (isControl && isShift && (input.key === 'i' || input.key === 'I')) ||
-        (process.platform === 'darwin' && input.meta && isAlt && (input.key === 'i' || input.key === 'I'));
+      // Intercept devtools keyboard shortcut for the active account in focus (not Wallie)
+      const key = input.key ? input.key.toLowerCase() : '';
+      const isDevToolsShortcut =
+        key === 'f12' ||
+        (isControl && isShift && (key === 'i' || key === 'j' || key === 'c')) ||
+        (process.platform === 'darwin' && input.meta && isAlt && (key === 'i' || key === 'j' || key === 'c'));
 
-      if (isDevToolsShortcut && state.mainWindow && webContents === state.mainWindow.webContents) {
+      if (isDevToolsShortcut) {
         event.preventDefault();
-        if (state.mainWindow.webContents.isDevToolsOpened()) {
-          state.mainWindow.webContents.closeDevTools();
-        } else {
-          state.mainWindow.webContents.openDevTools({ mode: 'detach' });
+        const activeView = state.accountViews.get(state.activeAccountId);
+        if (activeView && !activeView.webContents.isDestroyed()) {
+          if (activeView.webContents.isDevToolsOpened()) {
+            activeView.webContents.closeDevTools();
+          } else {
+            activeView.webContents.openDevTools({ mode: 'detach' });
+          }
         }
         return;
       }
@@ -595,6 +625,9 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
 
     childWindow.on('closed', () => {
       state.callWindows.delete(childWindow);
+      if (state.callWindows.size === 0) {
+        resumeMediaAfterCall();
+      }
     });
   });
 

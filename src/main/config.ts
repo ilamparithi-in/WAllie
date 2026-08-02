@@ -47,8 +47,11 @@ export function loadSettings(): GlobalSettings {
         hardwareAcceleration: parsed.hardwareAcceleration !== false,
         preloadAccountIds,
         showDevToolsToggle: !!parsed.showDevToolsToggle,
+        showRefreshButton: parsed.showRefreshButton !== false,
+        showNotificationHistoryButton: parsed.showNotificationHistoryButton !== false,
         notificationLoggingEnabled: !!parsed.notificationLoggingEnabled,
         extensionDevMode: !!parsed.extensionDevMode,
+        autoUpdateExtensions: parsed.autoUpdateExtensions !== false,
         startMinimized: !!parsed.startMinimized,
         disclaimerAccepted: !!parsed.disclaimerAccepted,
       };
@@ -61,8 +64,11 @@ export function loadSettings(): GlobalSettings {
     hardwareAcceleration: true,
     preloadAccountIds: ['acc_default'],
     showDevToolsToggle: false,
+    showRefreshButton: true,
+    showNotificationHistoryButton: true,
     notificationLoggingEnabled: false,
     extensionDevMode: false,
+    autoUpdateExtensions: true,
     startMinimized: false,
     disclaimerAccepted: false,
   };
