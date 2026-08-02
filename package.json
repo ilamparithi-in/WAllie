@@ -13,6 +13,8 @@
     "url": "https://github.com/ilamparithi-in/WAllie/issues"
   },
   "scripts": {
+    "clean": "rm -rf dist dist-pack",
+    "clean:build": "npm run clean && npm run build",
     "build:preload": "tsc src/preload/index.ts --module commonjs --target es2020 --outDir dist/preload --rootDir src && mv dist/preload/preload/index.js dist/preload/index.cjs && rm -rf dist/preload/preload dist/preload/shared",
     "dev": "npm run build:preload && vite",
     "build": "npm run build:preload && tsc && vite build",

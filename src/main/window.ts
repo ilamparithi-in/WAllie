@@ -62,12 +62,43 @@ function solveCubicBezier(p1x: number, p1y: number, p2x: number, p2y: number) {
     return t2;
   }
 
-  return function(x: number) {
+  return function (x: number) {
     return sampleCurveY(solveCurveX(x));
   };
 }
 
 const win10Easing = solveCubicBezier(0.1, 0.9, 0.2, 1);
+
+/**
+ * Calculates initial window dimensions, ensuring the window fits within
+ * the available display work area (avoiding taskbar/dock clipping and multi-monitor overflow).
+ */
+export function getInitialWindowSize(
+  targetWidth: number,
+  targetHeight: number,
+  referenceWindow?: BrowserWindow | null,
+  maxRatio = 0.9
+): { width: number; height: number } {
+  try {
+    const electronScreen = screen as unknown as Electron.Screen;
+    let display = electronScreen.getPrimaryDisplay();
+    if (referenceWindow && !referenceWindow.isDestroyed()) {
+      display = electronScreen.getDisplayMatching(referenceWindow.getBounds());
+    }
+
+    const { width: workWidth, height: workHeight } = display.workAreaSize;
+    const maxWidth = Math.floor(workWidth * maxRatio);
+    const maxHeight = Math.floor(workHeight * maxRatio);
+
+    return {
+      width: Math.max(360, Math.min(targetWidth, maxWidth)),
+      height: Math.max(360, Math.min(targetHeight, maxHeight)),
+    };
+  } catch (err) {
+    console.error('Failed to calculate initial window size:', err);
+    return { width: targetWidth, height: targetHeight };
+  }
+}
 
 export function updateActiveViewBounds(isFromAnimation = false) {
   if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
@@ -149,7 +180,7 @@ export async function switchActiveAccount(newAccountId: string) {
       targetView.webContents.setFrameRate(60);
     }
     updateActiveViewBounds();
-    
+
     if (!targetView.webContents.isDestroyed()) {
       targetView.webContents.focus();
     }
@@ -222,9 +253,10 @@ export function animateSettingsTransition(targetOpen: boolean) {
 }
 
 export function createMainWindow() {
+  const { width, height } = getInitialWindowSize(1100, 750);
   state.mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 750,
+    width,
+    height,
     minWidth: 700,
     minHeight: 500,
     frame: false,
@@ -272,7 +304,7 @@ export function createMainWindow() {
         }
       }, 1000);
     }
-    
+
     if (state.globalSettings?.disclaimerAccepted) {
       await initializeAccountsLoad();
     } else {
@@ -295,7 +327,7 @@ export function createMainWindow() {
     try {
       const parsedUrl = new URL(url);
       const isLocalHost = parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1';
-      const isAppUrl = process.env.VITE_DEV_SERVER_URL 
+      const isAppUrl = process.env.VITE_DEV_SERVER_URL
         ? url.startsWith(process.env.VITE_DEV_SERVER_URL)
         : url.startsWith('file://');
       if (!isAppUrl && !isLocalHost) {
@@ -314,12 +346,12 @@ export function createMainWindow() {
   });
 
   state.mainWindow.on('resize', updateActiveViewBounds);
-  
+
   state.mainWindow.on('maximize', () => {
     state.mainWindow?.webContents.send('window:maximized-changed', true);
     setTimeout(updateActiveViewBounds, 100);
   });
-  
+
   state.mainWindow.on('unmaximize', () => {
     state.mainWindow?.webContents.send('window:maximized-changed', false);
     setTimeout(updateActiveViewBounds, 100);
@@ -399,9 +431,10 @@ export function toggleDevToolsForAccount(accountId: string) {
     }
   }
 
+  const { width, height } = getInitialWindowSize(900, 600, state.mainWindow);
   const devtoolsWindow = new BrowserWindow({
-    width: 900,
-    height: 600,
+    width,
+    height,
     minWidth: 500,
     minHeight: 400,
     frame: false,
