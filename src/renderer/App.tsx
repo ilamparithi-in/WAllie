@@ -197,6 +197,12 @@ export const App: React.FC = () => {
     });
   };
 
+  const handleOpenNotificationHistory = () => {
+    setSettingsInitialPage('notifications');
+    setIsSettingsOpen(true);
+    window.electronAPI?.toggleSettings(true);
+  };
+
   const handleCloseSettings = () => {
     setIsSettingsOpen(false);
     setSettingsInitialPage(undefined);
@@ -237,7 +243,11 @@ export const App: React.FC = () => {
   return (
     <div className="h-screen w-screen flex flex-col bg-[#111b21] overflow-hidden select-none">
       {/* Custom Titlebar (28px) */}
-      <Titlebar onToggleSettings={handleToggleSettings} isDisclaimerAccepted={isDisclaimerAccepted} />
+      <Titlebar
+        onToggleSettings={handleToggleSettings}
+        onOpenNotificationHistory={handleOpenNotificationHistory}
+        isDisclaimerAccepted={isDisclaimerAccepted}
+      />
 
       {/* Main Container Area: The Electron WebContentsView will overlay this area below the titlebar */}
       <main className="flex-1 w-full relative bg-[#111b21]">

@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Minus, Square, Copy, X, Settings, Plus, MessageSquare, RotateCw, Code } from 'lucide-react';
+import { Minus, Square, Copy, X, Settings, Plus, MessageSquare, RotateCw, Code, Bell } from 'lucide-react';
 import type { AccountInfo } from '../../preload';
 
 interface TitlebarProps {
   onToggleSettings: () => void;
+  onOpenNotificationHistory?: () => void;
   isDisclaimerAccepted?: boolean;
 }
 
-export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaimerAccepted = true }) => {
+export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNotificationHistory, isDisclaimerAccepted = true }) => {
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [activeId, setActiveId] = useState<string>('default');
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
@@ -307,6 +308,21 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
                 <Code className="w-3.5 h-3.5" />
               </button>
             )}
+
+            {/* Notification History Button */}
+            <button
+              onClick={(e) => {
+                onOpenNotificationHistory?.();
+                e.currentTarget.blur();
+              }}
+              onMouseDown={(e) => e.preventDefault()}
+              tabIndex={-1}
+              title="Notification History"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none cursor-pointer"
+            >
+              <Bell className="w-3.5 h-3.5" />
+            </button>
 
             {/* Settings Button */}
             <button

@@ -53,9 +53,62 @@ export function logNotificationToHistory(notif: HistoricalNotification) {
   state.mainWindow?.webContents.send('notification:history-changed', history);
 }
 
-export function clearNotificationHistoryCache() {
-  state.notificationHistoryCache = [];
+export interface ClearHistoryOptions {
+  mode: 'all' | 'range' | 'single' | '24h' | '7d' | '30d' | 'older7d' | 'older30d';
+  startDate?: string;
+  endDate?: string;
+}
+
+export function clearNotificationHistoryCache(optionsOrPeriod: string | ClearHistoryOptions = 'all') {
+  const now = Date.now();
+  const history = getNotificationHistory();
+
+  let options: ClearHistoryOptions;
+  if (typeof optionsOrPeriod === 'string') {
+    options = { mode: optionsOrPeriod as any };
+  } else {
+    options = optionsOrPeriod || { mode: 'all' };
+  }
+
+  let updatedHistory: HistoricalNotification[];
+
+  switch (options.mode) {
+    case 'range': {
+      const startMs = options.startDate ? new Date(`${options.startDate}T00:00:00`).getTime() : 0;
+      const endMs = options.endDate ? new Date(`${options.endDate}T23:59:59.999`).getTime() : Date.now();
+      updatedHistory = history.filter((item) => item.timestamp < startMs || item.timestamp > endMs);
+      break;
+    }
+    case 'single': {
+      const startMs = options.startDate ? new Date(`${options.startDate}T00:00:00`).getTime() : 0;
+      const endMs = options.startDate ? new Date(`${options.startDate}T23:59:59.999`).getTime() : Date.now();
+      updatedHistory = history.filter((item) => item.timestamp < startMs || item.timestamp > endMs);
+      break;
+    }
+    case '24h':
+      updatedHistory = history.filter((item) => now - item.timestamp > 24 * 3600 * 1000);
+      break;
+    case '7d':
+      updatedHistory = history.filter((item) => now - item.timestamp > 7 * 24 * 3600 * 1000);
+      break;
+    case '30d':
+      updatedHistory = history.filter((item) => now - item.timestamp > 30 * 24 * 3600 * 1000);
+      break;
+    case 'older7d':
+      updatedHistory = history.filter((item) => now - item.timestamp <= 7 * 24 * 3600 * 1000);
+      break;
+    case 'older30d':
+      updatedHistory = history.filter((item) => now - item.timestamp <= 30 * 24 * 3600 * 1000);
+      break;
+    case 'all':
+    default:
+      updatedHistory = [];
+      break;
+  }
+
+  state.notificationHistoryCache = updatedHistory;
   scheduleHistoryFlush();
+  state.mainWindow?.webContents.send('notification:history-changed', updatedHistory);
 }
 
 export async function createNotification(data: { title: string; body: string; icon: string; tag: string }, senderWebContents: WebContents) {

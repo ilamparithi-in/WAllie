@@ -269,9 +269,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     }
   };
 
-  const handleClearHistory = async () => {
+  const handleClearHistory = async (options?: any) => {
     try {
-      await window.electronAPI.clearNotificationHistory();
+      await window.electronAPI.clearNotificationHistory(options);
     } catch (err) {
       console.error('Failed to clear notification logs:', err);
     }
