@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, session, Menu, app } from 'electron';
+import { ipcMain, BrowserWindow, session, Menu, app, dialog } from 'electron';
 import path from 'node:path';
 import { state } from './state';
 import { saveAccounts, saveSettings, getAccountStorageSizes, invalidateStorageCache } from './config';
@@ -305,53 +305,41 @@ export function registerIpcHandlers() {
         });
         console.log(`Cache cleared successfully for account: ${accountId}`);
       } else if (type === 'media') {
-        await accountSession.clearStorageData({
-          storages: ['filesystem', 'websql'],
-        });
-        console.log(`Filesystem and WebSQL cleared for account: ${accountId}`);
+        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+          const choice = await dialog.showMessageBox(state.mainWindow, {
+            type: 'warning',
+            buttons: ['Cancel', 'Clear Data & Log Out'],
+            defaultId: 0,
+            cancelId: 0,
+            title: 'Clear Media & Databases',
+            message: `Are you sure you want to clear media & databases for "${account.name}"?`,
+            detail: 'This will wipe all local chat history, media cache, and databases, and will log you out of this account.',
+          });
 
-        let view = state.accountViews.get(accountId);
-        if (!view) {
-          const acc = getAccountById(accountId);
-          if (acc) {
-            view = await createAccountView(acc);
-            state.accountViews.set(accountId, view);
+          if (choice.response !== 1) {
+            return false;
           }
         }
 
-        if (view) {
-          const runClear = async () => {
-            const clearScript = `
-              (async () => {
-                try {
-                  if (!window.indexedDB || !window.indexedDB.databases) return false;
-                  const dbs = await window.indexedDB.databases();
-                  const keptDbs = ['wawc', 'signal-storage'];
-                  for (const db of dbs) {
-                    if (db.name && !keptDbs.includes(db.name)) {
-                      window.indexedDB.deleteDatabase(db.name);
-                    }
-                  }
-                  return true;
-                } catch (err) {
-                  return false;
-                }
-              })()
-            `;
-            try {
-              await view.webContents.executeJavaScript(clearScript);
-            } catch (err) {
-              console.error('Failed to run selective IndexedDB clear:', err);
-            }
-          };
-
-          if (view.webContents.isLoading()) {
-            view.webContents.once('dom-ready', runClear);
-          } else {
-            await runClear();
-          }
+        const view = state.accountViews.get(accountId);
+        if (view && !view.webContents.isDestroyed()) {
+          view.webContents.stop();
+          await view.webContents.loadURL('about:blank');
         }
-        console.log(`Selective IndexedDB clear initiated for account: ${accountId}`);
+
+        await accountSession.clearStorageData();
+        await accountSession.clearCache();
+        console.log(`All storage and cache cleared for account: ${accountId}`);
+
+        account.loggedIn = false;
+        await saveAccounts();
+        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+          state.mainWindow.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+        }
+
+        if (view && !view.webContents.isDestroyed()) {
+          await view.webContents.loadURL('https://web.whatsapp.com');
+        }
       }
 
       invalidateStorageCache(account.partition);

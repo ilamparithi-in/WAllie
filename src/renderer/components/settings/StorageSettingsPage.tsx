@@ -269,7 +269,7 @@ export const StorageSettingsPage: React.FC<StorageSettingsPageProps> = ({
               <div className="flex items-center justify-between p-2 rounded bg-[#182229] border border-[#222d34]">
                 <div className="pr-4 min-w-0 flex-1">
                   <div className="font-semibold text-xs text-[#e9edef]">Clear Media & Databases</div>
-                  <div className="text-[10px] text-[#ea4335] mt-0.5 break-words">Wipes local chat history & media cache. Keeps you logged in, but page will reload and sync.</div>
+                  <div className="text-[10px] text-[#ea4335] mt-0.5 break-words">Wipes local chat history, databases & media cache. This will log you out of this account.</div>
                 </div>
                 <button
                   disabled={isClearing}

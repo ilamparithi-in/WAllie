@@ -1,4 +1,4 @@
-import { app, BrowserWindow, WebContentsView, Menu, session, desktopCapturer, shell, Notification } from 'electron';
+import { app, BrowserWindow, WebContentsView, Menu, session, desktopCapturer, shell, Notification, dialog } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -632,7 +632,20 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   });
 
   view.webContents.on('will-prevent-unload', (event) => {
-    event.preventDefault();
+    const parentWindow = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined;
+    const choice = dialog.showMessageBoxSync(parentWindow!, {
+      type: 'question',
+      buttons: ['Reload Page', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      title: 'Discard Changes?',
+      message: 'Do you want to reload this page?',
+      detail: 'Changes that you made may not be saved.',
+      noLink: true,
+    });
+    if (choice === 0) {
+      event.preventDefault();
+    }
   });
 
   // Handle title & page badge updates for unread notifications count
