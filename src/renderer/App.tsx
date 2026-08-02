@@ -115,6 +115,9 @@ export const App: React.FC = () => {
     setIsSettingsOpen((prev) => {
       const next = !prev;
       window.electronAPI?.toggleSettings(next);
+      if (!next) {
+        setSettingsInitialPage('main');
+      }
       return next;
     });
   };

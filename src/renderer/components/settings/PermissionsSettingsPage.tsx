@@ -60,7 +60,7 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
                 type="checkbox"
                 checked={selectedAccount.settings?.notificationsEnabled ?? true}
                 onChange={(e) => handleToggleAccountPermission('notificationsEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
               />
             </label>
 
@@ -73,7 +73,7 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
                 type="checkbox"
                 checked={selectedAccount.settings?.cameraEnabled ?? true}
                 onChange={(e) => handleToggleAccountPermission('cameraEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
               />
             </label>
 
@@ -86,7 +86,7 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
                 type="checkbox"
                 checked={selectedAccount.settings?.micEnabled ?? true}
                 onChange={(e) => handleToggleAccountPermission('micEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
               />
             </label>
 
@@ -99,7 +99,7 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
                 type="checkbox"
                 checked={selectedAccount.settings?.geolocationEnabled ?? false}
                 onChange={(e) => handleToggleAccountPermission('geolocationEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
               />
             </label>
 
@@ -112,7 +112,7 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
                 type="checkbox"
                 checked={selectedAccount.settings?.clipboardReadEnabled ?? false}
                 onChange={(e) => handleToggleAccountPermission('clipboardReadEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
               />
             </label>
 
