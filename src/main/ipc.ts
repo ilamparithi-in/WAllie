@@ -7,7 +7,7 @@ import { createAccountView, getActiveWebContents, resetZoom, injectCustomCssForV
 import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize } from './window';
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
-import { getAccountById, focusActiveView } from './utils';
+import { getAccountById, focusActiveView, getPreloadPath } from './utils';
 
 export function registerIpcHandlers() {
   ipcMain.on('window:minimize', (event) => {
@@ -235,7 +235,7 @@ export function registerIpcHandlers() {
       width,
       height,
       webPreferences: {
-        preload: path.join(__dirname, '../preload/index.cjs'),
+        preload: getPreloadPath(),
         partition: 'persist:webstore',
         contextIsolation: true,
         nodeIntegration: false,
