@@ -14,60 +14,8 @@ const __dirname = path.dirname(__filename);
 const TITLEBAR_HEIGHT = 28;
 const DRAWER_WIDTH = 450;
 
-let animationInterval: NodeJS.Timeout | null = null;
+let closeTimeout: NodeJS.Timeout | null = null;
 let resizeTimeout: NodeJS.Timeout | null = null;
-
-function solveCubicBezier(p1x: number, p1y: number, p2x: number, p2y: number) {
-  const cx = 3.0 * p1x;
-  const bx = 3.0 * (p2x - p1x) - cx;
-  const ax = 1.0 - cx - bx;
-
-  const cy = 3.0 * p1y;
-  const by = 3.0 * (p2y - p1y) - cy;
-  const ay = 1.0 - cy - by;
-
-  function sampleCurveX(t: number) {
-    return ((ax * t + bx) * t + cx) * t;
-  }
-
-  function sampleCurveY(t: number) {
-    return ((ay * t + by) * t + cy) * t;
-  }
-
-  function sampleCurveDerivativeX(t: number) {
-    return (3.0 * ax * t + 2.0 * bx) * t + cx;
-  }
-
-  function solveCurveX(x: number, epsilon = 1e-5) {
-    let t2 = x;
-    for (let i = 0; i < 8; i++) {
-      const x2 = sampleCurveX(t2) - x;
-      if (Math.abs(x2) < epsilon) return t2;
-      const d2 = sampleCurveDerivativeX(t2);
-      if (Math.abs(d2) < 1e-6) break;
-      t2 = t2 - x2 / d2;
-    }
-    let t0 = 0.0;
-    let t1 = 1.0;
-    t2 = x;
-    if (t2 < t0) return t0;
-    if (t2 > t1) return t1;
-    while (t0 < t1) {
-      const x2 = sampleCurveX(t2);
-      if (Math.abs(x2 - x) < epsilon) return t2;
-      if (x > x2) t0 = t2;
-      else t1 = t2;
-      t2 = (t1 - t0) * 0.5 + t0;
-    }
-    return t2;
-  }
-
-  return function (x: number) {
-    return sampleCurveY(solveCurveX(x));
-  };
-}
-
-const win10Easing = solveCubicBezier(0.1, 0.9, 0.2, 1);
 
 /**
  * Calculates initial window dimensions, ensuring the window fits within
@@ -100,13 +48,8 @@ export function getInitialWindowSize(
   }
 }
 
-export function updateActiveViewBounds(isFromAnimation = false) {
+export function updateActiveViewBounds() {
   if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
-
-  if (animationInterval && !isFromAnimation) {
-    clearInterval(animationInterval);
-    animationInterval = null;
-  }
 
   const [width, height] = state.mainWindow.getContentSize();
   const activeView = state.accountViews.get(state.activeAccountId);
@@ -219,37 +162,26 @@ export async function initializeAccountsLoad() {
 export function animateSettingsTransition(targetOpen: boolean) {
   if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
 
-  if (animationInterval) {
-    clearInterval(animationInterval);
-    animationInterval = null;
+  if (closeTimeout) {
+    clearTimeout(closeTimeout);
+    closeTimeout = null;
   }
 
   state.settingsOpen = targetOpen;
 
-  const startWidth = state.settingsDrawerWidth;
-  const endWidth = targetOpen ? DRAWER_WIDTH : 0;
-  const duration = 300;
-  const startTime = Date.now();
-
-  animationInterval = setInterval(() => {
-    if (!state.mainWindow || state.mainWindow.isDestroyed()) {
-      if (animationInterval) clearInterval(animationInterval);
-      animationInterval = null;
-      return;
-    }
-
-    const elapsed = Date.now() - startTime;
-    const progress = Math.min(1, elapsed / duration);
-    const easedProgress = win10Easing(progress);
-
-    state.settingsDrawerWidth = startWidth + (endWidth - startWidth) * easedProgress;
-    updateActiveViewBounds(true);
-
-    if (progress >= 1) {
-      if (animationInterval) clearInterval(animationInterval);
-      animationInterval = null;
-    }
-  }, 8);
+  if (targetOpen) {
+    state.settingsDrawerWidth = DRAWER_WIDTH;
+    updateActiveViewBounds();
+  } else {
+    closeTimeout = setTimeout(() => {
+      if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
+      if (!state.settingsOpen) {
+        state.settingsDrawerWidth = 0;
+        updateActiveViewBounds();
+      }
+      closeTimeout = null;
+    }, 300);
+  }
 }
 
 export function createMainWindow() {

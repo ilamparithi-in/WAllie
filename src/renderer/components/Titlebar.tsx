@@ -14,6 +14,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
   const [zoomPercent, setZoomPercent] = useState<number>(100);
   const [showFlash, setShowFlash] = useState<boolean>(false);
   const [showDevTools, setShowDevTools] = useState<boolean>(false);
+  const [closeToTray, setCloseToTray] = useState<boolean>(true);
 
   // Renaming state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -37,6 +38,9 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
     window.electronAPI.isMaximized().then(setIsMaximized);
     window.electronAPI.getGlobalSettings().then((settings) => {
       setShowDevTools(!!settings.showDevToolsToggle);
+      if (settings.closeToTray !== undefined) {
+        setCloseToTray(settings.closeToTray);
+      }
     });
 
     // Listen for account updates
@@ -85,6 +89,9 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
 
     const unsubscribeGlobalSettings = window.electronAPI.onGlobalSettingsChanged((settings) => {
       setShowDevTools(!!settings.showDevToolsToggle);
+      if (settings.closeToTray !== undefined) {
+        setCloseToTray(settings.closeToTray);
+      }
     });
 
     return () => {
@@ -346,7 +353,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, isDisclaim
           onClick={handleClose}
           onMouseDown={(e) => e.preventDefault()}
           tabIndex={-1}
-          title="Close / Minimize to Tray"
+          title={closeToTray ? 'Minimize to Tray' : 'Close'}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           className="flex items-center justify-center w-8 h-[28px] hover:bg-[#ea4335] text-[#8696a0] hover:text-white transition-colors focus:outline-none"
         >
