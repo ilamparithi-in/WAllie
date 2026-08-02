@@ -5,6 +5,7 @@ import { state } from './state';
 import { switchActiveAccount } from './window';
 import { getAccountForWebContents } from './utils';
 import { HistoricalNotification } from '../shared/types';
+import { getAccountDisplayName } from '../shared/constants';
 
 export const NOTIFICATION_HISTORY_FILE = path.join(app.getPath('userData'), 'notification_history.json');
 const MAX_NOTIFICATIONS = 100;
@@ -121,7 +122,7 @@ export async function createNotification(data: { title: string; body: string; ic
     logNotificationToHistory({
       id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       accountId: senderAccount.id,
-      accountName: senderAccount.emoji ? `${senderAccount.emoji} ${senderAccount.name}` : senderAccount.name,
+      accountName: getAccountDisplayName(senderAccount),
       title: data.title,
       body: data.body,
       icon: data.icon,
@@ -181,7 +182,7 @@ export async function createLogEntry(data: { title: string; body: string }, send
     logNotificationToHistory({
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       accountId: senderAccount.id,
-      accountName: senderAccount.emoji ? `${senderAccount.emoji} ${senderAccount.name}` : senderAccount.name,
+      accountName: getAccountDisplayName(senderAccount),
       title: data.title,
       body: data.body,
       icon: '',

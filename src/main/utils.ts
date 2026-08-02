@@ -7,7 +7,19 @@ import { Account, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const WHATSAPP_DOMAIN_REGEX = /^([^.\s]+\.)*whatsapp\.(com|net)$/i;
+import { WHATSAPP_DOMAIN_REGEX } from '../shared/constants';
+export { WHATSAPP_DOMAIN_REGEX };
+
+export function getAccountById(id: string): Account | undefined {
+  return state.accounts.find((a) => a.id === id);
+}
+
+export function focusActiveView(): void {
+  const activeView = state.accountViews.get(state.activeAccountId);
+  if (activeView && !activeView.webContents.isDestroyed()) {
+    activeView.webContents.focus();
+  }
+}
 
 export function isWhatsAppUrl(urlStr: string): boolean {
   try {
@@ -71,7 +83,7 @@ export function checkPermissionForAccount(
 export function getAccountForWebContents(webContents: WebContents): Account | undefined {
   for (const [accId, view] of state.accountViews.entries()) {
     if (view.webContents === webContents) {
-      return state.accounts.find((a) => a.id === accId);
+      return getAccountById(accId);
     }
   }
   return undefined;

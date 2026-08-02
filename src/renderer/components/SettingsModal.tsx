@@ -10,6 +10,8 @@ import { ThemeSettingsPage } from './settings/ThemeSettingsPage';
 import { StorageSettingsPage } from './settings/StorageSettingsPage';
 import { NotificationSettingsPage } from './settings/NotificationSettingsPage';
 
+import { useFocusTrap } from '../hooks/useFocusTrap';
+
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -20,52 +22,27 @@ interface SettingsModalProps {
 
 type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts';
 
+const SETTINGS_MENU_ITEMS: {
+  page: PageType;
+  icon: React.ElementType;
+  title: string;
+  description: string;
+}[] = [
+  { page: 'accounts', icon: User, title: 'Manage Accounts', description: 'Customize account names and emojis' },
+  { page: 'general', icon: SettingsIcon, title: 'General Settings', description: 'Tray settings and GPU hardware acceleration' },
+  { page: 'preload', icon: Users, title: 'Accounts to load on launch', description: 'Select which accounts get preloaded in the background' },
+  { page: 'permissions', icon: Shield, title: 'Browser permissions', description: 'Manage camera, mic, notifications, geolocation, and clipboard access' },
+  { page: 'extensions', icon: Puzzle, title: 'Chrome Extensions', description: 'Manage helper extensions and plugins' },
+  { page: 'css', icon: Palette, title: 'Custom CSS & Themes', description: 'Select preset themes or write custom CSS' },
+  { page: 'storage', icon: Database, title: 'Storage & Cache', description: 'Inspect sizes, clear browser media or cache' },
+  { page: 'notifications', icon: Bell, title: 'Notification History', description: 'View and search desktop alert logs' },
+];
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialPage, initialAccountId, onShowDisclaimer }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const [activePage, setActivePage] = useState<PageType>('main');
 
-  useEffect(() => {
-    if (isOpen && modalRef.current) {
-      const focusableSelector = 'a[href], button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Tab') {
-          const focusablesArray = Array.from(modalRef.current?.querySelectorAll(focusableSelector) || []) as HTMLElement[];
-          if (focusablesArray.length === 0) {
-            e.preventDefault();
-            return;
-          }
-          const first = focusablesArray[0];
-          const last = focusablesArray[focusablesArray.length - 1];
-          const active = document.activeElement as HTMLElement;
-
-          // If focus is outside the modal, redirect into it
-          if (!modalRef.current?.contains(active)) {
-            (e.shiftKey ? last : first).focus();
-            e.preventDefault();
-            return;
-          }
-
-          if (e.shiftKey) {
-            if (active === first) {
-              last.focus();
-              e.preventDefault();
-            }
-          } else {
-            if (active === last) {
-              first.focus();
-              e.preventDefault();
-            }
-          }
-        }
-      };
-
-      window.addEventListener('keydown', handleKeyDown, true);
-      return () => {
-        window.removeEventListener('keydown', handleKeyDown, true);
-      };
-    }
-  }, [isOpen, activePage]);
+  useFocusTrap(modalRef, isOpen);
 
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
@@ -456,117 +433,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             activePage === 'main' ? 'translate-x-0' : '-translate-x-full pointer-events-none invisible'
           }`}>
             <div className="flex flex-col space-y-2 select-text pb-4">
-              <button
-                onClick={() => setActivePage('accounts')}
-                onMouseDown={(e) => e.preventDefault()}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-              >
-                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
-                  <User className="w-4 h-4" />
-                </div>
-                <div className="flex-grow min-w-0">
-                  <div className="font-semibold text-[#e9edef] text-[12px]">Manage Accounts</div>
-                  <div className="text-[10px] text-[#8696a0] mt-0.5">Customize account names and emojis</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActivePage('general')}
-                onMouseDown={(e) => e.preventDefault()}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-              >
-                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
-                  <SettingsIcon className="w-4 h-4" />
-                </div>
-                <div className="flex-grow min-w-0">
-                  <div className="font-semibold text-[#e9edef] text-[12px]">General Settings</div>
-                  <div className="text-[10px] text-[#8696a0] mt-0.5">Tray settings and GPU hardware acceleration</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActivePage('preload')}
-                onMouseDown={(e) => e.preventDefault()}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-              >
-                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
-                  <Users className="w-4 h-4" />
-                </div>
-                <div className="flex-grow min-w-0">
-                  <div className="font-semibold text-[#e9edef] text-[12px]">Accounts to load on launch</div>
-                  <div className="text-[10px] text-[#8696a0] mt-0.5">Select which accounts get preloaded in the background</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActivePage('permissions')}
-                onMouseDown={(e) => e.preventDefault()}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-              >
-                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
-                  <Shield className="w-4 h-4" />
-                </div>
-                <div className="flex-grow min-w-0">
-                  <div className="font-semibold text-[#e9edef] text-[12px]">Browser permissions</div>
-                  <div className="text-[10px] text-[#8696a0] mt-0.5">Manage camera, mic, notifications, geolocation, and clipboard access</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActivePage('extensions')}
-                onMouseDown={(e) => e.preventDefault()}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-              >
-                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
-                  <Puzzle className="w-4 h-4" />
-                </div>
-                <div className="flex-grow min-w-0">
-                  <div className="font-semibold text-[#e9edef] text-[12px]">Chrome Extensions</div>
-                  <div className="text-[10px] text-[#8696a0] mt-0.5">Manage helper extensions and plugins</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActivePage('css')}
-                onMouseDown={(e) => e.preventDefault()}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-              >
-                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
-                  <Palette className="w-4 h-4" />
-                </div>
-                <div className="flex-grow min-w-0">
-                  <div className="font-semibold text-[#e9edef] text-[12px]">Custom CSS & Themes</div>
-                  <div className="text-[10px] text-[#8696a0] mt-0.5">Select preset themes or write custom CSS</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActivePage('storage')}
-                onMouseDown={(e) => e.preventDefault()}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-              >
-                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
-                  <Database className="w-4 h-4" />
-                </div>
-                <div className="flex-grow min-w-0">
-                  <div className="font-semibold text-[#e9edef] text-[12px]">Storage & Cache</div>
-                  <div className="text-[10px] text-[#8696a0] mt-0.5">Inspect sizes, clear browser media or cache</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActivePage('notifications')}
-                onMouseDown={(e) => e.preventDefault()}
-                className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-              >
-                <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
-                  <Bell className="w-4 h-4" />
-                </div>
-                <div className="flex-grow min-w-0">
-                  <div className="font-semibold text-[#e9edef] text-[12px]">Notification History</div>
-                  <div className="text-[10px] text-[#8696a0] mt-0.5">View and search desktop alert logs</div>
-                </div>
-              </button>
+              {SETTINGS_MENU_ITEMS.map((item) => {
+                const IconComponent = item.icon;
+                return (
+                  <button
+                    key={item.page}
+                    onClick={() => setActivePage(item.page)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
+                      <IconComponent className="w-4 h-4" />
+                    </div>
+                    <div className="flex-grow min-w-0">
+                      <div className="font-semibold text-[#e9edef] text-[12px]">{item.title}</div>
+                      <div className="text-[10px] text-[#8696a0] mt-0.5">{item.description}</div>
+                    </div>
+                  </button>
+                );
+              })}
 
               {/* About Section */}
               <div className="mt-6 pt-4 border-t border-[#222d34]/60 text-center select-text">

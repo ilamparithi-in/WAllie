@@ -3,15 +3,15 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
-import { getAppIcon, isWhatsAppUrl } from './utils';
+import { getAppIcon, isWhatsAppUrl, getAccountById } from './utils';
 import { createAccountView, pauseAllMedia, injectCustomCssForView, registerZoomShortcuts, registerContextMenu } from './views';
 import { safeDeleteExtensionDir } from './extensions';
 import { saveSettings, saveAccounts, ACCOUNTS_FILE } from './config';
+import { TITLEBAR_HEIGHT } from '../shared/constants';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const TITLEBAR_HEIGHT = 28;
 const DRAWER_WIDTH = 450;
 
 let closeTimeout: NodeJS.Timeout | null = null;
@@ -110,7 +110,7 @@ export async function switchActiveAccount(newAccountId: string) {
   let targetView = state.accountViews.get(newAccountId);
 
   if (!targetView) {
-    const acc = state.accounts.find((a) => a.id === newAccountId);
+    const acc = getAccountById(newAccountId);
     if (acc) {
       targetView = await createAccountView(acc);
       state.accountViews.set(newAccountId, targetView);
@@ -365,7 +365,7 @@ export function toggleDevToolsForAccount(accountId: string) {
 
 export async function removeAccountLogic(id: string): Promise<boolean> {
   if (state.accounts.length <= 1) return false;
-  const account = state.accounts.find((a) => a.id === id);
+  const account = getAccountById(id);
   if (!account) return false;
 
   if (account.loggedIn && state.mainWindow) {

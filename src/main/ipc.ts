@@ -7,6 +7,7 @@ import { createAccountView, getActiveWebContents, resetZoom, injectCustomCssForV
 import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize } from './window';
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
+import { getAccountById, focusActiveView } from './utils';
 
 export function registerIpcHandlers() {
   ipcMain.on('window:minimize', (event) => {
@@ -83,36 +84,21 @@ export function registerIpcHandlers() {
   ipcMain.on('settings:toggle', (_event, isOpen: boolean) => {
     console.log('IPC Received: settings:toggle, isOpen:', isOpen);
     animateSettingsTransition(isOpen);
-    if (!isOpen) {
-      const activeView = state.accountViews.get(state.activeAccountId);
-      if (activeView && !activeView.webContents.isDestroyed()) {
-        activeView.webContents.focus();
-      }
-    }
+    if (!isOpen) focusActiveView();
   });
 
   ipcMain.on('disclaimer:toggle', (_event, isOpen: boolean) => {
     console.log('IPC Received: disclaimer:toggle, isOpen:', isOpen);
     state.disclaimerOpen = isOpen;
     updateActiveViewBounds();
-    if (!isOpen) {
-      const activeView = state.accountViews.get(state.activeAccountId);
-      if (activeView && !activeView.webContents.isDestroyed()) {
-        activeView.webContents.focus();
-      }
-    }
+    if (!isOpen) focusActiveView();
   });
 
   ipcMain.on('protocol:toggle-prompt', (_event, isOpen: boolean) => {
     console.log('IPC Received: protocol:toggle-prompt, isOpen:', isOpen);
     state.protocolPromptOpen = isOpen;
     updateActiveViewBounds();
-    if (!isOpen) {
-      const activeView = state.accountViews.get(state.activeAccountId);
-      if (activeView && !activeView.webContents.isDestroyed()) {
-        activeView.webContents.focus();
-      }
-    }
+    if (!isOpen) focusActiveView();
   });
 
   ipcMain.on('devtools:toggle-wallie', () => {
@@ -182,7 +168,7 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('account:rename', (_event, id: string, newName: string) => {
     console.log('IPC Handle: account:rename');
-    const account = state.accounts.find((a) => a.id === id);
+    const account = getAccountById(id);
     if (account) {
       account.name = newName;
       saveAccounts();
@@ -193,7 +179,7 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.handle('account:update-emoji', (_event, id: string, emoji: string) => {
-    const account = state.accounts.find((a) => a.id === id);
+    const account = getAccountById(id);
     if (account) {
       account.emoji = emoji;
       saveAccounts();
@@ -208,7 +194,7 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.on('account:context-menu', (event, accountId: string) => {
-    const account = state.accounts.find((a) => a.id === accountId);
+    const account = getAccountById(accountId);
     if (!account) return;
 
     const menu = Menu.buildFromTemplate([
@@ -272,7 +258,7 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.handle('webstore:check-installed', (_event, accountId: string, extensionId: string) => {
-    const account = state.accounts.find((a) => a.id === accountId);
+    const account = getAccountById(accountId);
     if (!account || !account.extensions) return false;
     return account.extensions.some((ext) => ext.id === extensionId);
   });
@@ -291,13 +277,13 @@ export function registerIpcHandlers() {
 
   // Storage Handlers
   ipcMain.handle('account:get-storage-sizes', async (_event, accountId: string) => {
-    const account = state.accounts.find((a) => a.id === accountId);
+    const account = getAccountById(accountId);
     if (!account) return { cache: 0, localStorage: 0, indexedDb: 0, cookies: 0 };
     return await getAccountStorageSizes(account.partition);
   });
 
   ipcMain.handle('account:clear-storage', async (_event, accountId: string, type: 'cache' | 'media') => {
-    const account = state.accounts.find((a) => a.id === accountId);
+    const account = getAccountById(accountId);
     if (!account) return false;
 
     const accountSession = session.fromPartition(account.partition);
@@ -317,7 +303,7 @@ export function registerIpcHandlers() {
 
         let view = state.accountViews.get(accountId);
         if (!view) {
-          const acc = state.accounts.find((a) => a.id === accountId);
+          const acc = getAccountById(accountId);
           if (acc) {
             view = await createAccountView(acc);
             state.accountViews.set(accountId, view);
@@ -385,7 +371,7 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.handle('account:update-settings', (_event, accountId: string, settings: Account['settings']) => {
-    const account = state.accounts.find((a) => a.id === accountId);
+    const account = getAccountById(accountId);
     if (account) {
       account.settings = settings;
       saveAccounts();
@@ -396,7 +382,7 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.handle('account:save-css', (_event, accountId: string, customCss: string, selectedTheme: string) => {
-    const account = state.accounts.find((a) => a.id === accountId);
+    const account = getAccountById(accountId);
     if (account) {
       if (!account.settings) {
         account.settings = { ...DEFAULT_ACCOUNT_SETTINGS };

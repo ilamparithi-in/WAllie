@@ -5,6 +5,7 @@ import AdmZip from 'adm-zip';
 import { state } from './state';
 import { saveAccounts, CHROME_VERSION, DEFAULT_USER_AGENT } from './config';
 import { ExtensionInfo } from '../shared/types';
+import { getAccountById } from './utils';
 
 const EXTENSIONS_BASE = path.join(app.getPath('userData'), 'extensions');
 
@@ -176,7 +177,7 @@ export async function importExtension(accountId: string, importType: 'folder' | 
       return null;
     }
 
-    const account = state.accounts.find((a) => a.id === accountId);
+    const account = getAccountById(accountId);
     if (account) {
       if (!account.extensions) {
         account.extensions = [];
@@ -267,7 +268,7 @@ export async function installWebStoreExtension(accountId: string, urlOrId: strin
       }
     }
 
-    const account = state.accounts.find((a) => a.id === accountId);
+    const account = getAccountById(accountId);
     if (account) {
       if (!account.extensions) {
         account.extensions = [];
@@ -300,7 +301,7 @@ export async function installWebStoreExtension(accountId: string, urlOrId: strin
 }
 
 export async function toggleExtension(accountId: string, extensionId: string, enabled: boolean): Promise<boolean> {
-  const account = state.accounts.find((a) => a.id === accountId);
+  const account = getAccountById(accountId);
   if (!account || !account.extensions) return false;
 
   const ext = account.extensions.find((e) => e.id === extensionId);
@@ -332,7 +333,7 @@ export async function toggleExtension(accountId: string, extensionId: string, en
 }
 
 export async function removeExtension(accountId: string, extensionId: string): Promise<boolean> {
-  const account = state.accounts.find((a) => a.id === accountId);
+  const account = getAccountById(accountId);
   if (!account || !account.extensions) return false;
 
   const extIndex = account.extensions.findIndex((e) => e.id === extensionId);

@@ -216,6 +216,8 @@ const api: ElectronAPI = {
   },
 };
 
+// Defined inline here because build:preload cleans dist/preload/shared.
+// Canonical definition is maintained in src/shared/constants.ts.
 const WHATSAPP_DOMAIN_REGEX = /^([^.\s]+\.)*whatsapp\.(com|net)$/i;
 
 async function resolveIconToBase64(url: string): Promise<string | null> {
