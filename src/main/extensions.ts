@@ -234,9 +234,7 @@ export async function installWebStoreExtension(accountId: string, urlOrId: strin
     const crxBuffer = Buffer.from(arrayBuffer);
     const zipBuffer = crxToZip(crxBuffer);
 
-    if (fs.existsSync(targetDir)) {
-      safeDeleteExtensionDir(targetDir);
-    }
+    safeDeleteExtensionDir(targetDir);
     fs.mkdirSync(targetDir, { recursive: true });
 
     const zip = new AdmZip(zipBuffer);

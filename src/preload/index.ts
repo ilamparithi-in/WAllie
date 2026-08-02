@@ -365,6 +365,12 @@ function setupWhatsAppIntegration() {
   }]);
 }
 
+function escapeHtml(str: string): string {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 function injectUnifiedTitlebar(options: {
   title: string;
   badge?: string;
@@ -506,7 +512,9 @@ function injectUnifiedTitlebar(options: {
   container.id = 'custom-titlebar';
 
   const leftIcon = options.iconType === 'call' ? phoneIcon : codeIcon;
-  const badgeHtml = options.badge ? `<span class="titlebar-left-badge">${options.badge}</span>` : '';
+  const safeTitle = escapeHtml(options.title || '');
+  const safeBadge = options.badge ? escapeHtml(options.badge) : '';
+  const badgeHtml = safeBadge ? `<span class="titlebar-left-badge">${safeBadge}</span>` : '';
 
   let controlsHtml = '';
   options.controls.forEach((control) => {
@@ -525,7 +533,7 @@ function injectUnifiedTitlebar(options: {
   container.innerHTML = `
     <div class="titlebar-left">
       <span class="titlebar-left-icon">${leftIcon}</span>
-      <span class="titlebar-left-title">${options.title}</span>
+      <span class="titlebar-left-title">${safeTitle}</span>
       ${badgeHtml}
     </div>
     <div class="titlebar-drag-region"></div>

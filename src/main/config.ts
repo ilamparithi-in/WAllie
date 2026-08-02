@@ -1,12 +1,12 @@
 import { app } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { state } from './state';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export const CHROME_VERSION = process.versions.chrome || '132.0.0.0';
 
@@ -164,7 +164,7 @@ export async function calculatePathSize(itemPath: string, isRoot = true): Promis
 
     if (isRoot) {
       try {
-        const { stdout } = await execAsync(`du -sb "${itemPath}" 2>/dev/null`);
+        const { stdout } = await execFileAsync('du', ['-sb', itemPath]);
         const match = stdout.trim().match(/^(\d+)/);
         if (match) {
           return parseInt(match[1], 10);
