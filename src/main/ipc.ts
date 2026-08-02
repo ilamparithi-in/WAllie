@@ -450,8 +450,8 @@ export function registerIpcHandlers() {
     return getNotificationHistory();
   });
 
-  ipcMain.handle('notification:clear-history', () => {
-    clearNotificationHistoryCache();
+  ipcMain.handle('notification:clear-history', (_event, options?: any) => {
+    clearNotificationHistoryCache(options);
     return true;
   });
 

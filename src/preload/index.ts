@@ -49,7 +49,7 @@ export interface ElectronAPI {
 
   // Notification history & CSS controls
   getNotificationHistory: () => Promise<HistoricalNotification[]>;
-  clearNotificationHistory: () => Promise<boolean>;
+  clearNotificationHistory: (options?: string | { mode: string; startDate?: string; endDate?: string }) => Promise<boolean>;
   saveCss: (accountId: string, customCss: string, selectedTheme: string) => Promise<boolean>;
 
   // Custom protocol controls
@@ -125,7 +125,7 @@ const api: ElectronAPI = {
   updateAccountSettings: (accountId, settings) => ipcRenderer.invoke('account:update-settings', accountId, settings),
 
   getNotificationHistory: () => ipcRenderer.invoke('notification:get-history'),
-  clearNotificationHistory: () => ipcRenderer.invoke('notification:clear-history'),
+  clearNotificationHistory: (options) => ipcRenderer.invoke('notification:clear-history', options),
   saveCss: (accountId, customCss, selectedTheme) => ipcRenderer.invoke('account:save-css', accountId, customCss, selectedTheme),
   relaunchApp: () => ipcRenderer.send('app:relaunch'),
 
