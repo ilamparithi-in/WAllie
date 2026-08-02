@@ -9,16 +9,41 @@ files:
 linux:
   category: Chat;Network;InstantMessaging;
   target:
-    - pacman
-    - deb
-    - rpm
-    - AppImage
-    - flatpak
-  desktop:
-    Name: WAllie
-    Comment: Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
-    Categories: Network;InstantMessaging;Chat;
-    MimeType: x-scheme-handler/whatsapp;x-scheme-handler/wallie;
+    - target: AppImage
+      arch: [x64, arm64]
+    - target: deb
+      arch: [x64, arm64]
+    - target: rpm
+      arch: [x64, arm64]
+    - target: pacman
+      arch: [x64, arm64]
+    - target: flatpak
+      arch: [x64, arm64]
+flatpak:
+  runtimeVersion: "23.08"
+  finishArgs:
+    - "--share=ipc"
+    - "--socket=x11"
+    - "--socket=wayland"
+    - "--socket=pulseaudio"
+    - "--share=network"
+    - "--talk-name=org.freedesktop.Notifications"
+    - "--filesystem=xdg-download"
+    - "--filesystem=xdg-pictures"
+    - "--filesystem=xdg-videos"
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+    - target: portable
+      arch: [x64, arm64]
+mac:
+  category: public.app-category.social-networking
+  target:
+    - target: dmg
+      arch: [x64, arm64, universal]
+    - target: zip
+      arch: [x64, arm64, universal]
 protocols:
   - name: whatsapp
     schemes:
