@@ -4,13 +4,12 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
 import { DEFAULT_USER_AGENT, saveAccounts } from './config';
-import { isWhatsAppUrl, checkPermissionForAccount } from './utils';
+import { isWhatsAppUrl, checkPermissionForAccount, getAccountById } from './utils';
 import { Account, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
+import { TITLEBAR_HEIGHT } from '../shared/constants';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const TITLEBAR_HEIGHT = 28;
 
 export const OLED_THEME_CSS = `
 /* OLED Dark Theme overrides */
@@ -123,7 +122,7 @@ footer {
 const insertedCssKeys = new Map<string, string>();
 
 export async function injectCustomCssForView(accountId: string, webContents: Electron.WebContents) {
-  const account = state.accounts.find((a) => a.id === accountId);
+  const account = getAccountById(accountId);
   if (!account || !account.settings) return;
 
   const previousKey = insertedCssKeys.get(accountId);

@@ -5,6 +5,8 @@ import { Download, CheckCircle, XCircle, X, Shield } from 'lucide-react';
 
 import type { AccountInfo, GlobalSettings } from '../preload';
 
+import { useFocusTrap } from './hooks/useFocusTrap';
+
 interface DownloadState {
   id: number;
   filename: string;
@@ -30,91 +32,11 @@ export const App: React.FC = () => {
   const disclaimerRef = useRef<HTMLDivElement>(null);
   const protocolPromptRef = useRef<HTMLDivElement>(null);
 
-  // Focus trapping for Legal Disclaimer
-  useEffect(() => {
-    if ((!globalSettings?.disclaimerAccepted || showDisclaimerForce) && disclaimerRef.current) {
-      const focusableSelector = 'a[href], button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Tab') {
-          const focusablesArray = Array.from(disclaimerRef.current?.querySelectorAll(focusableSelector) || []) as HTMLElement[];
-          if (focusablesArray.length === 0) {
-            e.preventDefault();
-            return;
-          }
-          const first = focusablesArray[0];
-          const last = focusablesArray[focusablesArray.length - 1];
-          const active = document.activeElement as HTMLElement;
-
-          if (!disclaimerRef.current?.contains(active)) {
-            (e.shiftKey ? last : first).focus();
-            e.preventDefault();
-            return;
-          }
-
-          if (e.shiftKey) {
-            if (active === first) {
-              last.focus();
-              e.preventDefault();
-            }
-          } else {
-            if (active === last) {
-              first.focus();
-              e.preventDefault();
-            }
-          }
-        }
-      };
-
-      window.addEventListener('keydown', handleKeyDown, true);
-      return () => {
-        window.removeEventListener('keydown', handleKeyDown, true);
-      };
-    }
-  }, [globalSettings?.disclaimerAccepted, showDisclaimerForce]);
-
-  // Focus trapping for Protocol Switcher Prompt
-  useEffect(() => {
-    if (pendingUrl && protocolPromptRef.current) {
-      const focusableSelector = 'a[href], button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Tab') {
-          const focusablesArray = Array.from(protocolPromptRef.current?.querySelectorAll(focusableSelector) || []) as HTMLElement[];
-          if (focusablesArray.length === 0) {
-            e.preventDefault();
-            return;
-          }
-          const first = focusablesArray[0];
-          const last = focusablesArray[focusablesArray.length - 1];
-          const active = document.activeElement as HTMLElement;
-
-          if (!protocolPromptRef.current?.contains(active)) {
-            (e.shiftKey ? last : first).focus();
-            e.preventDefault();
-            return;
-          }
-
-          if (e.shiftKey) {
-            if (active === first) {
-              last.focus();
-              e.preventDefault();
-            }
-          } else {
-            if (active === last) {
-              first.focus();
-              e.preventDefault();
-            }
-          }
-        }
-      };
-
-      window.addEventListener('keydown', handleKeyDown, true);
-      return () => {
-        window.removeEventListener('keydown', handleKeyDown, true);
-      };
-    }
-  }, [pendingUrl]);
+  // Focus trapping hooks for overlays
+  const isDisclaimerActive = Boolean((!globalSettings?.disclaimerAccepted || showDisclaimerForce) && disclaimerRef.current);
+  const isProtocolPromptActive = Boolean(pendingUrl && protocolPromptRef.current);
+  useFocusTrap(disclaimerRef, isDisclaimerActive);
+  useFocusTrap(protocolPromptRef, isProtocolPromptActive);
 
   useEffect(() => {
     if (!window.electronAPI) return;
