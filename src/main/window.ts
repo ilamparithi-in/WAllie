@@ -199,7 +199,7 @@ export function createMainWindow() {
       preload: getPreloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
@@ -409,7 +409,7 @@ export async function removeAccountLogic(id: string): Promise<boolean> {
     if (!view.webContents.isDestroyed()) {
       try {
         view.webContents.closeDevTools();
-      } catch (e) {}
+      } catch (e) { }
     }
     if (state.activeAccountId === id && state.mainWindow) {
       state.mainWindow.contentView.removeChildView(view);
