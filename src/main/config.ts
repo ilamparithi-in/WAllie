@@ -9,8 +9,18 @@ import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS } from '../shared/typ
 const execAsync = promisify(exec);
 
 export const CHROME_VERSION = process.versions.chrome || '132.0.0.0';
+
+function getOsPlatformString(): string {
+  if (process.platform === 'win32') {
+    return 'Windows NT 10.0; Win64; x64';
+  }
+  const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
+  return `X11; Linux ${arch}`;
+}
+
 export const DEFAULT_USER_AGENT =
-  `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`;
+  `Mozilla/5.0 (${getOsPlatformString()}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`;
+
 
 export const ACCOUNTS_FILE = path.join(app.getPath('userData'), 'accounts.json');
 export const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
@@ -151,7 +161,7 @@ export async function calculatePathSize(itemPath: string, isRoot = true): Promis
     if (stats.isFile()) {
       return stats.size;
     }
-    
+
     if (isRoot) {
       try {
         const { stdout } = await execAsync(`du -sb "${itemPath}" 2>/dev/null`);
@@ -159,7 +169,7 @@ export async function calculatePathSize(itemPath: string, isRoot = true): Promis
         if (match) {
           return parseInt(match[1], 10);
         }
-      } catch {}
+      } catch { }
     }
 
     if (stats.isDirectory()) {

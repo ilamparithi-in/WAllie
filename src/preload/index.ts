@@ -600,13 +600,13 @@ function monitorCallBlankScreen() {
     const hasVideo = document.querySelector('video') !== null;
     const hasAudio = document.querySelector('audio') !== null;
     const hasCanvas = document.querySelector('canvas') !== null;
-    
+
     // Check for common call controls (buttons or SVGs with aria-labels or titles)
     const callControls = document.querySelectorAll(
       '[data-testid*="call"], [data-testid*="hangup"], [data-testid*="micro"], [data-testid*="video"], [data-testid*="screen"]'
     );
     const hasCallControls = callControls.length > 0;
-    
+
     const isCallActive = hasVideo || hasAudio || hasCanvas || hasCallControls;
 
     if (isCallActive) {
@@ -644,7 +644,7 @@ function monitorCallBlankScreen() {
         }
       }
     }
-  }, 200);
+  }, 1000);
 }
 
 function injectCallTitlebar() {
@@ -680,7 +680,7 @@ async function setupWebStoreInjection() {
 
       const extensionId = match[1].toLowerCase();
       const isInstalled = await ipcRenderer.invoke('webstore:check-installed', targetAccountId, extensionId);
-      
+
       createOrUpdateWebStoreButton(targetAccountId, extensionId, isInstalled);
     }
 
@@ -695,7 +695,7 @@ async function setupWebStoreInjection() {
       }
 
       btn.className = '';
-      
+
       Object.assign(btn.style, {
         position: 'fixed',
         top: '76px',
@@ -733,7 +733,7 @@ async function setupWebStoreInjection() {
           color: '#111b21',
           cursor: 'pointer'
         });
-        
+
         btn.onmouseenter = () => {
           if (!isInstalling) {
             btn!.style.backgroundColor = '#00c298';
@@ -750,7 +750,7 @@ async function setupWebStoreInjection() {
         btn.onclick = async () => {
           if (isInstalling) return;
           isInstalling = true;
-          
+
           btn!.innerText = 'Installing...';
           Object.assign(btn!.style, {
             backgroundColor: '#202c33',
@@ -809,7 +809,7 @@ async function setupWebStoreInjection() {
           lastUrl = window.location.href;
           checkAndUpdateButton();
         }
-      }, 500);
+      }, 1000);
     }
 
     if (document.body) {
@@ -824,7 +824,7 @@ async function setupWebStoreInjection() {
 
 if (!isWhatsApp) {
   contextBridge.exposeInMainWorld('electronAPI', api);
-  
+
   window.addEventListener('DOMContentLoaded', () => {
     const isDevTools = !!document.querySelector('meta[name="is-devtools"]');
     if (isDevTools) {
@@ -849,5 +849,5 @@ if (!isWhatsApp) {
   }
 }
 
-export {};
+export { };
 
