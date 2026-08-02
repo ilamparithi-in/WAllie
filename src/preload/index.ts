@@ -799,18 +799,6 @@ async function setupWebStoreInjection() {
       // Listen for popstate SPA events
       window.addEventListener('popstate', checkAndUpdateButton);
 
-      // DOM Mutation observer to catch SPA URL transitions
-      const observer = new MutationObserver(() => {
-        if (window.location.href !== lastUrl) {
-          lastUrl = window.location.href;
-          checkAndUpdateButton();
-        }
-      });
-
-      if (document.documentElement) {
-        observer.observe(document.documentElement, { childList: true, subtree: true });
-      }
-
       // Interval fallback for URL changes
       setInterval(() => {
         if (window.location.href !== lastUrl) {

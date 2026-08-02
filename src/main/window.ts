@@ -1,4 +1,4 @@
-import { app, BrowserWindow, WebContentsView, Tray, Menu, nativeImage, Notification, session, dialog, shell } from 'electron';
+import { app, BrowserWindow, WebContentsView, Tray, Menu, nativeImage, Notification, session, dialog, shell, screen } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -50,23 +50,6 @@ export function getInitialWindowSize(
 
 export function updateActiveViewBounds() {
   if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
-
-  const [width, height] = state.mainWindow.getContentSize();
-  const activeView = state.accountViews.get(state.activeAccountId);
-
-  if (activeView) {
-    if (state.disclaimerOpen || state.protocolPromptOpen) {
-      activeView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
-    } else {
-      const viewWidth = width - state.settingsDrawerWidth;
-      activeView.setBounds({
-        x: 0,
-        y: TITLEBAR_HEIGHT,
-        width: Math.max(0, viewWidth),
-        height: Math.max(0, height - TITLEBAR_HEIGHT),
-      });
-    }
-  }
 
   if (resizeTimeout) {
     clearTimeout(resizeTimeout);
