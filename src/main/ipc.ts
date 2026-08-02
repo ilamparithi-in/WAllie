@@ -168,9 +168,12 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('account:rename', (_event, id: string, newName: string) => {
     console.log('IPC Handle: account:rename');
+    if (typeof id !== 'string' || typeof newName !== 'string') return false;
+    const sanitizedName = newName.trim().substring(0, 100);
+    if (!sanitizedName) return false;
     const account = getAccountById(id);
     if (account) {
-      account.name = newName;
+      account.name = sanitizedName;
       saveAccounts();
       state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
       return true;
@@ -179,9 +182,11 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.handle('account:update-emoji', (_event, id: string, emoji: string) => {
+    if (typeof id !== 'string' || typeof emoji !== 'string') return false;
+    const sanitizedEmoji = emoji.trim().substring(0, 20);
     const account = getAccountById(id);
     if (account) {
-      account.emoji = emoji;
+      account.emoji = sanitizedEmoji;
       saveAccounts();
       state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
       return true;
@@ -386,13 +391,16 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.handle('account:save-css', (_event, accountId: string, customCss: string, selectedTheme: string) => {
+    if (typeof accountId !== 'string' || typeof customCss !== 'string' || typeof selectedTheme !== 'string') return false;
+    const safeCss = customCss.substring(0, 100000); // Limit CSS to 100KB
+    const safeTheme = selectedTheme.substring(0, 100);
     const account = getAccountById(accountId);
     if (account) {
       if (!account.settings) {
         account.settings = { ...DEFAULT_ACCOUNT_SETTINGS };
       }
-      account.settings.customCss = customCss;
-      account.settings.selectedTheme = selectedTheme;
+      account.settings.customCss = safeCss;
+      account.settings.selectedTheme = safeTheme;
       saveAccounts();
 
       const view = state.accountViews.get(accountId);
@@ -419,7 +427,14 @@ export function registerIpcHandlers() {
 
   // Notification Handlers
   ipcMain.on('notification:create', async (event, data: { title: string; body: string; icon: string; tag: string }) => {
-    await createNotification(data, event.sender);
+    if (!data || typeof data !== 'object') return;
+    const sanitizedData = {
+      title: typeof data.title === 'string' ? data.title.substring(0, 300) : '',
+      body: typeof data.body === 'string' ? data.body.substring(0, 1000) : '',
+      icon: typeof data.icon === 'string' ? data.icon.substring(0, 500000) : '', // Max 500KB icon string
+      tag: typeof data.tag === 'string' ? data.tag.substring(0, 100) : '',
+    };
+    await createNotification(sanitizedData, event.sender);
   });
 
   ipcMain.on('notification:create-log-entry', async (event, data: { title: string; body: string }) => {

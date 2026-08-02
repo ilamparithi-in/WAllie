@@ -36,7 +36,9 @@ export function scheduleHistoryFlush() {
     state.historyFlushTimeout = null;
     if (state.notificationHistoryCache) {
       try {
-        await fs.promises.writeFile(NOTIFICATION_HISTORY_FILE, JSON.stringify(state.notificationHistoryCache, null, 2), 'utf8');
+        const tempFile = `${NOTIFICATION_HISTORY_FILE}.tmp`;
+        await fs.promises.writeFile(tempFile, JSON.stringify(state.notificationHistoryCache, null, 2), 'utf8');
+        await fs.promises.rename(tempFile, NOTIFICATION_HISTORY_FILE);
       } catch (error) {
         console.error('Failed to flush notification history to disk:', error);
       }
@@ -125,7 +127,7 @@ export async function createNotification(data: { title: string; body: string; ic
       accountName: getAccountDisplayName(senderAccount),
       title: data.title,
       body: data.body,
-      icon: data.icon,
+      icon: '',
       timestamp: Date.now(),
     });
   }

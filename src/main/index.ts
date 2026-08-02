@@ -127,7 +127,9 @@ if (gotTheLock) {
     if (state.notificationHistoryCache && state.historyFlushTimeout) {
       clearTimeout(state.historyFlushTimeout);
       try {
-        fs.writeFileSync(NOTIFICATION_HISTORY_FILE, JSON.stringify(state.notificationHistoryCache, null, 2), 'utf8');
+        const tempFile = `${NOTIFICATION_HISTORY_FILE}.tmp`;
+        fs.writeFileSync(tempFile, JSON.stringify(state.notificationHistoryCache, null, 2), 'utf8');
+        fs.renameSync(tempFile, NOTIFICATION_HISTORY_FILE);
       } catch (err) {
         console.error('Failed to flush notification history on quit:', err);
       }
