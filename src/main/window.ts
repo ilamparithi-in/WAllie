@@ -351,7 +351,7 @@ export async function removeAccountLogic(id: string): Promise<boolean> {
   const account = getAccountById(id);
   if (!account) return false;
 
-  if (account.loggedIn && state.mainWindow) {
+  if (state.mainWindow) {
     const choice = await dialog.showMessageBox(state.mainWindow, {
       type: 'warning',
       buttons: ['Cancel', 'Remove'],
@@ -359,7 +359,7 @@ export async function removeAccountLogic(id: string): Promise<boolean> {
       cancelId: 0,
       title: 'Confirm Account Removal',
       message: `Are you sure you want to remove "${account.name}"?`,
-      detail: 'This will log you out, clear all session cache and storage, and delete all imported extensions for this account.',
+      detail: 'This will clear all session storage, account settings, and delete all imported extensions for this account.',
     });
 
     if (choice.response !== 1) {

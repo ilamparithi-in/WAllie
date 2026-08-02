@@ -202,9 +202,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
       const success = await window.electronAPI.clearStorage(selectedAccountId, type);
       if (success) {
         fetchStorageSizes(selectedAccountId);
-        setAccountsNeedingReload((prev) =>
-          prev.includes(selectedAccountId) ? prev : [...prev, selectedAccountId]
-        );
+        if (type === 'media') {
+          setAccountsNeedingReload((prev) => prev.filter((id) => id !== selectedAccountId));
+        } else {
+          setAccountsNeedingReload((prev) =>
+            prev.includes(selectedAccountId) ? prev : [...prev, selectedAccountId]
+          );
+        }
       }
     } catch (err) {
       console.error('Clear storage error:', err);
