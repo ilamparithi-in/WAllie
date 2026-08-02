@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
-import { getAppIcon, isWhatsAppUrl, getAccountById } from './utils';
+import { getAppIcon, isWhatsAppUrl, getAccountById, getPreloadPath } from './utils';
 import { createAccountView, pauseAllMedia, injectCustomCssForView, registerZoomShortcuts, registerContextMenu } from './views';
 import { safeDeleteExtensionDir } from './extensions';
 import { saveSettings, saveAccounts, ACCOUNTS_FILE } from './config';
@@ -196,7 +196,7 @@ export function createMainWindow() {
     backgroundColor: '#111b21',
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.cjs'),
+      preload: getPreloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,

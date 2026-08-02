@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
 import { DEFAULT_USER_AGENT, saveAccounts } from './config';
-import { isWhatsAppUrl, checkPermissionForAccount, getAccountById } from './utils';
+import { isWhatsAppUrl, checkPermissionForAccount, getAccountById, getPreloadPath } from './utils';
 import { Account, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 import { TITLEBAR_HEIGHT } from '../shared/constants';
 
@@ -512,7 +512,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
 
   const view = new WebContentsView({
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.cjs'),
+      preload: getPreloadPath(),
       partition: account.partition,
       contextIsolation: true,
       nodeIntegration: false,
@@ -573,7 +573,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
         backgroundColor: '#111b21',
         autoHideMenuBar: true,
         webPreferences: {
-          preload: path.join(__dirname, '../preload/index.cjs'),
+          preload: getPreloadPath(),
           contextIsolation: true,
           nodeIntegration: false,
           sandbox: true,

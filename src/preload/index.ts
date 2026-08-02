@@ -664,48 +664,26 @@ async function setupWebStoreInjection() {
     if (!targetAccountId) return;
 
     let isInstalling = false;
+    let lastUrl = '';
 
     async function checkAndUpdateButton() {
       const url = window.location.href;
-      const match = url.match(/\/detail\/[^/]+\/([a-p]{32})/);
+      const match = url.match(/\/detail\/(?:[^/]+\/)?([a-p]{32})/i);
       if (!match) {
         const existing = document.getElementById('wallie-cws-btn');
         if (existing) existing.remove();
         return;
       }
 
-      const extensionId = match[1];
+      const extensionId = match[1].toLowerCase();
       const isInstalled = await ipcRenderer.invoke('webstore:check-installed', targetAccountId, extensionId);
       
       createOrUpdateWebStoreButton(targetAccountId, extensionId, isInstalled);
     }
 
-    // Listen for SPA navigation events
-    window.addEventListener('popstate', checkAndUpdateButton);
-    
-    // MutationObserver on <title> as a fallback for pushState navigations
-    const titleObserver = new MutationObserver(checkAndUpdateButton);
-    const titleEl = document.querySelector('title');
-    if (titleEl) {
-      titleObserver.observe(titleEl, { childList: true });
-    }
-
-    // Also intercept pushState/replaceState
-    const origPushState = history.pushState;
-    const origReplaceState = history.replaceState;
-    history.pushState = function(...args) {
-      origPushState.apply(this, args);
-      checkAndUpdateButton();
-    };
-    history.replaceState = function(...args) {
-      origReplaceState.apply(this, args);
-      checkAndUpdateButton();
-    };
-
-    // Initial check
-    checkAndUpdateButton();
-
     function createOrUpdateWebStoreButton(accountId: string, extensionId: string, isInstalled: boolean) {
+      if (!document.body) return;
+
       let btn = document.getElementById('wallie-cws-btn');
       if (!btn) {
         btn = document.createElement('div');
@@ -801,6 +779,40 @@ async function setupWebStoreInjection() {
           cursor: 'pointer'
         });
       }
+    }
+
+    function init() {
+      lastUrl = window.location.href;
+      checkAndUpdateButton();
+
+      // Listen for popstate SPA events
+      window.addEventListener('popstate', checkAndUpdateButton);
+
+      // DOM Mutation observer to catch SPA URL transitions
+      const observer = new MutationObserver(() => {
+        if (window.location.href !== lastUrl) {
+          lastUrl = window.location.href;
+          checkAndUpdateButton();
+        }
+      });
+
+      if (document.documentElement) {
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+      }
+
+      // Interval fallback for URL changes
+      setInterval(() => {
+        if (window.location.href !== lastUrl) {
+          lastUrl = window.location.href;
+          checkAndUpdateButton();
+        }
+      }, 500);
+    }
+
+    if (document.body) {
+      init();
+    } else {
+      window.addEventListener('DOMContentLoaded', init, { once: true });
     }
   } catch (err) {
     console.error('[walinux] Failed to setup webstore injection:', err);

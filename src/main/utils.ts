@@ -10,6 +10,10 @@ const __dirname = path.dirname(__filename);
 import { WHATSAPP_DOMAIN_REGEX } from '../shared/constants';
 export { WHATSAPP_DOMAIN_REGEX };
 
+export function getPreloadPath(): string {
+  return path.join(__dirname, '../preload/index.cjs');
+}
+
 export function getAccountById(id: string): Account | undefined {
   return state.accounts.find((a) => a.id === id);
 }
