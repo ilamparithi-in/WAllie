@@ -358,7 +358,7 @@ export function createMainWindow() {
   });
 
   state.mainWindow.on('close', (event) => {
-    if (state.mainWindow && !(app as any).isQuitting) {
+    if (state.mainWindow && !(app as any).isQuitting && !state.isQuitting) {
       if (state.globalSettings?.closeToTray) {
         event.preventDefault();
         state.mainWindow.hide();
@@ -376,6 +376,8 @@ export function createMainWindow() {
           notification.show();
         }
       } else {
+        (app as any).isQuitting = true;
+        state.isQuitting = true;
         app.quit();
       }
     }
@@ -400,6 +402,8 @@ export function createTray() {
     {
       label: 'Quit',
       click: () => {
+        (app as any).isQuitting = true;
+        state.isQuitting = true;
         app.quit();
       },
     },

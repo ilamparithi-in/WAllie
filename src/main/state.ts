@@ -18,4 +18,5 @@ export const state = {
   notificationHistoryCache: null as any[] | null,
   historyFlushTimeout: null as NodeJS.Timeout | null,
   pendingProtocolUrl: null as string | null,
+  isQuitting: false,
 };

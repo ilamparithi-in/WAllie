@@ -109,6 +109,8 @@ if (gotTheLock) {
   });
 
   app.on('before-quit', () => {
+    (app as any).isQuitting = true;
+    state.isQuitting = true;
     // Flush notification history immediately before exit
     if (state.notificationHistoryCache && state.historyFlushTimeout) {
       clearTimeout(state.historyFlushTimeout);
