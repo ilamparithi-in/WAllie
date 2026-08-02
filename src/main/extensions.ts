@@ -389,10 +389,24 @@ export async function checkForWebStoreUpdates(targetAccountId?: string): Promise
 
     for (const ext of webstoreExtensions) {
       const extensionId = ext.id;
+      const updateCheckUrl = `https://clients2.google.com/service/update2/crx?x=id%3D${extensionId}%26v%3D${ext.version}%26uc`;
       const downloadUrl = `https://clients2.google.com/service/update2/crx?response=redirect&os=linux&arch=x86-64&os_arch=x86-64&prod=chromecrx&prodchannel=unknown&prodversion=${CHROME_VERSION}&acceptformat=crx3&x=id%3D${extensionId}%26uc`;
       const tmpDir = path.join(app.getPath('userData'), 'extensions', account.id, `${extensionId}_tmp`);
 
       try {
+        // Check update XML first to save bandwidth
+        const checkResponse = await fetch(updateCheckUrl);
+        if (checkResponse.ok) {
+          const xml = await checkResponse.text();
+          const versionMatch = xml.match(/version="([\d\.]+)"/);
+          if (versionMatch) {
+            const newVersion = versionMatch[1];
+            if (!isNewerVersion(ext.version, newVersion)) {
+              continue; // Skip download, already up to date
+            }
+          }
+        }
+
         const response = await fetch(downloadUrl, {
           headers: {
             'User-Agent': DEFAULT_USER_AGENT,
