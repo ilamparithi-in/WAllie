@@ -289,7 +289,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
   useEffect(() => {
     if (!isOpen) {
-      setActivePage('main');
       return;
     }
 
@@ -440,6 +439,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
           )}
           <button
             onClick={(e) => {
+              setActivePage('main');
               onClose();
               e.currentTarget.blur();
             }}

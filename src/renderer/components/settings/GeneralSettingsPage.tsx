@@ -33,7 +33,7 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
               type="checkbox"
               checked={globalSettings?.closeToTray ?? true}
               onChange={(e) => handleToggleGlobalSetting('closeToTray', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer"
+              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
             />
           </label>
 
@@ -48,7 +48,7 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
               type="checkbox"
               checked={globalSettings?.startMinimized ?? false}
               onChange={(e) => handleToggleGlobalSetting('startMinimized', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer"
+              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
             />
           </label>
 
@@ -63,7 +63,7 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
               type="checkbox"
               checked={globalSettings?.hardwareAcceleration ?? true}
               onChange={(e) => handleToggleGlobalSetting('hardwareAcceleration', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer"
+              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
             />
           </label>
 
@@ -78,7 +78,7 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
               type="checkbox"
               checked={globalSettings?.notificationLoggingEnabled ?? false}
               onChange={(e) => handleToggleGlobalSetting('notificationLoggingEnabled', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer"
+              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
             />
           </label>
         </div>
@@ -100,7 +100,7 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
                 type="checkbox"
                 checked={globalSettings?.showRefreshButton ?? true}
                 onChange={(e) => handleToggleGlobalSetting('showRefreshButton', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
               />
             </label>
 
@@ -115,7 +115,7 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
                 type="checkbox"
                 checked={globalSettings?.showDevToolsToggle ?? false}
                 onChange={(e) => handleToggleGlobalSetting('showDevToolsToggle', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
               />
             </label>
 
@@ -130,7 +130,7 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
                 type="checkbox"
                 checked={globalSettings?.showNotificationHistoryButton ?? true}
                 onChange={(e) => handleToggleGlobalSetting('showNotificationHistoryButton', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
               />
             </label>
           </div>

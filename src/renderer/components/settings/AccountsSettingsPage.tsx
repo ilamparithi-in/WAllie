@@ -178,7 +178,7 @@ export const AccountsSettingsPage: React.FC<AccountsSettingsPageProps> = ({
                         : currentIds.filter((id) => id !== acc.id);
                       handleToggleGlobalSetting('preloadAccountIds', updatedIds);
                     }}
-                    className="accent-[#00a884] w-3.5 h-3.5 cursor-pointer rounded"
+                    className="accent-[#00a884] w-3.5 h-3.5 cursor-pointer rounded flex-shrink-0"
                   />
                   <span className="text-[11px] text-[#e9edef] font-medium">Load account on launch</span>
                 </label>

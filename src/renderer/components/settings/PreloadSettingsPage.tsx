@@ -59,7 +59,7 @@ export const PreloadSettingsPage: React.FC<PreloadSettingsPageProps> = ({
                         : currentIds.filter((id) => id !== acc.id);
                       handleToggleGlobalSetting('preloadAccountIds', updatedIds);
                     }}
-                    className="accent-[#00a884] w-4 h-4 cursor-pointer"
+                    className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
                   />
                 </label>
               );
