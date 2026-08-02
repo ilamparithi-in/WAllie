@@ -66,10 +66,8 @@ jobs:
             dist-pack/*.deb
             dist-pack/*.rpm
             dist-pack/*.pkg.tar.zst
-            dist-pack/*.tar.gz
             dist-pack/*.flatpak
             dist-pack/*.exe
             dist-pack/*.dmg
-            dist-pack/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
