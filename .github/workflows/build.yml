@@ -66,9 +66,8 @@ jobs:
             dist-pack/*.deb
             dist-pack/*.rpm
             dist-pack/*.pkg.tar.zst
-            dist-pack/*.tar.gz
             dist-pack/*.flatpak
             dist-pack/*.exe
             dist-pack/*.dmg
-            dist-pack/*.zip
+          compression-level: 0
           if-no-files-found: warn
