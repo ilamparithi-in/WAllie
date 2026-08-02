@@ -4,7 +4,7 @@ import { state } from './state';
 import { saveAccounts, saveSettings, getAccountStorageSizes, invalidateStorageCache } from './config';
 import { importExtension, installWebStoreExtension, toggleExtension, removeExtension } from './extensions';
 import { createAccountView, getActiveWebContents, resetZoom, injectCustomCssForView } from './views';
-import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad } from './window';
+import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize } from './window';
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 
@@ -257,9 +257,10 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.on('webstore:open', (_event, accountId: string) => {
+    const { width, height } = getInitialWindowSize(1200, 800, state.mainWindow);
     const cwsWin = new BrowserWindow({
-      width: 1200,
-      height: 800,
+      width,
+      height,
       webPreferences: {
         preload: path.join(__dirname, '../preload/index.cjs'),
         partition: 'persist:webstore',
