@@ -187,19 +187,6 @@ export function registerIpcHandlers() {
       account.name = newName;
       saveAccounts();
       state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
-
-      const devtoolsWin = state.devtoolsWindows.get(id);
-      if (devtoolsWin && !devtoolsWin.isDestroyed()) {
-        devtoolsWin.setTitle(`DevTools - ${newName}`);
-        devtoolsWin.webContents.executeJavaScript(`
-          const badgeEl = document.querySelector('.titlebar-left-badge');
-          if (badgeEl) badgeEl.textContent = ${JSON.stringify(newName)};
-          document.title = 'DevTools - ' + ${JSON.stringify(newName)};
-          const metaEl = document.querySelector('meta[name="account-name"]');
-          if (metaEl) metaEl.setAttribute('content', encodeURIComponent(${JSON.stringify(newName)}));
-        `).catch((err) => console.error('Failed to update devtools window title:', err));
-      }
-
       return true;
     }
     return false;

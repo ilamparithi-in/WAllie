@@ -7,7 +7,6 @@ export const state = {
   accounts: [] as Account[],
   activeAccountId: '',
   accountViews: new Map<string, WebContentsView>(),
-  devtoolsWindows: new Map<string, BrowserWindow>(),
   configuredSessions: new Set<string>(),
   webstoreWindows: new Map<number, string>(),
   globalSettings: null as GlobalSettings | null,
