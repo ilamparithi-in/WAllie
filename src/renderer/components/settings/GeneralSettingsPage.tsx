@@ -69,21 +69,6 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
 
           <label className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
             <div>
-              <div className="font-medium text-[#e9edef] text-[11px]">Show Developer Tools Toggle</div>
-              <div className="text-[10px] text-[#8696a0]">
-                Show a code icon in the titlebar to toggle developer tools for WhatsApp Web
-              </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={globalSettings?.showDevToolsToggle ?? false}
-              onChange={(e) => handleToggleGlobalSetting('showDevToolsToggle', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer"
-            />
-          </label>
-
-          <label className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-            <div>
               <div className="font-medium text-[#e9edef] text-[11px]">Enable Notification Logging</div>
               <div className="text-[10px] text-[#8696a0]">
                 Log desktop notifications, message edits, and deletions to history (disabled by default)
@@ -96,6 +81,59 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
               className="accent-[#00a884] w-4 h-4 cursor-pointer"
             />
           </label>
+        </div>
+
+        <div className="mt-6 pt-4 border-t border-[#222d34]">
+          <h4 className="text-xs font-semibold text-[#e9edef] mb-1">Customize Toolbar</h4>
+          <p className="text-[10px] text-[#8696a0] mb-3 leading-relaxed">
+            Show or hide action buttons in the top toolbar (settings button is always shown).
+          </p>
+          <div className="space-y-2">
+            <label className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
+              <div>
+                <div className="font-medium text-[#e9edef] text-[11px]">Refresh Button</div>
+                <div className="text-[10px] text-[#8696a0]">
+                  Show refresh icon to reload the active WhatsApp Web view
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={globalSettings?.showRefreshButton ?? true}
+                onChange={(e) => handleToggleGlobalSetting('showRefreshButton', e.target.checked)}
+                className="accent-[#00a884] w-4 h-4 cursor-pointer"
+              />
+            </label>
+
+            <label className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
+              <div>
+                <div className="font-medium text-[#e9edef] text-[11px]">Developer Tools Button</div>
+                <div className="text-[10px] text-[#8696a0]">
+                  Show code icon in the titlebar to toggle developer tools
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={globalSettings?.showDevToolsToggle ?? false}
+                onChange={(e) => handleToggleGlobalSetting('showDevToolsToggle', e.target.checked)}
+                className="accent-[#00a884] w-4 h-4 cursor-pointer"
+              />
+            </label>
+
+            <label className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
+              <div>
+                <div className="font-medium text-[#e9edef] text-[11px]">Notification History Button</div>
+                <div className="text-[10px] text-[#8696a0]">
+                  Show bell icon in the titlebar to open notification history
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={globalSettings?.showNotificationHistoryButton ?? true}
+                onChange={(e) => handleToggleGlobalSetting('showNotificationHistoryButton', e.target.checked)}
+                className="accent-[#00a884] w-4 h-4 cursor-pointer"
+              />
+            </label>
+          </div>
         </div>
       </div>
     </div>

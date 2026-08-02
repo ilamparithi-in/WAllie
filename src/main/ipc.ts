@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow, session, Menu, app } from 'electron';
 import path from 'node:path';
 import { state } from './state';
 import { saveAccounts, saveSettings, getAccountStorageSizes, invalidateStorageCache } from './config';
-import { importExtension, installWebStoreExtension, toggleExtension, removeExtension } from './extensions';
+import { importExtension, installWebStoreExtension, toggleExtension, removeExtension, checkForWebStoreUpdates } from './extensions';
 import { createAccountView, getActiveWebContents, resetZoom, injectCustomCssForView } from './views';
 import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize } from './window';
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry } from './notifications';
@@ -273,6 +273,10 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('extension:remove', async (_event, accountId: string, extensionId: string) => {
     return await removeExtension(accountId, extensionId);
+  });
+
+  ipcMain.handle('extension:check-updates', async (_event, accountId?: string) => {
+    return await checkForWebStoreUpdates(accountId);
   });
 
   // Storage Handlers

@@ -43,8 +43,11 @@ export interface GlobalSettings {
   hardwareAcceleration: boolean;
   preloadAccountIds?: string[];
   showDevToolsToggle?: boolean;
+  showRefreshButton?: boolean;
+  showNotificationHistoryButton?: boolean;
   notificationLoggingEnabled?: boolean;
   extensionDevMode?: boolean;
+  autoUpdateExtensions?: boolean;
   startMinimized?: boolean;
   disclaimerAccepted?: boolean;
 }

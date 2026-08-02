@@ -6,6 +6,7 @@ import { loadSettings, loadAccounts } from './config';
 import { NOTIFICATION_HISTORY_FILE } from './notifications';
 import { registerIpcHandlers } from './ipc';
 import { createMainWindow, createTray } from './window';
+import { checkForWebStoreUpdates } from './extensions';
 
 // Memory & CPU Optimization flags
 app.commandLine.appendSwitch('enable-gpu-rasterization');
@@ -100,6 +101,17 @@ if (gotTheLock) {
         state.mainWindow?.show();
       }
     });
+
+    // Background Web Store extension updates
+    const triggerUpdateCheck = () => {
+      if (state.globalSettings?.autoUpdateExtensions !== false) {
+        checkForWebStoreUpdates().catch((err) => {
+          console.error('Background Web Store extension update check failed:', err);
+        });
+      }
+    };
+    setTimeout(triggerUpdateCheck, 15000);
+    setInterval(triggerUpdateCheck, 12 * 60 * 60 * 1000);
   });
 
   app.on('window-all-closed', () => {

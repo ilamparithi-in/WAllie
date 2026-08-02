@@ -15,6 +15,8 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
   const [zoomPercent, setZoomPercent] = useState<number>(100);
   const [showFlash, setShowFlash] = useState<boolean>(false);
   const [showDevTools, setShowDevTools] = useState<boolean>(false);
+  const [showRefresh, setShowRefresh] = useState<boolean>(true);
+  const [showNotifHistory, setShowNotifHistory] = useState<boolean>(true);
   const [closeToTray, setCloseToTray] = useState<boolean>(true);
 
   // Renaming state
@@ -39,6 +41,12 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
     window.electronAPI.isMaximized().then(setIsMaximized);
     window.electronAPI.getGlobalSettings().then((settings) => {
       setShowDevTools(!!settings.showDevToolsToggle);
+      if (settings.showRefreshButton !== undefined) {
+        setShowRefresh(settings.showRefreshButton);
+      }
+      if (settings.showNotificationHistoryButton !== undefined) {
+        setShowNotifHistory(settings.showNotificationHistoryButton);
+      }
       if (settings.closeToTray !== undefined) {
         setCloseToTray(settings.closeToTray);
       }
@@ -90,6 +98,12 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
 
     const unsubscribeGlobalSettings = window.electronAPI.onGlobalSettingsChanged((settings) => {
       setShowDevTools(!!settings.showDevToolsToggle);
+      if (settings.showRefreshButton !== undefined) {
+        setShowRefresh(settings.showRefreshButton);
+      }
+      if (settings.showNotificationHistoryButton !== undefined) {
+        setShowNotifHistory(settings.showNotificationHistoryButton);
+      }
       if (settings.closeToTray !== undefined) {
         setCloseToTray(settings.closeToTray);
       }
@@ -278,19 +292,21 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
             )}
 
             {/* Refresh Button */}
-            <button
-              onClick={(e) => {
-                window.electronAPI?.reloadActiveAccount();
-                e.currentTarget.blur();
-              }}
-              onMouseDown={(e) => e.preventDefault()}
-              tabIndex={-1}
-              title="Refresh WhatsApp Web"
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none"
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-            </button>
+            {showRefresh && (
+              <button
+                onClick={(e) => {
+                  window.electronAPI?.reloadActiveAccount();
+                  e.currentTarget.blur();
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+                tabIndex={-1}
+                title="Refresh WhatsApp Web"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+              </button>
+            )}
 
             {/* DevTools Toggle Button */}
             {showDevTools && (
@@ -310,19 +326,21 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
             )}
 
             {/* Notification History Button */}
-            <button
-              onClick={(e) => {
-                onOpenNotificationHistory?.();
-                e.currentTarget.blur();
-              }}
-              onMouseDown={(e) => e.preventDefault()}
-              tabIndex={-1}
-              title="Notification History"
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none cursor-pointer"
-            >
-              <Bell className="w-3.5 h-3.5" />
-            </button>
+            {showNotifHistory && (
+              <button
+                onClick={(e) => {
+                  onOpenNotificationHistory?.();
+                  e.currentTarget.blur();
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+                tabIndex={-1}
+                title="Notification History"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none cursor-pointer"
+              >
+                <Bell className="w-3.5 h-3.5" />
+              </button>
+            )}
 
             {/* Settings Button */}
             <button

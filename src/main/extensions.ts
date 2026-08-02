@@ -363,3 +363,111 @@ export async function removeExtension(accountId: string, extensionId: string): P
   state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
   return true;
 }
+
+function isNewerVersion(currentVersion: string, fetchedVersion: string): boolean {
+  const v1 = currentVersion.split('.').map(n => parseInt(n, 10) || 0);
+  const v2 = fetchedVersion.split('.').map(n => parseInt(n, 10) || 0);
+  const len = Math.max(v1.length, v2.length);
+  for (let i = 0; i < len; i++) {
+    const num1 = v1[i] || 0;
+    const num2 = v2[i] || 0;
+    if (num2 > num1) return true;
+    if (num2 < num1) return false;
+  }
+  return false;
+}
+
+export async function checkForWebStoreUpdates(targetAccountId?: string): Promise<{ updatedCount: number; updatedList: string[] }> {
+  let updatedCount = 0;
+  const updatedList: string[] = [];
+
+  const targetAccounts = targetAccountId
+    ? state.accounts.filter((a) => a.id === targetAccountId)
+    : state.accounts;
+
+  for (const account of targetAccounts) {
+    if (!account.extensions || account.extensions.length === 0) continue;
+    const webstoreExtensions = account.extensions.filter((ext) => ext.source === 'webstore');
+
+    for (const ext of webstoreExtensions) {
+      const extensionId = ext.id;
+      const downloadUrl = `https://clients2.google.com/service/update2/crx?response=redirect&os=linux&arch=x86-64&os_arch=x86-64&prod=chromecrx&prodchannel=unknown&prodversion=${CHROME_VERSION}&acceptformat=crx3&x=id%3D${extensionId}%26uc`;
+      const tmpDir = path.join(app.getPath('userData'), 'extensions', account.id, `${extensionId}_tmp`);
+
+      try {
+        const response = await fetch(downloadUrl, {
+          headers: {
+            'User-Agent': DEFAULT_USER_AGENT,
+            'Referer': `https://chrome.google.com/webstore/detail/${extensionId}?hl=en`
+          }
+        });
+
+        if (!response.ok) continue;
+
+        const arrayBuffer = await response.arrayBuffer();
+        const crxBuffer = Buffer.from(arrayBuffer);
+        const zipBuffer = crxToZip(crxBuffer);
+
+        if (fs.existsSync(tmpDir)) {
+          safeDeleteExtensionDir(tmpDir);
+        }
+        fs.mkdirSync(tmpDir, { recursive: true });
+
+        const zip = new AdmZip(zipBuffer);
+        zip.extractAllTo(tmpDir, true);
+
+        const manifestPath = path.join(tmpDir, 'manifest.json');
+        if (!fs.existsSync(manifestPath)) {
+          safeDeleteExtensionDir(tmpDir);
+          continue;
+        }
+
+        const manifestContent = fs.readFileSync(manifestPath, 'utf8');
+        const manifest = JSON.parse(manifestContent);
+        const newVersion = manifest.version || '1.0.0';
+
+        if (isNewerVersion(ext.version, newVersion)) {
+          console.log(`Updating extension ${ext.name} (${ext.id}) from v${ext.version} to v${newVersion} for account ${account.name}`);
+
+          if (fs.existsSync(ext.path)) {
+            safeDeleteExtensionDir(ext.path);
+          }
+          fs.renameSync(tmpDir, ext.path);
+
+          ext.version = newVersion;
+          if (manifest.name) ext.name = manifest.name;
+
+          const view = state.accountViews.get(account.id);
+          if (view) {
+            const accountSession = session.fromPartition(account.partition);
+            const loadedExts = accountSession.getAllExtensions();
+            const matched = loadedExts.find((e) => e.id === extensionId || path.resolve(e.path) === path.resolve(ext.path));
+            if (matched) {
+              accountSession.removeExtension(matched.id);
+            }
+            if (ext.enabled) {
+              await accountSession.loadExtension(ext.path);
+            }
+          }
+
+          updatedCount++;
+          updatedList.push(`${ext.name} (v${newVersion})`);
+        } else {
+          safeDeleteExtensionDir(tmpDir);
+        }
+      } catch (err) {
+        console.error(`Failed update check for extension ${ext.id}:`, err);
+        if (fs.existsSync(tmpDir)) {
+          try { safeDeleteExtensionDir(tmpDir); } catch (_) {}
+        }
+      }
+    }
+  }
+
+  if (updatedCount > 0) {
+    await saveAccounts();
+    state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+  }
+
+  return { updatedCount, updatedList };
+}
