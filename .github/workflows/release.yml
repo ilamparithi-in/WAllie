@@ -1,0 +1,75 @@
+name: Release WAllie
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    name: Build & Draft Release (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [linux, win, mac]
+        include:
+          - target: linux
+            os: ubuntu-latest
+          - target: win
+            os: windows-latest
+          - target: mac
+            os: macos-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Linux packaging dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm fpm bsdtar flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//23.08 org.freedesktop.Sdk//23.08
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Run Typecheck
+        run: npm run typecheck
+
+      - name: Build renderer and main bundles
+        run: npm run build
+
+      - name: Package Electron App
+        run: npx electron-builder --${{ matrix.target }} --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Draft GitHub Release & Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          name: WAllie ${{ github.ref_name }}
+          draft: true
+          files: |
+            dist-pack/*.AppImage
+            dist-pack/*.deb
+            dist-pack/*.rpm
+            dist-pack/*.pkg.tar.zst
+            dist-pack/*.tar.gz
+            dist-pack/*.flatpak
+            dist-pack/*.exe
+            dist-pack/*.dmg
+            dist-pack/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
