@@ -417,102 +417,14 @@ export function createTray() {
 }
 
 export function toggleDevToolsForAccount(accountId: string) {
-  const account = state.accounts.find((a) => a.id === accountId);
   const view = state.accountViews.get(accountId);
-  if (!view || !account) return;
+  if (!view || view.webContents.isDestroyed()) return;
 
-  const webContents = view.webContents;
-
-  if (state.devtoolsWindows.has(accountId)) {
-    const existingWin = state.devtoolsWindows.get(accountId)!;
-    if (!existingWin.isDestroyed()) {
-      existingWin.close();
-      return;
-    }
+  if (view.webContents.isDevToolsOpened()) {
+    view.webContents.closeDevTools();
+  } else {
+    view.webContents.openDevTools({ mode: 'detach' });
   }
-
-  const { width, height } = getInitialWindowSize(900, 600, state.mainWindow);
-  const devtoolsWindow = new BrowserWindow({
-    width,
-    height,
-    minWidth: 500,
-    minHeight: 400,
-    frame: false,
-    titleBarStyle: 'hidden',
-    backgroundColor: '#111b21',
-    show: false,
-    webPreferences: {
-      preload: path.join(__dirname, '../preload/index.cjs'),
-      partition: account.partition,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
-  });
-
-  state.devtoolsWindows.set(accountId, devtoolsWindow);
-
-  const devtoolsView = new WebContentsView({
-    webPreferences: {
-      partition: account.partition,
-    }
-  });
-  devtoolsWindow.contentView.addChildView(devtoolsView);
-
-  let devToolsResizeTimeout: NodeJS.Timeout | null = null;
-  const updateDevToolsBounds = () => {
-    if (devtoolsWindow.isDestroyed()) return;
-
-    const [width, height] = devtoolsWindow.getContentSize();
-    devtoolsView.setBounds({ x: 0, y: 28, width, height: Math.max(0, height - 28) });
-
-    if (devToolsResizeTimeout) {
-      clearTimeout(devToolsResizeTimeout);
-    }
-    devToolsResizeTimeout = setTimeout(() => {
-      if (devtoolsWindow.isDestroyed()) return;
-      const [w, h] = devtoolsWindow.getContentSize();
-      devtoolsView.setBounds({ x: 0, y: 28, width: w, height: Math.max(0, h - 28) });
-      devToolsResizeTimeout = null;
-    }, 50);
-  };
-
-  devtoolsWindow.on('resize', updateDevToolsBounds);
-  devtoolsWindow.once('ready-to-show', () => {
-    devtoolsWindow.show();
-    updateDevToolsBounds();
-  });
-
-  devtoolsWindow.on('maximize', () => {
-    devtoolsWindow.webContents.send('window:maximized-changed', true);
-    setTimeout(updateDevToolsBounds, 100);
-  });
-
-  devtoolsWindow.on('unmaximize', () => {
-    devtoolsWindow.webContents.send('window:maximized-changed', false);
-    setTimeout(updateDevToolsBounds, 100);
-  });
-
-  devtoolsWindow.on('closed', () => {
-    if (devToolsResizeTimeout) {
-      clearTimeout(devToolsResizeTimeout);
-      devToolsResizeTimeout = null;
-    }
-    state.devtoolsWindows.delete(accountId);
-    try {
-      if (webContents && !webContents.isDestroyed()) {
-        webContents.closeDevTools();
-      }
-    } catch (err) {
-      console.error('Error closing DevTools during window close:', err);
-    }
-  });
-
-  webContents.setDevToolsWebContents(devtoolsView.webContents);
-  webContents.openDevTools({ mode: 'detach' });
-
-  const htmlContent = `<!DOCTYPE html><html><head><title>DevTools - ${account.name}</title><meta name="is-devtools" content="true"><meta name="account-name" content="${encodeURIComponent(account.name)}"></head><body></body></html>`;
-  devtoolsWindow.loadURL('data:text/html;charset=UTF-8,' + encodeURIComponent(htmlContent));
 }
 
 export async function removeAccountLogic(id: string): Promise<boolean> {
@@ -558,17 +470,16 @@ export async function removeAccountLogic(id: string): Promise<boolean> {
 
   const view = state.accountViews.get(id);
   if (view) {
+    if (!view.webContents.isDestroyed()) {
+      try {
+        view.webContents.closeDevTools();
+      } catch (e) {}
+    }
     if (state.activeAccountId === id && state.mainWindow) {
       state.mainWindow.contentView.removeChildView(view);
     }
     state.accountViews.delete(id);
   }
-
-  const devtoolsWin = state.devtoolsWindows.get(id);
-  if (devtoolsWin && !devtoolsWin.isDestroyed()) {
-    devtoolsWin.close();
-  }
-  state.devtoolsWindows.delete(id);
 
   if (state.activeAccountId === id) {
     await switchActiveAccount(state.accounts[0].id);
