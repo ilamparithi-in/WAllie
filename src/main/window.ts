@@ -138,6 +138,7 @@ export async function initializeAccountsLoad() {
             view.webContents.setFrameRate(1);
           }
           console.log(`Preloaded account: ${account.name} (${account.id})`);
+          notifyAccountListChanged();
         }).catch((err) => {
           console.error(`Failed to preload account ${account.name}:`, err);
         });
