@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
 import { getAppIcon, isWhatsAppUrl, getAccountById, getPreloadPath } from './utils';
-import { createAccountView, pauseAllMedia, injectCustomCssForView, registerZoomShortcuts, registerContextMenu } from './views';
+import { createAccountView, pauseAllMedia, injectCustomCssForView, registerZoomShortcuts, registerContextMenu, handleExternalLinkClick } from './views';
 import { safeDeleteExtensionDir } from './extensions';
 import { saveSettings, saveAccounts, ACCOUNTS_FILE } from './config';
 import { TITLEBAR_HEIGHT } from '../shared/constants';
@@ -228,7 +228,7 @@ export function createMainWindow() {
   });
 
   state.mainWindow.on('focus', () => {
-    if (!state.disclaimerOpen && !state.protocolPromptOpen && !state.settingsOpen) {
+    if (!state.disclaimerOpen && !state.protocolPromptOpen) {
       const activeView = state.accountViews.get(state.activeAccountId);
       if (activeView && !activeView.webContents.isDestroyed()) {
         activeView.webContents.focus();
@@ -247,16 +247,16 @@ export function createMainWindow() {
         : url.startsWith('file://');
       if (!isAppUrl && !isLocalHost) {
         event.preventDefault();
-        shell.openExternal(url).catch((err: any) => console.error('Failed to open external link:', err));
+        handleExternalLinkClick(url);
       }
     } catch (err: any) {
       event.preventDefault();
-      shell.openExternal(url).catch((err: any) => console.error('Failed to open external link:', err));
+      handleExternalLinkClick(url);
     }
   });
 
   state.mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url).catch((err: any) => console.error('Failed to open external link:', err));
+    handleExternalLinkClick(details.url);
     return { action: 'deny' };
   });
 

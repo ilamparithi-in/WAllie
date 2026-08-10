@@ -25,9 +25,50 @@ export function focusActiveView(): void {
   }
 }
 
-export function isWhatsAppUrl(urlStr: string): boolean {
+export function getTargetUrlIfLinkShim(urlStr: string): string | null {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.hostname === 'l.whatsapp.com' || parsed.pathname.includes('/redirect')) {
+      const target = parsed.searchParams.get('u') || parsed.searchParams.get('url');
+      if (target) {
+        return target;
+      }
+    }
+  } catch {
+    // Ignore invalid URLs
+  }
+  return null;
+}
+
+export function getDomainFromUrl(urlStr: string): string {
   try {
     const hostname = new URL(urlStr).hostname;
+    return hostname.replace(/^www\./i, '').toLowerCase();
+  } catch {
+    return urlStr.toLowerCase();
+  }
+}
+
+export function isDomainTrusted(targetDomain: string, trustedDomainsList: string[]): boolean {
+  if (!targetDomain || !Array.isArray(trustedDomainsList) || trustedDomainsList.length === 0) {
+    return false;
+  }
+  const cleanTarget = targetDomain.trim().toLowerCase().replace(/^www\./i, '');
+  return trustedDomainsList.some((td) => {
+    if (!td) return false;
+    const cleanTrusted = td.trim().toLowerCase().replace(/^www\./i, '');
+    if (!cleanTrusted) return false;
+    return cleanTarget === cleanTrusted || cleanTarget.endsWith('.' + cleanTrusted);
+  });
+}
+
+export function isWhatsAppUrl(urlStr: string): boolean {
+  try {
+    const parsed = new URL(urlStr);
+    const hostname = parsed.hostname;
+    if (hostname === 'l.whatsapp.com' || parsed.pathname.includes('/redirect')) {
+      return false;
+    }
     return WHATSAPP_DOMAIN_REGEX.test(hostname);
   } catch {
     return false;

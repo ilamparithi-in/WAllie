@@ -38,9 +38,9 @@ export const PreloadSettingsPage: React.FC<PreloadSettingsPageProps> = ({
               return (
                 <label
                   key={acc.id}
-                  className="flex items-center justify-between cursor-pointer p-3 hover:bg-[#202c33]/50 transition-colors"
+                  className="flex items-center justify-between gap-4 cursor-pointer p-3 hover:bg-[#202c33]/50 transition-colors"
                 >
-                  <div className="flex flex-col min-w-0 pr-4">
+                  <div className="flex flex-col min-w-0 pr-4 flex-1">
                     <span className="font-medium text-[#e9edef] text-[12px] truncate">
                       {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
                     </span>

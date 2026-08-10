@@ -51,8 +51,8 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
       {selectedAccount && (
         <div className="p-3 bg-[#182229] border border-[#222d34] rounded-lg space-y-3">
           <div className="space-y-3">
-            <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-              <div>
+            <label className="flex items-center justify-between gap-4 cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+              <div className="flex-1 min-w-0">
                 <div className="font-medium text-[#e9edef] text-[11px]">Push Notifications</div>
                 <div className="text-[10px] text-[#8696a0] mt-0.5">Allow WhatsApp to show desktop notifications</div>
               </div>
@@ -60,12 +60,12 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
                 type="checkbox"
                 checked={selectedAccount.settings?.notificationsEnabled ?? true}
                 onChange={(e) => handleToggleAccountPermission('notificationsEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
               />
             </label>
 
-            <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-              <div>
+            <label className="flex items-center justify-between gap-4 cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+              <div className="flex-1 min-w-0">
                 <div className="font-medium text-[#e9edef] text-[11px]">Camera Access</div>
                 <div className="text-[10px] text-[#8696a0] mt-0.5">Allow video capture for video calls</div>
               </div>
@@ -73,12 +73,12 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
                 type="checkbox"
                 checked={selectedAccount.settings?.cameraEnabled ?? true}
                 onChange={(e) => handleToggleAccountPermission('cameraEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
               />
             </label>
 
-            <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-              <div>
+            <label className="flex items-center justify-between gap-4 cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+              <div className="flex-1 min-w-0">
                 <div className="font-medium text-[#e9edef] text-[11px]">Microphone Access</div>
                 <div className="text-[10px] text-[#8696a0] mt-0.5">Allow audio capture for voice calls</div>
               </div>
@@ -86,12 +86,12 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
                 type="checkbox"
                 checked={selectedAccount.settings?.micEnabled ?? true}
                 onChange={(e) => handleToggleAccountPermission('micEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
               />
             </label>
 
-            <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-              <div>
+            <label className="flex items-center justify-between gap-4 cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+              <div className="flex-1 min-w-0">
                 <div className="font-medium text-[#e9edef] text-[11px]">Geolocation Access</div>
                 <div className="text-[10px] text-[#8696a0] mt-0.5">Allow sharing current location inside chats</div>
               </div>
@@ -99,12 +99,12 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
                 type="checkbox"
                 checked={selectedAccount.settings?.geolocationEnabled ?? false}
                 onChange={(e) => handleToggleAccountPermission('geolocationEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
               />
             </label>
 
-            <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-              <div>
+            <label className="flex items-center justify-between gap-4 cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+              <div className="flex-1 min-w-0">
                 <div className="font-medium text-[#e9edef] text-[11px]">Clipboard Access (Read)</div>
                 <div className="text-[10px] text-[#8696a0] mt-0.5">Allow pages to read text and files from your system clipboard</div>
               </div>
@@ -112,7 +112,7 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
                 type="checkbox"
                 checked={selectedAccount.settings?.clipboardReadEnabled ?? false}
                 onChange={(e) => handleToggleAccountPermission('clipboardReadEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
               />
             </label>
 

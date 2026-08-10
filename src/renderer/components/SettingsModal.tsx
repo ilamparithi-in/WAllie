@@ -10,8 +10,6 @@ import { ThemeSettingsPage } from './settings/ThemeSettingsPage';
 import { StorageSettingsPage } from './settings/StorageSettingsPage';
 import { NotificationSettingsPage } from './settings/NotificationSettingsPage';
 
-import { useFocusTrap } from '../hooks/useFocusTrap';
-
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -41,8 +39,6 @@ const SETTINGS_MENU_ITEMS: {
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialPage, initialAccountId, onShowDisclaimer }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const [activePage, setActivePage] = useState<PageType>('main');
-
-  useFocusTrap(modalRef, isOpen);
 
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
