@@ -540,6 +540,23 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
     });
   }
 
+  if (account.extensions && account.extensions.length > 0) {
+    for (const ext of account.extensions) {
+      if (ext.enabled) {
+        if (fs.existsSync(ext.path)) {
+          try {
+            console.log(`Loading extension for account ${account.id}: ${ext.name} from ${ext.path}`);
+            await accountSession.loadExtension(ext.path);
+          } catch (err) {
+            console.error(`Failed to load extension ${ext.name} from ${ext.path}:`, err);
+          }
+        } else {
+          console.warn(`Extension path does not exist for ${ext.name}: ${ext.path}`);
+        }
+      }
+    }
+  }
+
   const view = new WebContentsView({
     webPreferences: {
       preload: getPreloadPath(),
@@ -552,21 +569,6 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
       v8CacheOptions: 'bypassHeatCheck',
       spellcheck: false,
     },
-  });
-
-  view.webContents.once('dom-ready', async () => {
-    if (account.extensions && account.extensions.length > 0) {
-      for (const ext of account.extensions) {
-        if (ext.enabled) {
-          try {
-            console.log(`Loading extension for account ${account.id}: ${ext.name} from ${ext.path}`);
-            await accountSession.loadExtension(ext.path);
-          } catch (err) {
-            console.error(`Failed to load extension ${ext.name} from ${ext.path}:`, err);
-          }
-        }
-      }
-    }
   });
 
   view.webContents.setUserAgent(DEFAULT_USER_AGENT);
