@@ -364,7 +364,7 @@ export function handleExternalLinkClick(urlStr: string): void {
             if (!container) {
               container = document.createElement('div');
               container.id = 'wallie-toast-container';
-              container.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:999999;display:flex;flex-direction:column;gap:8px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;pointer-events:none;';
+              container.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:999999;display:flex;flex-direction:column;gap:8px;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;pointer-events:none;';
               (document.body || document.documentElement).appendChild(container);
             }
             if (!document.getElementById('wallie-toast-style')) {
