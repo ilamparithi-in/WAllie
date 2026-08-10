@@ -420,7 +420,7 @@ function injectUnifiedTitlebar(options: {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       color: #aebac1;
       font-size: 11px;
       font-weight: 500;
@@ -717,7 +717,7 @@ async function setupWebStoreInjection() {
         top: '76px',
         right: '24px',
         zIndex: '999999',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
         fontSize: '13px',
         fontWeight: '700',
         padding: '10px 18px',
