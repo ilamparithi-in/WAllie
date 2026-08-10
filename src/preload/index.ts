@@ -23,6 +23,8 @@ export interface ElectronAPI {
   updateAccountEmoji: (id: string, emoji: string) => Promise<boolean>;
   reloadActiveAccount: () => void;
   reloadAccount: (accountId: string) => void;
+  unloadAccount: (accountId: string) => Promise<boolean>;
+  loadAccount: (accountId: string) => Promise<boolean>;
   showAccountContextMenu: (accountId: string) => void;
 
   // Extension controls
@@ -103,6 +105,8 @@ const api: ElectronAPI = {
   updateAccountEmoji: (id: string, emoji: string) => ipcRenderer.invoke('account:update-emoji', id, emoji),
   reloadActiveAccount: () => ipcRenderer.send('account:reload-active'),
   reloadAccount: (accountId: string) => ipcRenderer.send('account:reload', accountId),
+  unloadAccount: (accountId: string) => ipcRenderer.invoke('account:unload', accountId),
+  loadAccount: (accountId: string) => ipcRenderer.invoke('account:load', accountId),
   showAccountContextMenu: (accountId: string) => ipcRenderer.send('account:context-menu', accountId),
   focusActiveAccount: () => ipcRenderer.send('account:focus-active'),
 

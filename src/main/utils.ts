@@ -18,6 +18,13 @@ export function getAccountById(id: string): Account | undefined {
   return state.accounts.find((a) => a.id === id);
 }
 
+export function getAccountsWithLoadedStatus(): Account[] {
+  return state.accounts.map((acc) => ({
+    ...acc,
+    isLoaded: state.accountViews.has(acc.id) && !state.accountViews.get(acc.id)?.webContents.isDestroyed(),
+  }));
+}
+
 export function focusActiveView(): void {
   const activeView = state.accountViews.get(state.activeAccountId);
   if (activeView && !activeView.webContents.isDestroyed()) {

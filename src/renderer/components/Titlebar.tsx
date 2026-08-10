@@ -200,6 +200,18 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
             {accounts.map((account) => {
               const isActive = account.id === activeId;
               const isEditing = account.id === editingId;
+              const isLoaded = account.isLoaded !== false;
+
+              let tabStyle = '';
+              if (isActive) {
+                tabStyle = !isLoaded
+                  ? 'bg-[#182229] text-[#8696a0] border-t-2 border-[#00a884]/40 opacity-75'
+                  : 'bg-[#202c33] text-[#e9edef] border-t-2 border-[#00a884]';
+              } else {
+                tabStyle = !isLoaded
+                  ? 'text-[#54656f] bg-[#111b21]/60 opacity-60 hover:bg-[#182229] hover:text-[#aebac1] hover:opacity-100'
+                  : 'text-[#8696a0] hover:bg-[#182229] hover:text-[#d1d7db]';
+              }
 
               return (
                 <div
@@ -208,12 +220,8 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
                   onDoubleClick={(e) => handleStartEdit(account, e)}
                   onContextMenu={(e) => handleContextMenu(account.id, e)}
                   style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                  className={`group flex items-center gap-1.5 px-2.5 h-[22px] rounded-t text-[11px] font-medium transition-colors cursor-pointer relative ${
-                    isActive
-                      ? 'bg-[#202c33] text-[#e9edef] border-t-2 border-[#00a884]'
-                      : 'text-[#8696a0] hover:bg-[#182229] hover:text-[#d1d7db]'
-                  }`}
-                  title="Double click to rename, Right-click for options"
+                  className={`group flex items-center gap-1.5 px-2.5 h-[22px] rounded-t text-[11px] font-medium transition-colors cursor-pointer relative ${tabStyle}`}
+                  title={!isLoaded ? "Account unloaded (click to load), Double click to rename, Right-click for options" : "Double click to rename, Right-click for options"}
                 >
                   {isEditing ? (
                     <input
@@ -227,7 +235,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <span className="truncate max-w-[100px]">
+                    <span className={`truncate max-w-[100px] ${!isLoaded ? 'text-[#8696a0]/70' : ''}`}>
                       {account.emoji ? `${account.emoji} ` : ''}{account.name}
                     </span>
                   )}
