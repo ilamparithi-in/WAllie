@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
-import { getAppIcon, isWhatsAppUrl, getAccountById, getPreloadPath } from './utils';
+import { getAppIcon, isWhatsAppUrl, getAccountById, getAccountsWithLoadedStatus, getPreloadPath } from './utils';
 import { createAccountView, pauseAllMedia, injectCustomCssForView, registerZoomShortcuts, registerContextMenu, handleExternalLinkClick } from './views';
 import { safeDeleteExtensionDir } from './extensions';
 import { saveSettings, saveAccounts, ACCOUNTS_FILE } from './config';
@@ -89,7 +89,7 @@ export async function switchActiveAccount(newAccountId: string) {
   if (currentView) {
     state.mainWindow.contentView.removeChildView(currentView);
     if (!currentView.webContents.isDestroyed()) {
-      currentView.webContents.setFrameRate(5);
+      currentView.webContents.setFrameRate(1);
     }
   }
 
@@ -121,7 +121,7 @@ export async function switchActiveAccount(newAccountId: string) {
     state.mainWindow.webContents.send('zoom:changed', zoomPercent);
   }
 
-  state.mainWindow.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+  notifyAccountListChanged();
 }
 
 export async function initializeAccountsLoad() {
@@ -135,7 +135,7 @@ export async function initializeAccountsLoad() {
         createAccountView(account).then((view) => {
           state.accountViews.set(account.id, view);
           if (!view.webContents.isDestroyed()) {
-            view.webContents.setFrameRate(5);
+            view.webContents.setFrameRate(1);
           }
           console.log(`Preloaded account: ${account.name} (${account.id})`);
         }).catch((err) => {
@@ -233,11 +233,33 @@ export function createMainWindow() {
   });
 
   state.mainWindow.on('focus', () => {
-    if (!state.disclaimerOpen && !state.protocolPromptOpen) {
-      const activeView = state.accountViews.get(state.activeAccountId);
-      if (activeView && !activeView.webContents.isDestroyed()) {
+    const activeView = state.accountViews.get(state.activeAccountId);
+    if (activeView && !activeView.webContents.isDestroyed()) {
+      activeView.webContents.setFrameRate(60);
+      if (!state.disclaimerOpen && !state.protocolPromptOpen) {
         activeView.webContents.focus();
       }
+    }
+  });
+
+  state.mainWindow.on('show', () => {
+    const activeView = state.accountViews.get(state.activeAccountId);
+    if (activeView && !activeView.webContents.isDestroyed()) {
+      activeView.webContents.setFrameRate(60);
+    }
+  });
+
+  state.mainWindow.on('hide', () => {
+    const activeView = state.accountViews.get(state.activeAccountId);
+    if (activeView && !activeView.webContents.isDestroyed()) {
+      activeView.webContents.setFrameRate(1);
+    }
+  });
+
+  state.mainWindow.on('minimize', () => {
+    const activeView = state.accountViews.get(state.activeAccountId);
+    if (activeView && !activeView.webContents.isDestroyed()) {
+      activeView.webContents.setFrameRate(1);
     }
   });
 
@@ -408,7 +430,65 @@ export async function removeAccountLogic(id: string): Promise<boolean> {
   if (state.activeAccountId === id) {
     await switchActiveAccount(state.accounts[0].id);
   } else {
-    state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+    notifyAccountListChanged();
+  }
+  return true;
+}
+
+export function notifyAccountListChanged() {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('account:list-changed', getAccountsWithLoadedStatus(), state.activeAccountId);
+  }
+}
+
+export async function unloadAccountLogic(id: string): Promise<boolean> {
+  const account = getAccountById(id);
+  if (!account) return false;
+
+  const view = state.accountViews.get(id);
+  if (view) {
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      try {
+        state.mainWindow.contentView.removeChildView(view);
+      } catch (e) { }
+    }
+    if (!view.webContents.isDestroyed()) {
+      try {
+        view.webContents.closeDevTools();
+      } catch (e) { }
+      try {
+        (view.webContents as any).destroy();
+      } catch (e) { }
+    }
+    state.accountViews.delete(id);
+  }
+
+  notifyAccountListChanged();
+  return true;
+}
+
+export async function loadAccountLogic(id: string): Promise<boolean> {
+  const account = getAccountById(id);
+  if (!account) return false;
+
+  if (state.accountViews.has(id) && !state.accountViews.get(id)?.webContents.isDestroyed()) {
+    return true;
+  }
+
+  if (state.activeAccountId === id) {
+    await switchActiveAccount(id);
+  } else {
+    try {
+      const view = await createAccountView(account);
+      state.accountViews.set(id, view);
+      if (!view.webContents.isDestroyed()) {
+        view.webContents.setFrameRate(1);
+      }
+      notifyAccountListChanged();
+    } catch (err) {
+      console.error(`Failed to load account ${account.name}:`, err);
+      return false;
+    }
   }
   return true;
 }

@@ -4,10 +4,10 @@ import { state } from './state';
 import { saveAccounts, saveSettings, getAccountStorageSizes, invalidateStorageCache } from './config';
 import { importExtension, installWebStoreExtension, toggleExtension, removeExtension, checkForWebStoreUpdates } from './extensions';
 import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectCustomCssForView } from './views';
-import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize } from './window';
+import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize, unloadAccountLogic, loadAccountLogic, notifyAccountListChanged } from './window';
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
-import { getAccountById, focusActiveView, getPreloadPath } from './utils';
+import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus } from './utils';
 
 export function registerIpcHandlers() {
   ipcMain.on('window:minimize', (event) => {
@@ -116,11 +116,19 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('account:get-all', () => state.accounts);
+  ipcMain.handle('account:get-all', () => getAccountsWithLoadedStatus());
   ipcMain.handle('account:get-active-id', () => state.activeAccountId);
   
   ipcMain.on('account:switch', async (_event, id: string) => {
     await switchActiveAccount(id);
+  });
+
+  ipcMain.handle('account:unload', async (_event, id: string) => {
+    return await unloadAccountLogic(id);
+  });
+
+  ipcMain.handle('account:load', async (_event, id: string) => {
+    return await loadAccountLogic(id);
   });
 
   ipcMain.on('zoom:reset', () => {
@@ -147,8 +155,6 @@ export function registerIpcHandlers() {
       changeZoom(activeContents, direction);
     }
   });
-
-
 
   ipcMain.on('settings:reset-app-scale', async () => {
     if (!state.globalSettings) return;
@@ -215,7 +221,7 @@ export function registerIpcHandlers() {
     if (account) {
       account.name = sanitizedName;
       saveAccounts();
-      state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+      notifyAccountListChanged();
       return true;
     }
     return false;
@@ -228,7 +234,7 @@ export function registerIpcHandlers() {
     if (account) {
       account.emoji = sanitizedEmoji;
       saveAccounts();
-      state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+      notifyAccountListChanged();
       return true;
     }
     return false;
@@ -241,6 +247,8 @@ export function registerIpcHandlers() {
   ipcMain.on('account:context-menu', (event, accountId: string) => {
     const account = getAccountById(accountId);
     if (!account) return;
+
+    const isLoaded = state.accountViews.has(accountId) && !state.accountViews.get(accountId)?.webContents.isDestroyed();
 
     const menu = Menu.buildFromTemplate([
       {
@@ -255,6 +263,20 @@ export function registerIpcHandlers() {
           state.mainWindow?.webContents.send('settings:open-manage-accounts', accountId);
         },
       },
+      { type: 'separator' },
+      isLoaded
+        ? {
+            label: 'Unload Account',
+            click: async () => {
+              await unloadAccountLogic(accountId);
+            },
+          }
+        : {
+            label: 'Load Account',
+            click: async () => {
+              await loadAccountLogic(accountId);
+            },
+          },
       { type: 'separator' },
       {
         label: 'Remove Account',

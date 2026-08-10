@@ -26,6 +26,8 @@ export const App: React.FC = () => {
   const [settingsInitialAccountId, setSettingsInitialAccountId] = useState<string | undefined>(undefined);
   const [toasts, setToasts] = useState<{ id: number; message: string; url?: string }[]>([]);
 
+  const [accounts, setAccounts] = useState<AccountInfo[]>([]);
+  const [activeAccountId, setActiveAccountId] = useState<string>('');
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null);
   const [showDisclaimerForce, setShowDisclaimerForce] = useState(false);
   const [disclaimerChecked, setDisclaimerChecked] = useState(false);
@@ -41,6 +43,15 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (!window.electronAPI) return;
+
+    // Load initial accounts and active account ID
+    window.electronAPI.getAccounts().then((accs) => setAccounts(accs));
+    window.electronAPI.getActiveAccountId().then((id) => setActiveAccountId(id));
+
+    const unsubscribeAccount = window.electronAPI.onAccountListChanged((updatedAccounts, updatedActiveId) => {
+      setAccounts(updatedAccounts);
+      setActiveAccountId(updatedActiveId);
+    });
 
     // Load initial global settings
     window.electronAPI.getGlobalSettings().then((settings) => {
@@ -120,6 +131,7 @@ export const App: React.FC = () => {
 
     return () => {
       window.removeEventListener('wheel', preventWheelZoom);
+      unsubscribeAccount?.();
       unsubscribeGlobalSettings?.();
       unsubscribeDownload?.();
       unsubscribeCloseRequest?.();
@@ -182,6 +194,8 @@ export const App: React.FC = () => {
   const isDisclaimerAccepted = !!globalSettings.disclaimerAccepted;
   const showDisclaimerOverlay = !isDisclaimerAccepted || showDisclaimerForce;
   const isFirstLaunchMode = !isDisclaimerAccepted;
+  const activeAccount = accounts.find((a) => a.id === activeAccountId);
+  const isActiveAccountLoaded = activeAccount ? activeAccount.isLoaded !== false : false;
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#111b21] overflow-hidden select-none">
@@ -194,17 +208,19 @@ export const App: React.FC = () => {
 
       {/* Main Container Area: The Electron WebContentsView will overlay this area below the titlebar */}
       <main className="flex-1 w-full relative bg-[#111b21]">
-        {/* Placeholder background state when loading view */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-[#8696a0] text-sm gap-2">
-          {isDisclaimerAccepted ? (
-            <>
-              <div className="w-8 h-8 rounded-full border-2 border-[#00a884] border-t-transparent animate-spin" />
-              <span>Connecting to WhatsApp Web...</span>
-            </>
-          ) : (
-            <span>Please review and accept the legal disclaimer to proceed.</span>
-          )}
-        </div>
+        {/* Placeholder background state shown only when view is not yet loaded or disclaimer not accepted */}
+        {!isActiveAccountLoaded && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-[#8696a0] text-sm gap-2">
+            {isDisclaimerAccepted ? (
+              <>
+                <div className="w-8 h-8 rounded-full border-2 border-[#00a884] border-t-transparent animate-spin" />
+                <span>Connecting to WhatsApp Web...</span>
+              </>
+            ) : (
+              <span>Please review and accept the legal disclaimer to proceed.</span>
+            )}
+          </div>
+        )}
       </main>
 
       {/* Floating Downloads Tracker */}

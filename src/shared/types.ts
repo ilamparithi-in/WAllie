@@ -36,6 +36,7 @@ export interface Account {
   extensions: ExtensionInfo[];
   emoji?: string;
   settings?: AccountSettings;
+  isLoaded?: boolean;
 }
 
 export interface GlobalSettings {

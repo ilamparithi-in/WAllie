@@ -40,9 +40,20 @@ export const AccountsSettingsPage: React.FC<AccountsSettingsPageProps> = ({
               {/* Row 1: Name and Emoji inputs */}
               <div className="flex items-center justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <span className="font-semibold text-xs text-[#e9edef] block truncate">
-                    {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-xs text-[#e9edef] block truncate">
+                      {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
+                    </span>
+                    <span
+                      className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
+                        acc.isLoaded !== false
+                          ? 'bg-[#00a884]/20 text-[#00a884] border border-[#00a884]/30'
+                          : 'bg-[#8696a0]/20 text-[#8696a0] border border-[#8696a0]/30'
+                      }`}
+                    >
+                      {acc.isLoaded !== false ? 'Loaded' : 'Unloaded'}
+                    </span>
+                  </div>
                   <span className="text-[10px] text-[#8696a0] block truncate">{acc.id}</span>
                 </div>
                 

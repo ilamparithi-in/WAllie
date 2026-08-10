@@ -35,15 +35,27 @@ export const PreloadSettingsPage: React.FC<PreloadSettingsPageProps> = ({
               const isPreloaded = globalSettings?.preloadAccountIds
                 ? globalSettings.preloadAccountIds.includes(acc.id)
                 : acc.id === 'acc_default';
+              const isLoaded = acc.isLoaded !== false;
               return (
                 <label
                   key={acc.id}
                   className="flex items-center justify-between gap-4 cursor-pointer p-3 hover:bg-[#202c33]/50 transition-colors"
                 >
                   <div className="flex flex-col min-w-0 pr-4 flex-1">
-                    <span className="font-medium text-[#e9edef] text-[12px] truncate">
-                      {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-[#e9edef] text-[12px] truncate">
+                        {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
+                      </span>
+                      <span
+                        className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
+                          isLoaded
+                            ? 'bg-[#00a884]/20 text-[#00a884] border border-[#00a884]/30'
+                            : 'bg-[#8696a0]/20 text-[#8696a0] border border-[#8696a0]/30'
+                        }`}
+                      >
+                        {isLoaded ? 'Loaded' : 'Unloaded'}
+                      </span>
+                    </div>
                     <span className="text-[10px] text-[#8696a0] truncate mt-0.5">
                       {acc.id}
                     </span>
