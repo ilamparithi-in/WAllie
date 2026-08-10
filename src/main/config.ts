@@ -64,6 +64,8 @@ export function loadSettings(): GlobalSettings {
         autoUpdateExtensions: parsed.autoUpdateExtensions !== false,
         startMinimized: !!parsed.startMinimized,
         disclaimerAccepted: !!parsed.disclaimerAccepted,
+        externalLinkWarningEnabled: parsed.externalLinkWarningEnabled !== false,
+        trustedDomains: Array.isArray(parsed.trustedDomains) ? parsed.trustedDomains : ['whatsapp.com', 'whatsapp.net'],
       };
     }
   } catch (error) {
@@ -81,6 +83,8 @@ export function loadSettings(): GlobalSettings {
     autoUpdateExtensions: true,
     startMinimized: false,
     disclaimerAccepted: false,
+    externalLinkWarningEnabled: true,
+    trustedDomains: ['whatsapp.com', 'whatsapp.net'],
   };
 }
 

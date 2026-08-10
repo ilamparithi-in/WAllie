@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Titlebar } from './components/Titlebar';
 import { SettingsModal } from './components/SettingsModal';
-import { Download, CheckCircle, XCircle, X, Shield } from 'lucide-react';
+import { Download, CheckCircle, XCircle, X, Shield, ExternalLink } from 'lucide-react';
 
 import type { AccountInfo, GlobalSettings } from '../preload';
 
@@ -24,6 +24,7 @@ export const App: React.FC = () => {
   const [promptAccounts, setPromptAccounts] = useState<AccountInfo[]>([]);
   const [settingsInitialPage, setSettingsInitialPage] = useState<'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | undefined>(undefined);
   const [settingsInitialAccountId, setSettingsInitialAccountId] = useState<string | undefined>(undefined);
+  const [toasts, setToasts] = useState<{ id: number; message: string; url?: string }[]>([]);
 
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null);
   const [showDisclaimerForce, setShowDisclaimerForce] = useState(false);
@@ -100,6 +101,14 @@ export const App: React.FC = () => {
       window.electronAPI?.toggleSettings(true);
     });
 
+    const unsubscribeToast = window.electronAPI.onToastShow((data) => {
+      const toastId = Date.now() + Math.random();
+      setToasts((prev) => [...prev, { id: toastId, ...data }]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== toastId));
+      }, 4500);
+    });
+
     window.electronAPI.signalProtocolReady();
 
     return () => {
@@ -108,6 +117,7 @@ export const App: React.FC = () => {
       unsubscribeCloseRequest?.();
       unsubscribeProtocol?.();
       unsubscribeOpenManage?.();
+      unsubscribeToast?.();
     };
   }, []);
 
@@ -440,6 +450,36 @@ export const App: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Toast Notifications */}
+      {toasts.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm pointer-events-auto">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className="flex items-center gap-3 p-3.5 bg-[#1f2c34] border border-[#00a884]/40 text-[#e9edef] rounded-xl shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-3 duration-200"
+            >
+              <div className="p-2 bg-[#00a884]/20 text-[#00a884] rounded-lg shrink-0">
+                <ExternalLink className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold leading-tight text-[#e9edef]">{toast.message}</p>
+                {toast.url && (
+                  <p className="text-[10px] text-[#8696a0] truncate mt-0.5" title={toast.url}>
+                    {toast.url}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+                className="text-[#8696a0] hover:text-[#e9edef] transition-colors p-1 rounded-md hover:bg-[#2a3942]"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>

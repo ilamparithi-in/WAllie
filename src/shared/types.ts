@@ -50,6 +50,8 @@ export interface GlobalSettings {
   autoUpdateExtensions?: boolean;
   startMinimized?: boolean;
   disclaimerAccepted?: boolean;
+  externalLinkWarningEnabled?: boolean;
+  trustedDomains?: string[];
 }
 
 export interface HistoricalNotification {

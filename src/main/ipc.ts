@@ -81,6 +81,10 @@ export function registerIpcHandlers() {
     return 'WhatsApp';
   });
 
+  ipcMain.on('account:focus-active', () => {
+    focusActiveView();
+  });
+
   ipcMain.on('settings:toggle', (_event, isOpen: boolean) => {
     console.log('IPC Received: settings:toggle, isOpen:', isOpen);
     animateSettingsTransition(isOpen);

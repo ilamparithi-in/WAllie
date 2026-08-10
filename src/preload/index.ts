@@ -58,6 +58,7 @@ export interface ElectronAPI {
   handleProtocolUrl: (accountId: string, url: string) => void;
   signalProtocolReady: () => void;
   toggleProtocolPrompt: (isOpen: boolean) => void;
+  onToastShow: (callback: (data: { message: string; url?: string }) => void) => () => void;
   toggleWallieDevTools: () => void;
 
   // Event listeners
@@ -81,6 +82,7 @@ export interface ElectronAPI {
   ) => () => void;
   relaunchApp: () => void;
   onOpenManageAccounts: (callback: (accountId: string) => void) => () => void;
+  focusActiveAccount: () => void;
 }
 
 const api: ElectronAPI = {
@@ -101,6 +103,7 @@ const api: ElectronAPI = {
   reloadActiveAccount: () => ipcRenderer.send('account:reload-active'),
   reloadAccount: (accountId: string) => ipcRenderer.send('account:reload', accountId),
   showAccountContextMenu: (accountId: string) => ipcRenderer.send('account:context-menu', accountId),
+  focusActiveAccount: () => ipcRenderer.send('account:focus-active'),
 
   importExtension: (accountId: string, importType: 'folder' | 'archive') =>
     ipcRenderer.invoke('extension:import', accountId, importType),
@@ -141,6 +144,11 @@ const api: ElectronAPI = {
   signalProtocolReady: () => ipcRenderer.send('protocol:ready'),
   toggleProtocolPrompt: (isOpen) => ipcRenderer.send('protocol:toggle-prompt', isOpen),
   toggleWallieDevTools: () => ipcRenderer.send('devtools:toggle-wallie'),
+  onToastShow: (callback) => {
+    const subscription = (_event: unknown, data: { message: string; url?: string }) => callback(data);
+    ipcRenderer.on('toast:show', subscription);
+    return () => ipcRenderer.removeListener('toast:show', subscription);
+  },
 
   onAccountListChanged: (callback) => {
     const subscription = (_event: unknown, accounts: AccountInfo[], activeId: string) => callback(accounts, activeId);

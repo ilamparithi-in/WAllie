@@ -3,8 +3,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
-import { DEFAULT_USER_AGENT, saveAccounts } from './config';
-import { isWhatsAppUrl, checkPermissionForAccount, getAccountById, getPreloadPath } from './utils';
+import { DEFAULT_USER_AGENT, saveAccounts, saveSettings } from './config';
+import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath } from './utils';
 import { Account, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 import { TITLEBAR_HEIGHT } from '../shared/constants';
 
@@ -274,7 +274,7 @@ export function registerContextMenu(webContents: Electron.WebContents) {
       menuItems.push({
         label: `Open ${truncatedLink} in browser`,
         click: () => {
-          shell.openExternal(link).catch((err) => console.error('Failed to open external link:', err));
+          handleExternalLinkClick(link);
         },
       });
     }
@@ -286,7 +286,7 @@ export function registerContextMenu(webContents: Electron.WebContents) {
         label: 'Search in Google',
         click: () => {
           const query = encodeURIComponent(params.selectionText.trim());
-          shell.openExternal(`https://www.google.com/search?q=${query}`).catch((err) => console.error('Failed to open search URL:', err));
+          handleExternalLinkClick(`https://www.google.com/search?q=${query}`);
         },
       });
     }
@@ -332,6 +332,99 @@ export function registerContextMenu(webContents: Electron.WebContents) {
       window: BrowserWindow.fromWebContents(webContents) || undefined,
     });
   });
+}
+
+export function handleExternalLinkClick(urlStr: string): void {
+  const targetUrl = getTargetUrlIfLinkShim(urlStr) || urlStr;
+  const domain = getDomainFromUrl(targetUrl);
+
+  const settings = state.globalSettings;
+  const warningEnabled = settings?.externalLinkWarningEnabled !== false;
+  const trustedDomains = settings?.trustedDomains || ['whatsapp.com', 'whatsapp.net'];
+
+  const isTrusted = isDomainTrusted(domain, trustedDomains);
+
+  const showToast = () => {
+    const msg = `Opened link in external browser: ${domain}`;
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('toast:show', {
+        message: msg,
+        url: targetUrl,
+      });
+    }
+
+    const activeView = state.accountViews.get(state.activeAccountId);
+    if (activeView && !activeView.webContents.isDestroyed()) {
+      const safeMsg = JSON.stringify(msg);
+      const safeUrl = JSON.stringify(targetUrl);
+      const script = `
+        (function() {
+          try {
+            let container = document.getElementById('wallie-toast-container');
+            if (!container) {
+              container = document.createElement('div');
+              container.id = 'wallie-toast-container';
+              container.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:999999;display:flex;flex-direction:column;gap:8px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;pointer-events:none;';
+              (document.body || document.documentElement).appendChild(container);
+            }
+            if (!document.getElementById('wallie-toast-style')) {
+              const style = document.createElement('style');
+              style.id = 'wallie-toast-style';
+              style.textContent = '@keyframes wallieToastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}';
+              (document.head || document.documentElement).appendChild(style);
+            }
+            const toast = document.createElement('div');
+            toast.style.cssText = 'background:#1f2c34;color:#e9edef;border:1px solid rgba(0,168,132,0.5);padding:10px 14px;border-radius:10px;box-shadow:0 10px 25px rgba(0,0,0,0.5);font-size:12px;max-width:340px;pointer-events:auto;display:flex;align-items:center;gap:10px;animation:wallieToastIn 0.2s ease-out;';
+            toast.innerHTML = '<div style="background:rgba(0,168,132,0.2);color:#00a884;padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center;shrink:0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div><div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:12px;color:#e9edef;line-height:1.3;">' + ${safeMsg} + '</div><div style="font-size:10px;color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;" title="' + ${safeUrl} + '">' + ${safeUrl} + '</div></div>';
+            container.appendChild(toast);
+            setTimeout(() => {
+              toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+              toast.style.opacity = '0';
+              toast.style.transform = 'translateY(10px)';
+              setTimeout(() => toast.remove(), 300);
+            }, 4500);
+          } catch(e) {}
+        })();
+      `;
+      activeView.webContents.executeJavaScript(script).catch(() => {});
+    }
+  };
+
+  if (!warningEnabled || isTrusted) {
+    shell.openExternal(targetUrl).catch((err) => console.error('Failed to open external link:', err));
+    showToast();
+    return;
+  }
+
+  // Show native Electron system prompt
+  const parentWindow = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined;
+  dialog.showMessageBox(parentWindow!, {
+    type: 'warning',
+    buttons: ['Visit Site', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+    title: 'Hold on! Leaving WAllie',
+    message: 'You are about to visit an external website:',
+    detail: targetUrl,
+    checkboxLabel: `Trust ${domain} and do not ask again`,
+    checkboxChecked: false,
+    noLink: true,
+  }).then((result) => {
+    if (result.response === 0) { // Visit Site
+      if (result.checkboxChecked && settings) {
+        if (!settings.trustedDomains) {
+          settings.trustedDomains = ['whatsapp.com', 'whatsapp.net'];
+        }
+        if (!settings.trustedDomains.includes(domain)) {
+          settings.trustedDomains.push(domain);
+          saveSettings(settings);
+          state.mainWindow?.webContents.send('global-settings:changed', settings);
+        }
+      }
+      shell.openExternal(targetUrl).catch((err) => console.error('Failed to open external link:', err));
+      showToast();
+    }
+  }).catch((err) => console.error('Error showing link warning prompt:', err));
 }
 
 export function registerZoomShortcuts(webContents: Electron.WebContents) {
@@ -581,7 +674,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   view.webContents.on('will-navigate', (event, url) => {
     if (!isWhatsAppUrl(url)) {
       event.preventDefault();
-      shell.openExternal(url).catch((err) => console.error('Failed to open external link:', err));
+      handleExternalLinkClick(url);
     }
   });
 
@@ -589,7 +682,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   view.webContents.setWindowOpenHandler((details) => {
     const url = details.url;
     if (!isWhatsAppUrl(url)) {
-      shell.openExternal(url).catch((err) => console.error('Failed to open external link:', err));
+      handleExternalLinkClick(url);
       return { action: 'deny' };
     }
 
