@@ -54,6 +54,13 @@ export const App: React.FC = () => {
       setGlobalSettings(settings);
     });
 
+    const preventWheelZoom = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('wheel', preventWheelZoom, { passive: false });
+
     const unsubscribeDownload = window.electronAPI.onDownloadProgress((data) => {
       setDownloads((prev) => {
         const idx = prev.findIndex((d) => d.id === data.id);
@@ -112,6 +119,7 @@ export const App: React.FC = () => {
     window.electronAPI.signalProtocolReady();
 
     return () => {
+      window.removeEventListener('wheel', preventWheelZoom);
       unsubscribeGlobalSettings?.();
       unsubscribeDownload?.();
       unsubscribeCloseRequest?.();

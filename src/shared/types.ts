@@ -41,6 +41,7 @@ export interface Account {
 export interface GlobalSettings {
   closeToTray: boolean;
   hardwareAcceleration: boolean;
+  appScale?: number;
   preloadAccountIds?: string[];
   showDevToolsToggle?: boolean;
   showRefreshButton?: boolean;

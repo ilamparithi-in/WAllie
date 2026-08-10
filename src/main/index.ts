@@ -8,9 +8,20 @@ import { registerIpcHandlers } from './ipc';
 import { createMainWindow, createTray } from './window';
 import { checkForWebStoreUpdates } from './extensions';
 
-// Memory & CPU Optimization flags
+// Memory & CPU Optimization flags & Touchpad / Pinch Gestures
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('enable-pinch');
+if (process.platform === 'linux') {
+  if (process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland') {
+    app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
+    app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform,WaylandWindowDecorations,TouchpadOverscrollHistoryNavigation,TouchpadPinch,PinchToZoom,OverscrollHistoryNavigation');
+  } else {
+    app.commandLine.appendSwitch('enable-features', 'TouchpadOverscrollHistoryNavigation,TouchpadPinch,PinchToZoom,OverscrollHistoryNavigation');
+  }
+} else {
+  app.commandLine.appendSwitch('enable-features', 'TouchpadOverscrollHistoryNavigation,TouchpadPinch,PinchToZoom');
+}
 app.commandLine.appendSwitch('disable-features', 'TranslateUI');
 
 // Set application name and associate desktop file for Linux notifications & taskbar grouping
