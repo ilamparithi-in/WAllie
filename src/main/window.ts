@@ -65,12 +65,16 @@ export function updateActiveViewBounds() {
       if (state.disclaimerOpen || state.protocolPromptOpen) {
         aView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
       } else {
-        const vWidth = w - state.settingsDrawerWidth;
+        const scaleFactor = (state.globalSettings?.appScale || 100) / 100;
+        const scaledTitlebarHeight = Math.round(TITLEBAR_HEIGHT * scaleFactor);
+        const scaledDrawerWidth = Math.round(state.settingsDrawerWidth * scaleFactor);
+        const vWidth = w - scaledDrawerWidth;
+
         aView.setBounds({
           x: 0,
-          y: TITLEBAR_HEIGHT,
+          y: scaledTitlebarHeight,
           width: Math.max(0, vWidth),
-          height: Math.max(0, h - TITLEBAR_HEIGHT),
+          height: Math.max(0, h - scaledTitlebarHeight),
         });
       }
     }
@@ -183,7 +187,8 @@ export function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-    },
+      visualZoom: false,
+    } as any,
   });
 
   if (process.env.VITE_DEV_SERVER_URL) {

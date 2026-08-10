@@ -55,6 +55,7 @@ export function loadSettings(): GlobalSettings {
       return {
         closeToTray: parsed.closeToTray !== false,
         hardwareAcceleration: parsed.hardwareAcceleration !== false,
+        appScale: typeof parsed.appScale === 'number' ? parsed.appScale : 100,
         preloadAccountIds,
         showDevToolsToggle: !!parsed.showDevToolsToggle,
         showRefreshButton: parsed.showRefreshButton !== false,
@@ -74,6 +75,7 @@ export function loadSettings(): GlobalSettings {
   return {
     closeToTray: true,
     hardwareAcceleration: true,
+    appScale: 100,
     preloadAccountIds: ['acc_default'],
     showDevToolsToggle: false,
     showRefreshButton: true,

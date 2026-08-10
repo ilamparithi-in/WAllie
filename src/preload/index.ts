@@ -37,6 +37,7 @@ export interface ElectronAPI {
   toggleSettings: (isOpen: boolean) => void;
   toggleDisclaimer: (isOpen: boolean) => void;
   resetZoom: () => void;
+  resetAppScale: () => void;
   toggleDevTools: () => void;
 
   // Storage & Cache controls
@@ -121,6 +122,7 @@ const api: ElectronAPI = {
   toggleSettings: (isOpen: boolean) => ipcRenderer.send('settings:toggle', isOpen),
   toggleDisclaimer: (isOpen: boolean) => ipcRenderer.send('disclaimer:toggle', isOpen),
   resetZoom: () => ipcRenderer.send('zoom:reset'),
+  resetAppScale: () => ipcRenderer.send('settings:reset-app-scale'),
   toggleDevTools: () => ipcRenderer.send('devtools:toggle'),
 
   getStorageSizes: (accountId) => ipcRenderer.invoke('account:get-storage-sizes', accountId),
@@ -269,6 +271,14 @@ function setupWhatsAppIntegration() {
   });
 
   // Expose safe proxy methods to the Main World
+  contextBridge.exposeInMainWorld('__walinux_report_zoom', (scale: number) => {
+    ipcRenderer.send('zoom:visual-changed', scale);
+  });
+
+  contextBridge.exposeInMainWorld('__walinux_trigger_zoom', (direction: 'in' | 'out') => {
+    ipcRenderer.send('zoom:trigger-step', direction);
+  });
+
   contextBridge.exposeInMainWorld('__walinux_ipc', {
     createNotification: (data: { title: string; body: string; icon: string; tag: string }) => {
       resolveIconToBase64(data.icon).then((base64Icon) => {

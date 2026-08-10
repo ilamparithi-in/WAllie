@@ -8,6 +8,7 @@ interface GeneralSettingsPageProps {
 }
 
 const DOMAINS_PER_PAGE = 5;
+const PRESET_SCALES = [80, 90, 100, 110, 125, 150, 200];
 
 export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
   globalSettings,
@@ -16,6 +17,31 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+
+  const currentScale = globalSettings?.appScale ?? 100;
+  const isCustomScale = !PRESET_SCALES.includes(currentScale);
+  const [selectValue, setSelectValue] = useState<string>(isCustomScale ? 'custom' : currentScale.toString());
+  const [customScaleInput, setCustomScaleInput] = useState<string>(currentScale.toString());
+
+  useEffect(() => {
+    setSelectValue(isCustomScale ? 'custom' : currentScale.toString());
+    setCustomScaleInput(currentScale.toString());
+  }, [currentScale, isCustomScale]);
+
+  const handleSelectScaleChange = (val: string) => {
+    setSelectValue(val);
+    if (val !== 'custom') {
+      const num = parseInt(val, 10);
+      handleToggleGlobalSetting('appScale', num);
+    }
+  };
+
+  const handleApplyCustomScale = () => {
+    let num = parseInt(customScaleInput, 10);
+    if (isNaN(num)) num = 100;
+    num = Math.max(50, Math.min(300, num));
+    handleToggleGlobalSetting('appScale', num);
+  };
 
   const trustedDomains = useMemo(() => {
     return globalSettings?.trustedDomains || ['whatsapp.com', 'whatsapp.net'];
@@ -124,6 +150,70 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
               className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
             />
           </label>
+
+          <div className="p-2 rounded hover:bg-[#182229] transition-colors space-y-2">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-[#e9edef] text-[11px]">App Scale (UI Zoom)</div>
+                <div className="text-[10px] text-[#8696a0]">
+                  Scale WAllie UI and default zoom level for WhatsApp viewports
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectValue}
+                  onChange={(e) => handleSelectScaleChange(e.target.value)}
+                  className="bg-[#202c33] text-[#e9edef] text-xs px-2 py-1 rounded border border-[#2c3943] focus:border-[#00a884] focus:outline-none cursor-pointer"
+                >
+                  <option value="80">80%</option>
+                  <option value="90">90%</option>
+                  <option value="100">100% (Default)</option>
+                  <option value="110">110%</option>
+                  <option value="125">125%</option>
+                  <option value="150">150%</option>
+                  <option value="200">200%</option>
+                  <option value="custom">Custom...</option>
+                </select>
+
+                {currentScale !== 100 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.electronAPI?.resetAppScale();
+                    }}
+                    title="Reset App Scale to 100%"
+                    className="px-2 py-1 bg-[#202c33] text-[#ea4335] border border-[#ea4335]/40 hover:bg-[#ea4335] hover:text-white transition-colors rounded text-[10px] font-semibold cursor-pointer shrink-0"
+                  >
+                    Reset (100%)
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {selectValue === 'custom' && (
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <span className="text-[10px] text-[#8696a0]">Custom Percentage (%):</span>
+                <input
+                  type="number"
+                  min={50}
+                  max={300}
+                  value={customScaleInput}
+                  onChange={(e) => setCustomScaleInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleApplyCustomScale();
+                  }}
+                  className="w-20 bg-[#202c33] text-[#e9edef] text-xs px-2 py-1 rounded border border-[#2c3943] focus:border-[#00a884] focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyCustomScale}
+                  className="px-3 py-1 bg-[#00a884] hover:bg-[#00c298] text-[#111b21] font-bold rounded text-xs transition-colors cursor-pointer"
+                >
+                  Apply
+                </button>
+              </div>
+            )}
+          </div>
 
           <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
             <div className="flex-1 min-w-0">

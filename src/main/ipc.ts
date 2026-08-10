@@ -3,7 +3,7 @@ import path from 'node:path';
 import { state } from './state';
 import { saveAccounts, saveSettings, getAccountStorageSizes, invalidateStorageCache } from './config';
 import { importExtension, installWebStoreExtension, toggleExtension, removeExtension, checkForWebStoreUpdates } from './extensions';
-import { createAccountView, getActiveWebContents, resetZoom, injectCustomCssForView } from './views';
+import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectCustomCssForView } from './views';
 import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize } from './window';
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
@@ -128,6 +128,42 @@ export function registerIpcHandlers() {
     if (activeContents) {
       resetZoom(activeContents);
     }
+  });
+
+  ipcMain.on('zoom:visual-changed', (_event, visualScale: number) => {
+    const activeContents = getActiveWebContents();
+    if (activeContents) {
+      const baseScale = (state.globalSettings?.appScale || 100) / 100;
+      const factor = activeContents.getZoomFactor();
+      const relativeFactor = factor / baseScale;
+      const effectivePercent = Math.round(relativeFactor * visualScale * 100);
+      state.mainWindow?.webContents.send('zoom:changed', effectivePercent);
+    }
+  });
+
+  ipcMain.on('zoom:trigger-step', (_event, direction: 'in' | 'out') => {
+    const activeContents = getActiveWebContents();
+    if (activeContents) {
+      changeZoom(activeContents, direction);
+    }
+  });
+
+
+
+  ipcMain.on('settings:reset-app-scale', async () => {
+    if (!state.globalSettings) return;
+    state.globalSettings.appScale = 100;
+    await saveSettings(state.globalSettings);
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.setZoomFactor(1.0);
+      state.mainWindow.webContents.send('settings:global-changed', state.globalSettings);
+    }
+    for (const view of state.accountViews.values()) {
+      if (view && !view.webContents.isDestroyed()) {
+        view.webContents.setZoomFactor(1.0);
+      }
+    }
+    updateActiveViewBounds();
   });
 
   ipcMain.on('account:reload-active', () => {
@@ -359,11 +395,70 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('settings:save-global', async (_event, newSettings: GlobalSettings) => {
     if (!state.globalSettings) return false;
+    const oldScale = state.globalSettings.appScale || 100;
     const disclaimerJustAccepted = newSettings.disclaimerAccepted && !state.globalSettings.disclaimerAccepted;
+    const scaleChanged = newSettings.appScale !== undefined && newSettings.appScale !== oldScale;
+
     state.globalSettings = newSettings;
     await saveSettings(state.globalSettings);
-    state.mainWindow?.webContents.send('settings:global-changed', state.globalSettings);
+
+    const newBaseScale = (newSettings.appScale || 100) / 100;
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      try {
+        state.mainWindow.webContents.setZoomFactor(newBaseScale);
+      } catch (e) {}
+      state.mainWindow.webContents.send('settings:global-changed', state.globalSettings);
+    }
     
+    if (scaleChanged) {
+      for (const view of state.accountViews.values()) {
+        if (view && !view.webContents.isDestroyed()) {
+          try {
+            const currentFactor = view.webContents.getZoomFactor();
+            const relativeZoom = currentFactor / (oldScale / 100);
+            view.webContents.setZoomFactor(newBaseScale * relativeZoom);
+          } catch (e) {}
+        }
+      }
+      updateActiveViewBounds();
+
+      // Show native system dialog prompt for scale confirmation
+      if (newSettings.appScale !== 100 && state.mainWindow && !state.mainWindow.isDestroyed()) {
+        const targetWindow = state.mainWindow;
+        setTimeout(async () => {
+          try {
+            const result = await dialog.showMessageBox(targetWindow, {
+              type: 'question',
+              buttons: ['Keep Scale', 'Revert Scale'],
+              defaultId: 0,
+              cancelId: 1,
+              title: 'Confirm App Scale',
+              message: `App Scale changed to ${newSettings.appScale}%`,
+              detail: 'Does WAllie UI display properly at this scale level?',
+              noLink: true,
+            });
+
+            if (result.response !== 0) { // Revert clicked or window closed
+              console.log(`Reverting App Scale back to ${oldScale}%`);
+              state.globalSettings!.appScale = oldScale;
+              await saveSettings(state.globalSettings!);
+              const revertedBaseScale = oldScale / 100;
+              targetWindow.webContents.setZoomFactor(revertedBaseScale);
+              targetWindow.webContents.send('settings:global-changed', state.globalSettings);
+              for (const view of state.accountViews.values()) {
+                if (view && !view.webContents.isDestroyed()) {
+                  view.webContents.setZoomFactor(revertedBaseScale);
+                }
+              }
+              updateActiveViewBounds();
+            }
+          } catch (err) {
+            console.error('Error in scale confirmation dialog:', err);
+          }
+        }, 100);
+      }
+    }
+
     if (disclaimerJustAccepted) {
       console.log('Legal disclaimer accepted. Initializing account views.');
       await initializeAccountsLoad();

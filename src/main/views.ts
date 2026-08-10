@@ -205,14 +205,16 @@ export const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0]
 
 export function changeZoom(contents: Electron.WebContents, direction: 'in' | 'out') {
   try {
+    const baseScale = (state.globalSettings?.appScale || 100) / 100;
     const currentFactor = contents.getZoomFactor();
+    const relativeFactor = currentFactor / baseScale;
 
     // Find closest zoom step
     let closestIndex = 4; // Default to 1.0 (index 4)
-    let minDiff = Math.abs(currentFactor - ZOOM_STEPS[closestIndex]);
+    let minDiff = Math.abs(relativeFactor - ZOOM_STEPS[closestIndex]);
 
     for (let i = 0; i < ZOOM_STEPS.length; i++) {
-      const diff = Math.abs(currentFactor - ZOOM_STEPS[i]);
+      const diff = Math.abs(relativeFactor - ZOOM_STEPS[i]);
       if (diff < minDiff) {
         minDiff = diff;
         closestIndex = i;
@@ -226,11 +228,12 @@ export function changeZoom(contents: Electron.WebContents, direction: 'in' | 'ou
       nextIndex = Math.max(0, closestIndex - 1);
     }
 
-    const newFactor = ZOOM_STEPS[nextIndex];
+    const relativeNext = ZOOM_STEPS[nextIndex];
+    const newFactor = relativeNext * baseScale;
     contents.setZoomFactor(newFactor);
 
-    const zoomPercent = Math.round(newFactor * 100);
-    console.log(`Setting zoom factor to: ${newFactor} (${zoomPercent}%)`);
+    const zoomPercent = Math.round(relativeNext * 100);
+    console.log(`Setting zoom factor to: ${newFactor} (${zoomPercent}% relative)`);
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('zoom:changed', zoomPercent);
     }
@@ -241,8 +244,11 @@ export function changeZoom(contents: Electron.WebContents, direction: 'in' | 'ou
 
 export function resetZoom(contents: Electron.WebContents) {
   try {
-    contents.setZoomFactor(1.0);
-    console.log('Resetting zoom factor to: 1.0 (100%)');
+    const baseScale = (state.globalSettings?.appScale || 100) / 100;
+    contents.setZoomFactor(baseScale);
+    contents.setVisualZoomLevelLimits(1, 1);
+    contents.setVisualZoomLevelLimits(1, 5);
+    console.log(`Resetting zoom factor to baseline ${baseScale} (100%) and resetting visual zoom scale`);
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('zoom:changed', 100);
     }
@@ -454,19 +460,32 @@ export function registerZoomShortcuts(webContents: Electron.WebContents) {
         return;
       }
 
+      if (isControl && (isShift || isAlt) && input.key === '0') {
+        event.preventDefault();
+        if (state.globalSettings) {
+          state.globalSettings.appScale = 100;
+          saveSettings(state.globalSettings);
+          if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+            state.mainWindow.webContents.setZoomFactor(1.0);
+            state.mainWindow.webContents.send('settings:global-changed', state.globalSettings);
+          }
+          const activeContents = getActiveWebContents();
+          if (activeContents) resetZoom(activeContents);
+        }
+        return;
+      }
+
       if (isControl) {
+        const activeContents = getActiveWebContents();
         if (input.key === '=' || input.key === '+') {
-          const targetContents = getActiveWebContents() || webContents;
-          changeZoom(targetContents, 'in');
           event.preventDefault();
+          if (activeContents) changeZoom(activeContents, 'in');
         } else if (input.key === '-') {
-          const targetContents = getActiveWebContents() || webContents;
-          changeZoom(targetContents, 'out');
           event.preventDefault();
+          if (activeContents) changeZoom(activeContents, 'out');
         } else if (input.key === '0') {
-          const targetContents = getActiveWebContents() || webContents;
-          resetZoom(targetContents);
           event.preventDefault();
+          if (activeContents) resetZoom(activeContents);
         }
       }
     }
@@ -650,6 +669,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
     }
   }
 
+  const baseScale = (state.globalSettings?.appScale || 100) / 100;
   const view = new WebContentsView({
     webPreferences: {
       preload: getPreloadPath(),
@@ -661,11 +681,23 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
       webSecurity: true,
       v8CacheOptions: 'bypassHeatCheck',
       spellcheck: false,
-    },
+      visualZoom: true,
+    } as any,
   });
 
   view.webContents.setUserAgent(DEFAULT_USER_AGENT);
+  view.webContents.setZoomFactor(baseScale);
+  view.webContents.setVisualZoomLevelLimits(1, 5);
   view.webContents.loadURL('https://web.whatsapp.com');
+
+  // Touchpad 2-finger horizontal swipe navigation (forward/back)
+  (view.webContents as any).on('swipe', (_event: any, direction: string) => {
+    if (direction === 'left' && view.webContents.canGoForward()) {
+      view.webContents.goForward();
+    } else if (direction === 'right' && view.webContents.canGoBack()) {
+      view.webContents.goBack();
+    }
+  });
 
   registerZoomShortcuts(view.webContents);
   registerContextMenu(view.webContents);
@@ -797,6 +829,41 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
     checkLoginStatus();
     insertedCssKeys.delete(account.id);
     injectCustomCssForView(account.id, view.webContents);
+
+    view.webContents.executeJavaScript(`
+      (() => {
+        if (window.__walinux_zoom_monitored) return;
+        window.__walinux_zoom_monitored = true;
+        if (window.visualViewport) {
+          const reportZoom = () => {
+            if (window.__walinux_report_zoom) {
+              window.__walinux_report_zoom(window.visualViewport.scale);
+            }
+          };
+          window.visualViewport.addEventListener('resize', reportZoom);
+        }
+
+        // Ctrl + Mouse Wheel / Touchpad Pinch to Page Zoom
+        let wheelZoomTimeout = null;
+        let accumulatedDeltaY = 0;
+        window.addEventListener('wheel', (e) => {
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            accumulatedDeltaY += e.deltaY;
+            if (wheelZoomTimeout) clearTimeout(wheelZoomTimeout);
+            wheelZoomTimeout = setTimeout(() => {
+              if (Math.abs(accumulatedDeltaY) > 5) {
+                const direction = accumulatedDeltaY < 0 ? 'in' : 'out';
+                if (window.__walinux_trigger_zoom) {
+                  window.__walinux_trigger_zoom(direction);
+                }
+              }
+              accumulatedDeltaY = 0;
+            }, 30);
+          }
+        }, { passive: false });
+      })();
+    `).catch(() => {});
   });
   view.webContents.on('page-title-updated', checkLoginStatus);
 
