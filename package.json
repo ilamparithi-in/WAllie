@@ -1,5 +1,6 @@
 {
   "name": "wallie",
+  "desktopName": "dev.ilamparithi.wallie.desktop",
   "version": "1.0.0",
   "type": "module",
   "description": "Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support",
