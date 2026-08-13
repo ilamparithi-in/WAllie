@@ -1,4 +1,4 @@
-import { app, BrowserWindow, WebContentsView, Menu, session, desktopCapturer, shell, Notification, dialog } from 'electron';
+import { app, BrowserWindow, WebContentsView, Menu, session, desktopCapturer, shell, Notification, dialog, clipboard } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -268,11 +268,84 @@ export function registerContextMenu(webContents: Electron.WebContents) {
 
     const isEditable = params.isEditable;
     const hasSelection = !!(params.selectionText && params.selectionText.trim() !== '');
+    const isImage = params.mediaType === 'image' || params.hasImageContents;
     const hasLink = !!((params.linkURL && params.linkURL.trim() !== '') || 
                     (hasSelection && /^(https?:\/\/|www\.)[^\s]+$/i.test(params.selectionText.trim())));
 
+    // Image options
+    if (isImage) {
+      menuItems.push({
+        label: 'Save Image As...',
+        click: async () => {
+          try {
+            const win = BrowserWindow.fromWebContents(webContents);
+            let ext = 'png';
+            if (params.srcURL && params.srcURL.startsWith('data:image/')) {
+              const m = params.srcURL.match(/^data:image\/([a-z0-9+]+);base64,/i);
+              if (m) ext = m[1].toLowerCase() === 'jpeg' ? 'jpg' : m[1].split('+')[0].toLowerCase();
+            } else if (params.srcURL) {
+              const urlPath = params.srcURL.split('?')[0];
+              const matchExt = urlPath.match(/\.(png|jpg|jpeg|webp|gif|svg)$/i);
+              if (matchExt) ext = matchExt[1].toLowerCase();
+            }
+
+            const options: Electron.SaveDialogOptions = {
+              title: 'Save Image As...',
+              defaultPath: `image_${Date.now()}.${ext}`,
+              filters: [
+                { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'] },
+                { name: 'All Files', extensions: ['*'] }
+              ]
+            };
+
+            const { filePath, canceled } = win
+              ? await dialog.showSaveDialog(win, options)
+              : await dialog.showSaveDialog(options);
+
+            if (canceled || !filePath) return;
+
+            if (params.srcURL) {
+              const base64Data: string = await webContents.executeJavaScript(`
+                (async () => {
+                  const response = await fetch(${JSON.stringify(params.srcURL)});
+                  const blob = await response.blob();
+                  return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                  });
+                })();
+              `);
+              const base64Clean = base64Data.replace(/^data:image\/[^;]+;base64,/i, '');
+              fs.writeFileSync(filePath, Buffer.from(base64Clean, 'base64'));
+            }
+          } catch (err) {
+            console.error('Failed to save image via context menu:', err);
+          }
+        }
+      });
+
+      menuItems.push({
+        label: 'Copy Image',
+        click: () => {
+          webContents.copyImageAt(params.x, params.y);
+        }
+      });
+
+      if (params.srcURL && !params.srcURL.startsWith('blob:')) {
+        menuItems.push({
+          label: 'Copy Image Address',
+          click: () => {
+            clipboard.writeText(params.srcURL);
+          }
+        });
+      }
+    }
+
     // Link option
     if (hasLink) {
+      if (menuItems.length > 0) menuItems.push({ type: 'separator' });
       const rawLink = params.linkURL || params.selectionText.trim();
       const link = rawLink.startsWith('www.') ? `https://${rawLink}` : rawLink;
       const maxLength = 40;
