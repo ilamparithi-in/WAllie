@@ -1,6 +1,9 @@
 <!--
 othneildrew/Best-README-Template
 -->
+> [!WARNING]
+> Due to WhatsApp's recent attempt to curb third-party "clients" to WhatsApp Web, this project is now archived and will no longer be updated. Look into this powerful fork of Whatsie called [Whatly](https://github.com/shakaran/whatly)
+
 <a id="readme-top"></a>
 
 <!-- PROJECT SHIELDS -->
