@@ -114,7 +114,69 @@ export function clearNotificationHistoryCache(optionsOrPeriod: string | ClearHis
   state.mainWindow?.webContents.send('notification:history-changed', updatedHistory);
 }
 
-export async function createNotification(data: { title: string; body: string; icon: string; tag: string }, senderWebContents: WebContents) {
+import { dbusNotifications } from './dbusNotifications';
+
+interface ActiveNotificationContext {
+  accountId: string;
+  senderWebContents: WebContents;
+  contactName: string;
+  tag: string;
+}
+
+const activeDbusNotifications = new Map<number, ActiveNotificationContext>();
+let dbusListenersAttached = false;
+
+function ensureDbusListeners() {
+  if (dbusListenersAttached) return;
+  dbusListenersAttached = true;
+
+  dbusNotifications.on('replied', (id: number, text: string) => {
+    const ctx = activeDbusNotifications.get(id);
+    if (!ctx) return;
+    activeDbusNotifications.delete(id);
+
+    const body = text.trim();
+    if (!body) return;
+
+    ctx.senderWebContents.send('notification:send-inline-reply', {
+      contactName: ctx.contactName,
+      text: body,
+      tag: ctx.tag,
+    });
+  });
+
+  dbusNotifications.on('actionInvoked', (id: number, actionKey: string) => {
+    const ctx = activeDbusNotifications.get(id);
+    if (!ctx) return;
+    activeDbusNotifications.delete(id);
+
+    if (state.mainWindow) {
+      state.mainWindow.show();
+      state.mainWindow.focus();
+    }
+    switchActiveAccount(ctx.accountId);
+    ctx.senderWebContents.send('notification:clicked-reply', ctx.tag);
+  });
+
+  dbusNotifications.on('closed', (id: number) => {
+    activeDbusNotifications.delete(id);
+  });
+}
+
+export function closeDbusNotificationByTag(tag: string) {
+  for (const [id, ctx] of activeDbusNotifications.entries()) {
+    if (ctx.tag === tag) {
+      dbusNotifications.close(id);
+      activeDbusNotifications.delete(id);
+      break;
+    }
+  }
+}
+
+export async function createNotification(
+  data: { title: string; body: string; icon: string; tag: string; canReply?: boolean },
+  senderWebContents: WebContents
+) {
   const senderAccount = getAccountForWebContents(senderWebContents);
   if (!senderAccount) return;
 
@@ -134,6 +196,32 @@ export async function createNotification(data: { title: string; body: string; ic
 
   if (senderAccount.settings?.notificationsEnabled === false) {
     return;
+  }
+
+  const isInlineReplyEnabled = state.globalSettings?.inlineReplyEnabled !== false;
+  if (isInlineReplyEnabled) {
+    ensureDbusListeners();
+    const canUseDbus = await dbusNotifications.isAvailable();
+    if (canUseDbus) {
+      const id = await dbusNotifications.notify({
+        title: brandedTitle,
+        body: data.body,
+        iconDataUrl: data.icon,
+        placeholder: `Reply to ${data.title}…`,
+        canReply: data.canReply !== false,
+        timeoutMs: 25000,
+      });
+
+      if (id > 0) {
+        activeDbusNotifications.set(id, {
+          accountId: senderAccount.id,
+          senderWebContents,
+          contactName: data.title,
+          tag: data.tag,
+        });
+        return;
+      }
+    }
   }
 
   let iconImage: any = null;

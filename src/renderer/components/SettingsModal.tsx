@@ -500,21 +500,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                   Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
                 </div>
                 {/* Dynamic Version & Build Info */}
-                <div className="flex items-center justify-center gap-2 mt-2">
+                <div className="flex items-center justify-center mt-2">
                   <span className="text-[11px] font-mono font-medium text-[#d1d7db]">
                     {versionInfo ? versionInfo.displayVersion : 'v1.0.0'}
                   </span>
-                  {versionInfo && (
-                    <span
-                      className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-semibold uppercase tracking-wider ${
-                        versionInfo.isRelease
-                          ? 'bg-[#00a884]/20 text-[#00a884] border border-[#00a884]/30'
-                          : 'bg-[#ff9f43]/20 text-[#ff9f43] border border-[#ff9f43]/30'
-                      }`}
-                    >
-                      {versionInfo.isRelease ? 'Release' : 'Dev Build'}
-                    </span>
-                  )}
                 </div>
 
                 <div className="text-[10px] text-[#8696a0] mt-1 flex items-center justify-center gap-1.5">

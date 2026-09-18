@@ -5,7 +5,7 @@ import { saveAccounts, saveSettings, getAccountStorageSizes, invalidateStorageCa
 import { importExtension, installWebStoreExtension, toggleExtension, removeExtension, checkForWebStoreUpdates } from './extensions';
 import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectCustomCssForView } from './views';
 import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize, unloadAccountLogic, loadAccountLogic, notifyAccountListChanged } from './window';
-import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry } from './notifications';
+import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry, closeDbusNotificationByTag } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus } from './utils';
 import { downloadManager } from './downloads';
@@ -536,13 +536,14 @@ export function registerIpcHandlers() {
   });
 
   // Notification Handlers
-  ipcMain.on('notification:create', async (event, data: { title: string; body: string; icon: string; tag: string }) => {
+  ipcMain.on('notification:create', async (event, data: { title: string; body: string; icon: string; tag: string; canReply?: boolean }) => {
     if (!data || typeof data !== 'object') return;
     const sanitizedData = {
       title: typeof data.title === 'string' ? data.title.substring(0, 300) : '',
       body: typeof data.body === 'string' ? data.body.substring(0, 1000) : '',
       icon: typeof data.icon === 'string' ? data.icon.substring(0, 500000) : '', // Max 500KB icon string
       tag: typeof data.tag === 'string' ? data.tag.substring(0, 100) : '',
+      canReply: typeof data.canReply === 'boolean' ? data.canReply : true,
     };
     await createNotification(sanitizedData, event.sender);
   });
@@ -557,8 +558,9 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.on('notification:close-request', (_event, tag: string) => {
-    // Optional tag mapping close
+  ipcMain.on('notification:close-request', (_event, _tag: string) => {
+    // Intentionally no-op to prevent WhatsApp Web's browser auto-dismiss timer from
+    // prematurely killing desktop notifications before the user can type a reply.
   });
 
   ipcMain.handle('notification:get-history', () => {
