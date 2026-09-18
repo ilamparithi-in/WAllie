@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw, FolderOpen, User, Trash2 } from 'lucide-react';
-import type { AccountInfo, GlobalSettings } from '../../preload';
+import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw, FolderOpen, User, Trash2, Download, Copy, Check } from 'lucide-react';
+import type { AccountInfo, GlobalSettings, AppVersionInfo } from '../../preload';
 import { GeneralSettingsPage } from './settings/GeneralSettingsPage';
 import { PreloadSettingsPage } from './settings/PreloadSettingsPage';
 import { AccountsSettingsPage } from './settings/AccountsSettingsPage';
@@ -9,6 +9,7 @@ import { ExtensionsSettingsPage } from './settings/ExtensionsSettingsPage';
 import { ThemeSettingsPage } from './settings/ThemeSettingsPage';
 import { StorageSettingsPage } from './settings/StorageSettingsPage';
 import { NotificationSettingsPage } from './settings/NotificationSettingsPage';
+import { DownloadsSettingsPage } from './settings/DownloadsSettingsPage';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -18,7 +19,7 @@ interface SettingsModalProps {
   onShowDisclaimer: () => void;
 }
 
-type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts';
+type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads';
 
 const SETTINGS_MENU_ITEMS: {
   page: PageType;
@@ -28,6 +29,7 @@ const SETTINGS_MENU_ITEMS: {
 }[] = [
   { page: 'accounts', icon: User, title: 'Manage Accounts', description: 'Customize account names and emojis' },
   { page: 'general', icon: SettingsIcon, title: 'General Settings', description: 'Tray settings and GPU hardware acceleration' },
+  { page: 'downloads', icon: Download, title: 'Downloads', description: 'Default folder, Save As dialog, and file click behavior' },
   { page: 'preload', icon: Users, title: 'Accounts to load on launch', description: 'Select which accounts get preloaded in the background' },
   { page: 'permissions', icon: Shield, title: 'Browser permissions', description: 'Manage camera, mic, notifications, geolocation, and clipboard access' },
   { page: 'extensions', icon: Puzzle, title: 'Chrome Extensions', description: 'Manage helper extensions and plugins' },
@@ -85,6 +87,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   const [notificationHistory, setNotificationHistory] = useState<any[]>([]);
   const [notifSearch, setNotifSearch] = useState<string>('');
   const [notifAccountFilter, setNotifAccountFilter] = useState<string>('all');
+
+  // Dynamic Version Info state
+  const [versionInfo, setVersionInfo] = useState<AppVersionInfo | null>(null);
+  const [copiedVersion, setCopiedVersion] = useState<boolean>(false);
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
 
@@ -311,6 +317,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
       setNotificationHistory(history);
     });
 
+    // Fetch dynamic build version information
+    window.electronAPI?.getAppVersion().then((info) => {
+      setVersionInfo(info);
+    }).catch(console.error);
+
     // Listen for real-time account list changes
     const unsubscribeAccount = window.electronAPI?.onAccountListChanged((updatedAccounts, updatedActiveId) => {
       setAccounts(updatedAccounts);
@@ -427,6 +438,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
               <ArrowLeft className="w-4 h-4" />
               <span className="text-[#e9edef] font-semibold text-xs">
                 {activePage === 'general' && 'General Settings'}
+                {activePage === 'downloads' && 'Downloads'}
                 {activePage === 'preload' && 'Accounts to load on launch'}
                 {activePage === 'permissions' && 'Browser permissions'}
                 {activePage === 'extensions' && 'Chrome Extensions'}
@@ -487,8 +499,54 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                 <div className="text-[10px] text-[#8696a0] mt-1 leading-normal max-w-[320px] mx-auto">
                   Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
                 </div>
-                <div className="text-[9px] text-[#8696a0] mt-1">
-                  Version 1.0.0 • MIT License • By Ilamparithi M
+                {/* Dynamic Version & Build Info */}
+                <div className="flex items-center justify-center gap-2 mt-2">
+                  <span className="text-[11px] font-mono font-medium text-[#d1d7db]">
+                    {versionInfo ? versionInfo.displayVersion : 'v1.0.0'}
+                  </span>
+                  {versionInfo && (
+                    <span
+                      className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-semibold uppercase tracking-wider ${
+                        versionInfo.isRelease
+                          ? 'bg-[#00a884]/20 text-[#00a884] border border-[#00a884]/30'
+                          : 'bg-[#ff9f43]/20 text-[#ff9f43] border border-[#ff9f43]/30'
+                      }`}
+                    >
+                      {versionInfo.isRelease ? 'Release' : 'Dev Build'}
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-[10px] text-[#8696a0] mt-1 flex items-center justify-center gap-1.5">
+                  <span>MIT License • By Ilamparithi M</span>
+                  {versionInfo && (
+                    <>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const details = `WAllie ${versionInfo.version} (Commit: ${versionInfo.commitHash}, Built: ${versionInfo.buildDate})`;
+                          navigator.clipboard.writeText(details);
+                          setCopiedVersion(true);
+                          setTimeout(() => setCopiedVersion(false), 2000);
+                        }}
+                        title="Copy build diagnostics to clipboard"
+                        className="text-[#8696a0] hover:text-[#00a884] transition-colors inline-flex items-center gap-1 cursor-pointer bg-transparent border-none p-0 text-[10px]"
+                      >
+                        {copiedVersion ? (
+                          <>
+                            <Check className="w-3 h-3 text-[#00a884]" />
+                            <span className="text-[#00a884] font-medium">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span className="underline hover:text-[#00a884]">Copy details</span>
+                          </>
+                        )}
+                      </button>
+                    </>
+                  )}
                 </div>
                 <div className="mt-1.5 flex flex-col gap-1 items-center">
                   <button
@@ -545,6 +603,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                 <>
                   {subPage === 'general' && (
                     <GeneralSettingsPage
+                      globalSettings={globalSettings}
+                      handleToggleGlobalSetting={handleToggleGlobalSetting}
+                    />
+                  )}
+
+                  {subPage === 'downloads' && (
+                    <DownloadsSettingsPage
                       globalSettings={globalSettings}
                       handleToggleGlobalSetting={handleToggleGlobalSetting}
                     />

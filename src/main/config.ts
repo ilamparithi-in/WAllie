@@ -67,6 +67,10 @@ export function loadSettings(): GlobalSettings {
         disclaimerAccepted: !!parsed.disclaimerAccepted,
         externalLinkWarningEnabled: parsed.externalLinkWarningEnabled !== false,
         trustedDomains: Array.isArray(parsed.trustedDomains) ? parsed.trustedDomains : ['whatsapp.com', 'whatsapp.net'],
+        defaultDownloadsPath: typeof parsed.defaultDownloadsPath === 'string' && parsed.defaultDownloadsPath ? parsed.defaultDownloadsPath : app.getPath('downloads'),
+        askWhereToSaveEveryTime: !!parsed.askWhereToSaveEveryTime,
+        fileSecondClickAction: (['open', 'showInFolder', 'saveAs', 'download'].includes(parsed.fileSecondClickAction) ? parsed.fileSecondClickAction : 'open'),
+        downloadNotificationsEnabled: parsed.downloadNotificationsEnabled !== false,
       };
     }
   } catch (error) {
@@ -87,6 +91,10 @@ export function loadSettings(): GlobalSettings {
     disclaimerAccepted: false,
     externalLinkWarningEnabled: true,
     trustedDomains: ['whatsapp.com', 'whatsapp.net'],
+    defaultDownloadsPath: app.getPath('downloads'),
+    askWhereToSaveEveryTime: false,
+    fileSecondClickAction: 'open',
+    downloadNotificationsEnabled: true,
   };
 }
 

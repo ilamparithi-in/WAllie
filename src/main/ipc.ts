@@ -8,6 +8,7 @@ import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition,
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus } from './utils';
+import { downloadManager } from './downloads';
 
 export function registerIpcHandlers() {
   ipcMain.on('window:minimize', (event) => {
@@ -599,5 +600,48 @@ export function registerIpcHandlers() {
     } catch (error) {
       console.error('Failed to handle custom protocol redirection:', error);
     }
+  });
+
+  // Download Manager Handlers
+  ipcMain.handle('downloads:choose-folder', async () => {
+    return downloadManager.chooseDownloadsFolder();
+  });
+
+  ipcMain.handle('downloads:open-file', async (_event, filePath: string) => {
+    return downloadManager.openDownloadedFile(filePath);
+  });
+
+  ipcMain.handle('downloads:show-in-folder', (_event, filePath: string) => {
+    return downloadManager.showItemInFolder(filePath);
+  });
+
+  ipcMain.handle('downloads:get-history', () => {
+    return downloadManager.getHistory();
+  });
+
+  ipcMain.handle('downloads:clear-history', async () => {
+    return downloadManager.clearHistory();
+  });
+
+  ipcMain.on('download:set-intent', (_event, data: { intent: any; filename?: string }) => {
+    downloadManager.setIntent(data.intent, data.filename);
+  });
+
+  // App Version Info Handler
+  ipcMain.handle('app:get-version-info', () => {
+    if (typeof __APP_VERSION_INFO__ !== 'undefined' && __APP_VERSION_INFO__) {
+      return __APP_VERSION_INFO__;
+    }
+    return {
+      version: app.getVersion(),
+      displayVersion: `v${app.getVersion()}`,
+      commitHash: 'unknown',
+      commitCount: 0,
+      baseVersion: app.getVersion(),
+      targetVersion: app.getVersion(),
+      isRelease: true,
+      isDirty: false,
+      buildDate: new Date().toISOString(),
+    };
   });
 }

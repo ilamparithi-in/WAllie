@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
-import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification } from '../shared/types';
+import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo } from '../shared/types';
 
-export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification };
+export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo };
 
 export interface ElectronAPI {
   // Window controls
@@ -51,6 +51,13 @@ export interface ElectronAPI {
   saveGlobalSettings: (settings: GlobalSettings) => Promise<boolean>;
   updateAccountSettings: (accountId: string, settings: { cameraEnabled: boolean; micEnabled: boolean; notificationsEnabled: boolean }) => Promise<boolean>;
 
+  // Download controls
+  chooseDownloadsFolder: () => Promise<string | null>;
+  openDownloadedFile: (filePath: string) => Promise<boolean>;
+  showItemInFolder: (filePath: string) => void;
+  getDownloadHistory: () => Promise<DownloadRecord[]>;
+  clearDownloadHistory: () => Promise<boolean>;
+
   // Notification history & CSS controls
   getNotificationHistory: () => Promise<HistoricalNotification[]>;
   clearNotificationHistory: (options?: string | { mode: string; startDate?: string; endDate?: string }) => Promise<boolean>;
@@ -77,6 +84,7 @@ export interface ElectronAPI {
     callback: (data: {
       id: number;
       filename: string;
+      savePath?: string;
       percent: number;
       state: 'progressing' | 'completed' | 'failed';
       receivedBytes?: number;
@@ -86,6 +94,7 @@ export interface ElectronAPI {
   relaunchApp: () => void;
   onOpenManageAccounts: (callback: (accountId: string) => void) => () => void;
   focusActiveAccount: () => void;
+  getAppVersion: () => Promise<AppVersionInfo>;
 }
 
 const api: ElectronAPI = {
@@ -135,6 +144,12 @@ const api: ElectronAPI = {
   getGlobalSettings: () => ipcRenderer.invoke('settings:get-global'),
   saveGlobalSettings: (settings) => ipcRenderer.invoke('settings:save-global', settings),
   updateAccountSettings: (accountId, settings) => ipcRenderer.invoke('account:update-settings', accountId, settings),
+
+  chooseDownloadsFolder: () => ipcRenderer.invoke('downloads:choose-folder'),
+  openDownloadedFile: (filePath) => ipcRenderer.invoke('downloads:open-file', filePath),
+  showItemInFolder: (filePath) => ipcRenderer.invoke('downloads:show-in-folder', filePath),
+  getDownloadHistory: () => ipcRenderer.invoke('downloads:get-history'),
+  clearDownloadHistory: () => ipcRenderer.invoke('downloads:clear-history'),
 
   getNotificationHistory: () => ipcRenderer.invoke('notification:get-history'),
   clearNotificationHistory: (options) => ipcRenderer.invoke('notification:clear-history', options),
@@ -216,6 +231,7 @@ const api: ElectronAPI = {
       data: {
         id: number;
         filename: string;
+        savePath?: string;
         percent: number;
         state: 'progressing' | 'completed' | 'failed';
         receivedBytes?: number;
@@ -231,6 +247,8 @@ const api: ElectronAPI = {
     ipcRenderer.on('window:always-on-top-changed', subscription);
     return () => ipcRenderer.removeListener('window:always-on-top-changed', subscription);
   },
+
+  getAppVersion: () => ipcRenderer.invoke('app:get-version-info'),
 };
 
 // Defined inline here because build:preload cleans dist/preload/shared.
@@ -274,6 +292,55 @@ function setupWhatsAppIntegration() {
     ipcRenderer.send('webview:clicked');
   });
 
+  // Capture clicks on document to detect Context Menu Download or Second-click on file
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    // 1. Context Menu "Download" detection
+    const menuItem = target.closest('[role="button"], li, div[class*="menu-item"], div[tabindex="-1"]');
+    if (menuItem) {
+      const text = (menuItem.textContent || '').trim().toLowerCase();
+      const isDownloadText = text === 'download' || text.startsWith('download ') || text.includes('download');
+      const hasDownloadIcon = !!menuItem.querySelector('[data-icon*="download"], [data-testid*="download"]');
+      const isInsideMenu = !!target.closest('[role="application"], [data-testid="context-menu"], [class*="popup"], [class*="menu"], [class*="dropdown"], [role="menu"]');
+
+      if ((isDownloadText || hasDownloadIcon) && isInsideMenu) {
+        console.log('[walinux] Context menu Download clicked -> intent: context-menu-download');
+        ipcRenderer.send('download:set-intent', { intent: 'context-menu-download' });
+        return;
+      }
+    }
+
+    // 2. Message / Document card detection
+    const msgContainer = target.closest('[data-id], div[class*="message-in"], div[class*="message-out"], [data-testid="msg-container"]');
+    if (msgContainer) {
+      // Check if download button is present in this message
+      const downloadBtn = msgContainer.querySelector(
+        '[data-icon="download"], [data-testid="download"], [data-testid="audio-download"], [data-icon="audio-download"], button[aria-label*="download" i]'
+      );
+      const clickedDownloadBtn = target.closest(
+        '[data-icon="download"], [data-testid="download"], [data-testid="audio-download"], [data-icon="audio-download"], button[aria-label*="download" i]'
+      );
+
+      if (clickedDownloadBtn || downloadBtn) {
+        console.log('[walinux] Download button present -> intent: first-download');
+        ipcRenderer.send('download:set-intent', { intent: 'first-download' });
+      } else {
+        // Download button is not present, check if this is a file card
+        const titleEl = msgContainer.querySelector('span[title], div[title]');
+        const filename = titleEl ? titleEl.getAttribute('title') || titleEl.textContent || '' : '';
+        const hasExtension = /\.[a-z0-9]{2,5}$/i.test(filename.trim());
+        const isDocCard = !!msgContainer.querySelector('[data-icon="document"], [data-icon="default-doc"], [data-testid="document-thumb"]');
+
+        if (hasExtension || isDocCard) {
+          console.log('[walinux] File card clicked without download button -> intent: second-click for:', filename.trim());
+          ipcRenderer.send('download:set-intent', { intent: 'second-click', filename: filename.trim() });
+        }
+      }
+    }
+  }, true);
+
   // Expose safe proxy methods to the Main World
   contextBridge.exposeInMainWorld('__walinux_report_zoom', (scale: number) => {
     ipcRenderer.send('zoom:visual-changed', scale);
@@ -299,7 +366,10 @@ function setupWhatsAppIntegration() {
     },
     onNotificationClicked: (callback: (tag: string) => void) => {
       onClickCallback = callback;
-    }
+    },
+    onAnchorDownload: (filename: string) => {
+      ipcRenderer.send('download:set-intent', { intent: 'anchor-detected', filename });
+    },
   });
 
   ipcRenderer.on('notification:clicked-reply', (_event: any, tag: string) => {
@@ -380,6 +450,16 @@ function setupWhatsAppIntegration() {
           window.ServiceWorkerRegistration.prototype.showNotification = function(title, options = {}) {
             new CustomNotification(title, options);
             return Promise.resolve();
+          };
+        }
+
+        if (window.HTMLAnchorElement && window.HTMLAnchorElement.prototype) {
+          const originalAnchorClick = window.HTMLAnchorElement.prototype.click;
+          window.HTMLAnchorElement.prototype.click = function() {
+            if (this.download && window.__walinux_ipc && window.__walinux_ipc.onAnchorDownload) {
+              window.__walinux_ipc.onAnchorDownload(this.download);
+            }
+            return originalAnchorClick.apply(this, arguments);
           };
         }
       })();

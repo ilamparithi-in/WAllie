@@ -39,6 +39,19 @@ export interface Account {
   isLoaded?: boolean;
 }
 
+export type FileSecondClickAction = 'open' | 'showInFolder' | 'saveAs' | 'download';
+
+export interface DownloadRecord {
+  id: number | string;
+  filename: string;
+  savePath: string;
+  fileSize?: number;
+  mimeType?: string;
+  timestamp: number;
+  accountId?: string;
+  state: 'progressing' | 'completed' | 'failed' | 'cancelled';
+}
+
 export interface GlobalSettings {
   closeToTray: boolean;
   hardwareAcceleration: boolean;
@@ -54,6 +67,10 @@ export interface GlobalSettings {
   disclaimerAccepted?: boolean;
   externalLinkWarningEnabled?: boolean;
   trustedDomains?: string[];
+  defaultDownloadsPath?: string;
+  askWhereToSaveEveryTime?: boolean;
+  fileSecondClickAction?: FileSecondClickAction;
+  downloadNotificationsEnabled?: boolean;
 }
 
 export interface HistoricalNotification {
@@ -65,3 +82,20 @@ export interface HistoricalNotification {
   icon: string;
   timestamp: number;
 }
+
+export interface AppVersionInfo {
+  version: string;
+  displayVersion: string;
+  commitHash: string;
+  commitCount: number;
+  baseVersion: string;
+  targetVersion: string;
+  isRelease: boolean;
+  isDirty: boolean;
+  buildDate: string;
+}
+
+declare global {
+  const __APP_VERSION_INFO__: AppVersionInfo | undefined;
+}
+

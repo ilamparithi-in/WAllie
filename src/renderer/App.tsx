@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Titlebar } from './components/Titlebar';
 import { SettingsModal } from './components/SettingsModal';
-import { Download, CheckCircle, XCircle, X, Shield, ExternalLink } from 'lucide-react';
+import { Download, CheckCircle, XCircle, X, Shield, ExternalLink, FolderOpen } from 'lucide-react';
 
 import type { AccountInfo, GlobalSettings } from '../preload';
 
@@ -10,6 +10,7 @@ import { useFocusTrap } from './hooks/useFocusTrap';
 interface DownloadState {
   id: number;
   filename: string;
+  savePath?: string;
   percent: number;
   state: 'progressing' | 'completed' | 'failed';
   receivedBytes?: number;
@@ -22,7 +23,7 @@ export const App: React.FC = () => {
   const [downloads, setDownloads] = useState<DownloadState[]>([]);
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
   const [promptAccounts, setPromptAccounts] = useState<AccountInfo[]>([]);
-  const [settingsInitialPage, setSettingsInitialPage] = useState<'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | undefined>(undefined);
+  const [settingsInitialPage, setSettingsInitialPage] = useState<'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads' | undefined>(undefined);
   const [settingsInitialAccountId, setSettingsInitialAccountId] = useState<string | undefined>(undefined);
   const [toasts, setToasts] = useState<{ id: number; message: string; url?: string }[]>([]);
 
@@ -271,8 +272,31 @@ export const App: React.FC = () => {
               )}
 
               {dl.state === 'completed' && (
-                <div className="text-[9px] text-[#00a884] font-semibold">
-                  Saved to Downloads folder
+                <div className="flex items-center justify-between pt-1 border-t border-[#222d34]/60">
+                  <span className="text-[10px] text-[#00a884] font-medium flex items-center gap-1 truncate max-w-[130px]">
+                    <CheckCircle className="w-3 h-3 flex-shrink-0" />
+                    <span>Downloaded</span>
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {dl.savePath && (
+                      <>
+                        <button
+                          onClick={() => window.electronAPI.openDownloadedFile(dl.savePath!)}
+                          className="px-2 py-0.5 bg-[#111b21] hover:bg-[#2a3942] text-[#e9edef] text-[10px] font-medium rounded border border-[#222d34] transition-colors"
+                          title="Open file"
+                        >
+                          Open
+                        </button>
+                        <button
+                          onClick={() => window.electronAPI.showItemInFolder(dl.savePath!)}
+                          className="p-1 bg-[#111b21] hover:bg-[#2a3942] text-[#8696a0] hover:text-[#e9edef] rounded border border-[#222d34] transition-colors"
+                          title="Show in folder"
+                        >
+                          <FolderOpen className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
 
