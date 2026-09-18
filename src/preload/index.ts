@@ -612,17 +612,27 @@ function setupWhatsAppIntegration() {
             }
 
             function isReadOnlyChat(tag, title, opts) {
+              // 1. WhatsApp Channels & Broadcast lists are strictly one-way for followers
               if (tag && (tag.endsWith('@newsletter') || tag.endsWith('@broadcast'))) {
                 return true;
               }
 
-              if (opts && opts.data) {
-                const d = opts.data;
-                if (d.readOnly || d.isReadOnly || d.canSend === false) return true;
-                if (d.chat && (d.chat.readOnly || d.chat.isReadOnly || d.chat.canSend === false)) return true;
-                if (d.chat && d.chat.groupMetadata && d.chat.groupMetadata.announce && !d.chat.groupMetadata.canSend) return true;
+              // 2. Direct 1:1 chats (@c.us / @s.whatsapp.net) are never announcement groups
+              if (tag && (tag.endsWith('@c.us') || tag.endsWith('@s.whatsapp.net'))) {
+                return false;
               }
 
+              // 3. Options metadata check for announcement restrictions
+              if (opts && opts.data) {
+                const d = opts.data;
+                if (d.readOnly === true || d.isReadOnly === true) return true;
+                if (d.chat && (d.chat.readOnly === true || d.chat.isReadOnly === true)) return true;
+                if (d.chat && d.chat.groupMetadata && d.chat.groupMetadata.announce && d.chat.groupMetadata.canSend === false) {
+                  return true;
+                }
+              }
+
+              // 4. WhatsApp Web internal store check
               try {
                 let chatCollection = null;
                 if (typeof window.require === 'function') {
@@ -650,26 +660,21 @@ function setupWhatsAppIntegration() {
                   }
 
                   if (chat) {
-                    if (chat.readOnly === true || chat.isReadOnly === true || chat.canSend === false) {
-                      return true;
-                    }
-                    if (chat.groupMetadata) {
-                      const gm = chat.groupMetadata;
-                      if (gm.announce) {
-                        if (gm.canSend === false) return true;
-                        if (gm.isSenderAnAdmin === false) return true;
+                    if (chat.groupMetadata && chat.groupMetadata.announce) {
+                      if (chat.groupMetadata.canSend === false || chat.groupMetadata.isSenderAnAdmin === false) {
+                        return true;
                       }
                     }
                   }
                 }
               } catch (e) {}
 
+              // 5. Active DOM check: only if an explicit admin restriction lock banner is displayed
               try {
                 const activeHeader = document.querySelector('header span[title]');
                 if (activeHeader && title && activeHeader.textContent.trim().toLowerCase() === title.trim().toLowerCase()) {
-                  const composer = document.querySelector('footer div[contenteditable="true"][role="textbox"]');
                   const lockBanner = document.querySelector('footer [data-icon="lock"], footer [data-icon="channel"], div[data-testid="conversation-footer-banner"]');
-                  if (!composer || lockBanner) {
+                  if (lockBanner) {
                     return true;
                   }
                 }
