@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw, FolderOpen, User, Trash2, Download, Copy, Check } from 'lucide-react';
-import type { AccountInfo, GlobalSettings, AppVersionInfo } from '../../preload';
+import type { AccountInfo, GlobalSettings, AppVersionInfo, AccountSettings } from '../../preload';
 import { GeneralSettingsPage } from './settings/GeneralSettingsPage';
 import { PreloadSettingsPage } from './settings/PreloadSettingsPage';
 import { AccountsSettingsPage } from './settings/AccountsSettingsPage';
@@ -33,7 +33,7 @@ const SETTINGS_MENU_ITEMS: {
   { page: 'preload', icon: Users, title: 'Accounts to load on launch', description: 'Select which accounts get preloaded in the background' },
   { page: 'permissions', icon: Shield, title: 'Browser permissions', description: 'Manage camera, mic, notifications, geolocation, and clipboard access' },
   { page: 'extensions', icon: Puzzle, title: 'Chrome Extensions', description: 'Manage helper extensions and plugins' },
-  { page: 'css', icon: Palette, title: 'Custom CSS & Themes', description: 'Select preset themes or write custom CSS' },
+  { page: 'css', icon: Palette, title: 'Appearance, Fonts & Themes', description: 'Customize fonts, wallpaper, preset themes, and CSS' },
   { page: 'storage', icon: Database, title: 'Storage & Cache', description: 'Inspect sizes, clear browser media or cache' },
   { page: 'notifications', icon: Bell, title: 'Notification History', description: 'View and search desktop alert logs' },
 ];
@@ -79,8 +79,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     }
   }, [activePage]);
 
-  // Custom CSS live state and debounce ref
+  // Custom CSS & Appearance live states
   const [customCss, setCustomCss] = useState<string>('');
+  const [fontFamily, setFontFamily] = useState<string>('');
+  const [monoFontFamily, setMonoFontFamily] = useState<string>('');
+  const [followSystemFont, setFollowSystemFont] = useState<boolean>(false);
+  const [customWallpaper, setCustomWallpaper] = useState<string>('');
+  const [systemFonts, setSystemFonts] = useState<string[]>([]);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Notification History state
@@ -233,48 +238,102 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   }, [selectedAccountId]);
 
   useEffect(() => {
+    if (isOpen && activePage === 'css') {
+      window.electronAPI.getSystemFonts?.().then((fonts) => {
+        if (fonts && fonts.length > 0) {
+          setSystemFonts(fonts);
+        }
+      }).catch(() => {});
+    }
+  }, [isOpen, activePage]);
+
+  useEffect(() => {
     if (selectedAccount) {
       setCustomCss(selectedAccount.settings?.customCss || '');
+      setFontFamily(selectedAccount.settings?.fontFamily || '');
+      setMonoFontFamily(selectedAccount.settings?.monoFontFamily || '');
+      setFollowSystemFont(!!selectedAccount.settings?.followSystemFont);
+      setCustomWallpaper(selectedAccount.settings?.customWallpaper || '');
     }
   }, [selectedAccountId, accounts]);
+
+  const handleSaveAppearance = async (updates: Partial<AccountSettings>) => {
+    if (!selectedAccountId) return;
+    setAccounts((prev) =>
+      prev.map((acc) =>
+        acc.id === selectedAccountId
+          ? { ...acc, settings: { ...acc.settings!, ...updates } }
+          : acc
+      )
+    );
+    try {
+      await window.electronAPI.saveAppearance(selectedAccountId, updates);
+    } catch (err) {
+      console.error('Failed to save appearance settings:', err);
+    }
+  };
 
   const handleCssChange = (newCss: string) => {
     setCustomCss(newCss);
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
-    saveTimeoutRef.current = setTimeout(async () => {
-      if (!selectedAccountId) return;
-      const currentTheme = selectedAccount?.settings?.selectedTheme || 'none';
-      try {
-        await window.electronAPI.saveCss(selectedAccountId, newCss, currentTheme);
-        setAccounts((prev) =>
-          prev.map((acc) =>
-            acc.id === selectedAccountId
-              ? { ...acc, settings: { ...acc.settings!, customCss: newCss } }
-              : acc
-          )
-        );
-      } catch (err) {
-        console.error('Failed to save live CSS override:', err);
-      }
+    saveTimeoutRef.current = setTimeout(() => {
+      handleSaveAppearance({ customCss: newCss });
     }, 300);
   };
 
   const handleSelectPresetTheme = async (themeName: string) => {
-    if (!selectedAccountId) return;
+    await handleSaveAppearance({ selectedTheme: themeName });
+  };
+
+  const handleUpdateFont = (newFont: string) => {
+    setFontFamily(newFont);
+    handleSaveAppearance({ fontFamily: newFont });
+  };
+
+  const handleUpdateMonoFont = (newMono: string) => {
+    setMonoFontFamily(newMono);
+    handleSaveAppearance({ monoFontFamily: newMono });
+  };
+
+  const handleToggleFollowSystemFont = (enabled: boolean) => {
+    setFollowSystemFont(enabled);
+    handleSaveAppearance({ followSystemFont: enabled });
+  };
+
+  const handleSelectWallpaper = async () => {
     try {
-      await window.electronAPI.saveCss(selectedAccountId, customCss, themeName);
-      setAccounts((prev) =>
-        prev.map((acc) =>
-          acc.id === selectedAccountId
-            ? { ...acc, settings: { ...acc.settings!, selectedTheme: themeName } }
-            : acc
-        )
-      );
+      const dataUri = await window.electronAPI.selectWallpaperFile();
+      if (dataUri) {
+        setCustomWallpaper(dataUri);
+        await handleSaveAppearance({ customWallpaper: dataUri });
+      }
     } catch (err) {
-      console.error('Failed to save preset theme:', err);
+      console.error('Failed to select wallpaper:', err);
     }
+  };
+
+  const handleClearWallpaper = () => {
+    setCustomWallpaper('');
+    handleSaveAppearance({ customWallpaper: '' });
+  };
+
+  const handleImportCustomCss = async () => {
+    try {
+      const fileContent = await window.electronAPI.selectCustomCssFile();
+      if (typeof fileContent === 'string') {
+        setCustomCss(fileContent);
+        await handleSaveAppearance({ customCss: fileContent });
+      }
+    } catch (err) {
+      console.error('Failed to import custom CSS:', err);
+    }
+  };
+
+  const handleClearCustomCss = () => {
+    setCustomCss('');
+    handleSaveAppearance({ customCss: '' });
   };
 
   const handleClearHistory = async (options?: any) => {
@@ -442,7 +501,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                 {activePage === 'preload' && 'Accounts to load on launch'}
                 {activePage === 'permissions' && 'Browser permissions'}
                 {activePage === 'extensions' && 'Chrome Extensions'}
-                {activePage === 'css' && 'Custom CSS & Themes'}
+                {activePage === 'css' && 'Appearance, Fonts & Themes'}
                 {activePage === 'storage' && 'Storage & Cache'}
                 {activePage === 'notifications' && 'Notification History'}
                 {activePage === 'accounts' && 'Manage Accounts'}
@@ -666,6 +725,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                       handleSelectPresetTheme={handleSelectPresetTheme}
                       customCss={customCss}
                       handleCssChange={handleCssChange}
+                      fontFamily={fontFamily}
+                      monoFontFamily={monoFontFamily}
+                      followSystemFont={followSystemFont}
+                      customWallpaper={customWallpaper}
+                      systemFonts={systemFonts}
+                      onUpdateFont={handleUpdateFont}
+                      onUpdateMonoFont={handleUpdateMonoFont}
+                      onToggleFollowSystemFont={handleToggleFollowSystemFont}
+                      onSelectWallpaper={handleSelectWallpaper}
+                      onClearWallpaper={handleClearWallpaper}
+                      onImportCustomCss={handleImportCustomCss}
+                      onClearCustomCss={handleClearCustomCss}
                     />
                   )}
 

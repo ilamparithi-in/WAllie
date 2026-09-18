@@ -120,40 +120,107 @@ footer {
 }
 `;
 
-const insertedCssKeys = new Map<string, string>();
+export function buildAccountStyling(account: Account): { fontCss: string; wallpaperCss: string; customCss: string } {
+  const {
+    customCss = '',
+    selectedTheme = 'none',
+    fontFamily = '',
+    monoFontFamily = '',
+    followSystemFont = false,
+    customWallpaper = '',
+  } = account.settings || {};
 
-export async function injectCustomCssForView(accountId: string, webContents: Electron.WebContents) {
-  const account = getAccountById(accountId);
-  if (!account || !account.settings) return;
-
-  const previousKey = insertedCssKeys.get(accountId);
-  if (previousKey) {
-    try {
-      await webContents.removeInsertedCSS(previousKey);
-      insertedCssKeys.delete(accountId);
-    } catch (err) {
-      // Ignore if key is already invalid due to page reload
+  // 1. Font CSS
+  const fontRules: string[] = [];
+  if (followSystemFont) {
+    fontRules.push(
+      '#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n}'
+    );
+  } else if (fontFamily && fontFamily.trim()) {
+    const family = fontFamily.trim();
+    const isGeneric = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|Segoe UI|Arial|Helvetica|Times New Roman|Courier New|Ubuntu|Cantarell|DejaVu Sans)$/i.test(family);
+    let importRule = '';
+    if (!isGeneric && !family.includes(',')) {
+      importRule = `@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:ital,wght@0,300..700;1,300..700&display=swap');\n`;
     }
+    fontRules.push(
+      `${importRule}#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: "${family}", "Segoe UI", Helvetica, Arial, sans-serif !important;\n}`
+    );
   }
 
-  const { customCss = '', selectedTheme = 'none' } = account.settings;
+  if (monoFontFamily && monoFontFamily.trim()) {
+    const mono = monoFontFamily.trim();
+    const isGenericMono = /^(monospace|ui-monospace|Courier New|Courier|Consolas|DejaVu Sans Mono|Liberation Mono)$/i.test(mono);
+    let importRule = '';
+    if (!isGenericMono && !mono.includes(',')) {
+      importRule = `@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(mono)}:ital,wght@0,300..700;1,300..700&display=swap');\n`;
+    }
+    fontRules.push(
+      `${importRule}code, pre {\n  font-family: "${mono}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;\n}`
+    );
+  }
+  const fontCss = fontRules.join('\n\n');
 
+  // 2. Chat Wallpaper CSS on #main
+  let wallpaperCss = '';
+  if (customWallpaper && customWallpaper.trim()) {
+    wallpaperCss = `#main {\n  background-image: url(${JSON.stringify(customWallpaper.trim())}) !important;\n  background-size: cover !important;\n  background-position: center center !important;\n  background-repeat: no-repeat !important;\n}`;
+  }
+
+  // 3. Preset Theme & Custom CSS
   let themeCss = '';
   if (selectedTheme === 'oled') {
     themeCss = OLED_THEME_CSS;
   } else if (selectedTheme === 'compact') {
     themeCss = COMPACT_THEME_CSS;
   }
+  const finalCustomCss = [themeCss, customCss].filter(Boolean).join('\n\n');
 
-  const combinedCss = themeCss + '\n' + customCss;
-  if (!combinedCss.trim()) return;
+  return { fontCss, wallpaperCss, customCss: finalCustomCss };
+}
+
+export async function injectAccountStyling(accountId: string, webContents: Electron.WebContents) {
+  if (!webContents || webContents.isDestroyed()) return;
+  const account = getAccountById(accountId);
+  if (!account || !account.settings) return;
+
+  const { fontCss, wallpaperCss, customCss } = buildAccountStyling(account);
+
+  const jsPayload = `
+    (() => {
+      try {
+        const updateStyle = (id, css) => {
+          let el = document.getElementById(id);
+          if (!css || !css.trim()) {
+            if (el) el.remove();
+            return;
+          }
+          if (!el) {
+            el = document.createElement('style');
+            el.id = id;
+            (document.head || document.documentElement).appendChild(el);
+          }
+          el.textContent = css;
+        };
+
+        updateStyle('wallie-web-font', ${JSON.stringify(fontCss)});
+        updateStyle('wallie-chat-wallpaper', ${JSON.stringify(wallpaperCss)});
+        updateStyle('wallie-custom-css', ${JSON.stringify(customCss)});
+      } catch (e) {
+        console.error('Error applying account styles:', e);
+      }
+    })();
+  `;
 
   try {
-    const key = await webContents.insertCSS(combinedCss);
-    insertedCssKeys.set(accountId, key);
+    await webContents.executeJavaScript(jsPayload);
   } catch (err) {
-    console.error('Failed to insert CSS:', err);
+    // Page may not be ready or navigating; will re-apply on dom-ready
   }
+}
+
+export async function injectCustomCssForView(accountId: string, webContents: Electron.WebContents) {
+  return injectAccountStyling(accountId, webContents);
 }
 
 export function pauseAllMedia() {
@@ -830,8 +897,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
 
   view.webContents.on('dom-ready', () => {
     checkLoginStatus();
-    insertedCssKeys.delete(account.id);
-    injectCustomCssForView(account.id, view.webContents);
+    injectAccountStyling(account.id, view.webContents);
 
     view.webContents.executeJavaScript(`
       (() => {

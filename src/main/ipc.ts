@@ -1,14 +1,19 @@
-import { ipcMain, BrowserWindow, session, Menu, app, dialog } from 'electron';
+import { ipcMain, BrowserWindow, session, Menu, app, dialog, nativeImage } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { state } from './state';
 import { saveAccounts, saveSettings, getAccountStorageSizes, invalidateStorageCache } from './config';
 import { importExtension, installWebStoreExtension, toggleExtension, removeExtension, checkForWebStoreUpdates } from './extensions';
-import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectCustomCssForView } from './views';
+import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectCustomCssForView, injectAccountStyling } from './views';
 import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize, unloadAccountLogic, loadAccountLogic, notifyAccountListChanged } from './window';
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry, closeDbusNotificationByTag } from './notifications';
-import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
+import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS, AccountSettings } from '../shared/types';
 import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus } from './utils';
 import { downloadManager } from './downloads';
+
+const execAsync = promisify(exec);
 
 export function registerIpcHandlers() {
   ipcMain.on('window:minimize', (event) => {
@@ -515,11 +520,144 @@ export function registerIpcHandlers() {
 
       const view = state.accountViews.get(accountId);
       if (view) {
-        injectCustomCssForView(accountId, view.webContents);
+        injectAccountStyling(accountId, view.webContents);
       }
       return true;
     }
     return false;
+  });
+
+  ipcMain.handle('account:save-appearance', (_event, accountId: string, appearance: Partial<AccountSettings>) => {
+    if (typeof accountId !== 'string' || !appearance || typeof appearance !== 'object') return false;
+    const account = getAccountById(accountId);
+    if (!account) return false;
+    if (!account.settings) {
+      account.settings = { ...DEFAULT_ACCOUNT_SETTINGS };
+    }
+
+    if (typeof appearance.customCss === 'string') {
+      account.settings.customCss = appearance.customCss.substring(0, 500000);
+    }
+    if (typeof appearance.selectedTheme === 'string') {
+      account.settings.selectedTheme = appearance.selectedTheme.substring(0, 100);
+    }
+    if (typeof appearance.fontFamily === 'string') {
+      account.settings.fontFamily = appearance.fontFamily.substring(0, 200);
+    }
+    if (typeof appearance.monoFontFamily === 'string') {
+      account.settings.monoFontFamily = appearance.monoFontFamily.substring(0, 200);
+    }
+    if (typeof appearance.followSystemFont === 'boolean') {
+      account.settings.followSystemFont = appearance.followSystemFont;
+    }
+    if (typeof appearance.customWallpaper === 'string') {
+      account.settings.customWallpaper = appearance.customWallpaper.substring(0, 5000000);
+    }
+
+    saveAccounts();
+
+    const view = state.accountViews.get(accountId);
+    if (view) {
+      injectAccountStyling(accountId, view.webContents);
+    }
+    return true;
+  });
+
+  ipcMain.handle('wallpaper:select-file', async () => {
+    if (!state.mainWindow || state.mainWindow.isDestroyed()) return null;
+    const result = await dialog.showOpenDialog(state.mainWindow, {
+      title: 'Choose Chat Wallpaper Image',
+      filters: [
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] },
+      ],
+      properties: ['openFile'],
+    });
+
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return null;
+    }
+
+    const filePath = result.filePaths[0];
+    try {
+      const image = nativeImage.createFromPath(filePath);
+      if (image.isEmpty()) return null;
+
+      const size = image.getSize();
+      const maxEdge = 1920;
+      let finalImage = image;
+
+      if (size.width > maxEdge || size.height > maxEdge) {
+        const scale = Math.min(maxEdge / size.width, maxEdge / size.height);
+        finalImage = image.resize({
+          width: Math.round(size.width * scale),
+          height: Math.round(size.height * scale),
+          quality: 'better',
+        });
+      }
+
+      const jpegBuffer = finalImage.toJPEG(82);
+      return `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`;
+    } catch (err) {
+      console.error('Failed to process wallpaper image:', err);
+      return null;
+    }
+  });
+
+  ipcMain.handle('customcss:select-file', async () => {
+    if (!state.mainWindow || state.mainWindow.isDestroyed()) return null;
+    const result = await dialog.showOpenDialog(state.mainWindow, {
+      title: 'Choose Custom CSS Stylesheet',
+      filters: [
+        { name: 'CSS Stylesheets', extensions: ['css'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+      properties: ['openFile'],
+    });
+
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return null;
+    }
+
+    try {
+      const content = await fs.promises.readFile(result.filePaths[0], 'utf-8');
+      return content.substring(0, 500000); // 500KB max
+    } catch (err) {
+      console.error('Failed to read custom CSS file:', err);
+      return null;
+    }
+  });
+
+  ipcMain.handle('system:get-fonts', async () => {
+    try {
+      const { stdout } = await execAsync('fc-list : family');
+      const families = new Set<string>();
+      stdout.split('\n').forEach((line) => {
+        line.split(',').forEach((f) => {
+          const trimmed = f.trim();
+          if (trimmed && !trimmed.startsWith('.')) {
+            families.add(trimmed);
+          }
+        });
+      });
+      return Array.from(families).sort((a, b) => a.localeCompare(b));
+    } catch (err) {
+      return [
+        'Inter',
+        'Roboto',
+        'Open Sans',
+        'Lato',
+        'Montserrat',
+        'Poppins',
+        'Ubuntu',
+        'Cantarell',
+        'DejaVu Sans',
+        'Fira Sans',
+        'Segoe UI',
+        'Helvetica Neue',
+        'Arial',
+        'sans-serif',
+      ];
+    }
   });
 
   ipcMain.on('devtools:toggle', () => {
