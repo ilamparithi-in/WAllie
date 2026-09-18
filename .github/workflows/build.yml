@@ -28,6 +28,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -73,8 +75,11 @@ jobs:
       - name: Build renderer and main bundles
         run: npm run build
 
+      - name: Print Version Diagnostics
+        run: node scripts/version-helper.cjs --json
+
       - name: Package Electron App
-        run: npx electron-builder --${{ matrix.target }} --publish never
+        run: node scripts/build-package.cjs --${{ matrix.target }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

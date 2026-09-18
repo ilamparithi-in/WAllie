@@ -1,0 +1,57 @@
+# Maintainer: Ilamparithi Murali <ilamparithi.in@gmail.com>
+# VCS PKGBUILD for continuous development / debug builds of WAllie
+
+pkgname=wallie-git
+_pkgname=wallie
+pkgver=1.0.0.r11.g7441551
+pkgrel=1
+pkgdesc="Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support (Git VCS debug build)"
+arch=('any')
+url="https://github.com/ilamparithi-in/WAllie"
+license=('MIT')
+depends=('electron34')
+makedepends=('git' 'npm' 'nodejs')
+provides=('wallie')
+conflicts=('wallie')
+source=("${_pkgname}::git+https://github.com/ilamparithi-in/WAllie.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "${srcdir}/${_pkgname}"
+  git describe --long --tags 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' || \
+  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+  cd "${srcdir}/${_pkgname}"
+  npm ci
+}
+
+build() {
+  cd "${srcdir}/${_pkgname}"
+  npm run build
+  npm prune --omit=dev
+}
+
+package() {
+  cd "${srcdir}/${_pkgname}"
+  
+  # App directory
+  install -d "${pkgdir}/usr/lib/${_pkgname}"
+  cp -r dist package.json node_modules "${pkgdir}/usr/lib/${_pkgname}/"
+
+  # Binary launcher script
+  install -d "${pkgdir}/usr/bin"
+  cat <<EOF > "${pkgdir}/usr/bin/${_pkgname}"
+#!/bin/sh
+exec electron34 /usr/lib/${_pkgname}/dist/main/index.js "\$@"
+EOF
+  chmod 755 "${pkgdir}/usr/bin/${_pkgname}"
+
+  # Desktop launcher & icons
+  install -Dm644 "build/${_pkgname}.desktop" "${pkgdir}/usr/share/applications/${_pkgname}.desktop"
+  install -Dm644 "build/icons/512x512.png" "${pkgdir}/usr/share/icons/hicolor/512x512/apps/${_pkgname}.png"
+
+  # License file
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

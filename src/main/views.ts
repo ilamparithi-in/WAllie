@@ -7,6 +7,7 @@ import { DEFAULT_USER_AGENT, saveAccounts, saveSettings } from './config';
 import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath } from './utils';
 import { Account, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 import { TITLEBAR_HEIGHT } from '../shared/constants';
+import { downloadManager } from './downloads';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -649,79 +650,8 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
     });
 
     // Downloads Interception Handler
-    accountSession.on('will-download', (event, item) => {
-      const fileName = item.getFilename();
-      const downloadsPath = app.getPath('downloads');
-      const savePath = path.join(downloadsPath, fileName);
-
-      let uniqueSavePath = savePath;
-      let counter = 1;
-      const ext = path.extname(fileName);
-      const base = path.basename(fileName, ext);
-      while (fs.existsSync(uniqueSavePath)) {
-        uniqueSavePath = path.join(downloadsPath, `${base} (${counter})${ext}`);
-        counter++;
-      }
-      item.setSavePath(uniqueSavePath);
-
-      const startTime = item.getStartTime();
-      state.mainWindow?.webContents.send('download:progress', {
-        id: startTime,
-        filename: fileName,
-        percent: 0,
-        state: 'progressing',
-        receivedBytes: 0,
-        totalBytes: item.getTotalBytes(),
-      });
-
-      item.on('updated', (event, stateName) => {
-        if (stateName === 'interrupted') {
-          state.mainWindow?.webContents.send('download:progress', {
-            id: startTime,
-            filename: fileName,
-            percent: 0,
-            state: 'failed',
-          });
-        } else if (stateName === 'progressing') {
-          if (!item.isPaused()) {
-            const received = item.getReceivedBytes();
-            const total = item.getTotalBytes();
-            const percent = total > 0 ? Math.round((received / total) * 100) : 0;
-            state.mainWindow?.webContents.send('download:progress', {
-              id: startTime,
-              filename: fileName,
-              percent,
-              state: 'progressing',
-              receivedBytes: received,
-              totalBytes: total,
-            });
-          }
-        }
-      });
-
-      item.once('done', (event, stateName) => {
-        if (stateName === 'completed') {
-          state.mainWindow?.webContents.send('download:progress', {
-            id: startTime,
-            filename: fileName,
-            percent: 100,
-            state: 'completed',
-          });
-
-          const notification = new Notification({
-            title: 'Download Complete',
-            body: `Successfully downloaded ${path.basename(uniqueSavePath)} to Downloads folder.`,
-          });
-          notification.show();
-        } else {
-          state.mainWindow?.webContents.send('download:progress', {
-            id: startTime,
-            filename: fileName,
-            percent: 0,
-            state: 'failed',
-          });
-        }
-      });
+    accountSession.on('will-download', (_event, item, webContents) => {
+      downloadManager.handleWillDownload(item, webContents, account.id);
     });
   }
 
