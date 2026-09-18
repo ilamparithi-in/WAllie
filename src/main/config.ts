@@ -127,6 +127,10 @@ export function loadAccounts(): Account[] {
             clipboardReadEnabled: acc.settings?.clipboardReadEnabled === true,
             customCss: acc.settings?.customCss || '',
             selectedTheme: acc.settings?.selectedTheme || 'none',
+            fontFamily: acc.settings?.fontFamily || '',
+            monoFontFamily: acc.settings?.monoFontFamily || '',
+            followSystemFont: acc.settings?.followSystemFont === true,
+            customWallpaper: acc.settings?.customWallpaper || '',
           },
         }));
       }

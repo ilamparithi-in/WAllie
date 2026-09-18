@@ -15,6 +15,10 @@ export interface AccountSettings {
   clipboardReadEnabled?: boolean;
   customCss?: string;
   selectedTheme?: string;
+  fontFamily?: string;
+  monoFontFamily?: string;
+  followSystemFont?: boolean;
+  customWallpaper?: string;
 }
 
 export const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
@@ -25,6 +29,10 @@ export const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
   clipboardReadEnabled: false,
   customCss: '',
   selectedTheme: 'none',
+  fontFamily: '',
+  monoFontFamily: '',
+  followSystemFont: false,
+  customWallpaper: '',
 };
 
 export interface Account {

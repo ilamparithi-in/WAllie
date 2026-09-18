@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
-import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo } from '../shared/types';
+import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings } from '../shared/types';
 
-export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo };
+export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings };
 
 export interface ElectronAPI {
   // Window controls
@@ -58,10 +58,14 @@ export interface ElectronAPI {
   getDownloadHistory: () => Promise<DownloadRecord[]>;
   clearDownloadHistory: () => Promise<boolean>;
 
-  // Notification history & CSS controls
+  // Notification history & CSS / Appearance controls
   getNotificationHistory: () => Promise<HistoricalNotification[]>;
   clearNotificationHistory: (options?: string | { mode: string; startDate?: string; endDate?: string }) => Promise<boolean>;
   saveCss: (accountId: string, customCss: string, selectedTheme: string) => Promise<boolean>;
+  saveAppearance: (accountId: string, settings: Partial<AccountSettings>) => Promise<boolean>;
+  selectWallpaperFile: () => Promise<string | null>;
+  selectCustomCssFile: () => Promise<string | null>;
+  getSystemFonts: () => Promise<string[]>;
 
   // Custom protocol controls
   onProtocolReceived: (callback: (url: string) => void) => () => void;
@@ -154,6 +158,10 @@ const api: ElectronAPI = {
   getNotificationHistory: () => ipcRenderer.invoke('notification:get-history'),
   clearNotificationHistory: (options) => ipcRenderer.invoke('notification:clear-history', options),
   saveCss: (accountId, customCss, selectedTheme) => ipcRenderer.invoke('account:save-css', accountId, customCss, selectedTheme),
+  saveAppearance: (accountId, settings) => ipcRenderer.invoke('account:save-appearance', accountId, settings),
+  selectWallpaperFile: () => ipcRenderer.invoke('wallpaper:select-file'),
+  selectCustomCssFile: () => ipcRenderer.invoke('customcss:select-file'),
+  getSystemFonts: () => ipcRenderer.invoke('system:get-fonts'),
   relaunchApp: () => ipcRenderer.send('app:relaunch'),
 
   onProtocolReceived: (callback) => {
