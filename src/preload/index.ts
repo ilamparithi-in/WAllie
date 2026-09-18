@@ -366,7 +366,7 @@ function setupWhatsAppIntegration() {
     closeNotification: (_tag: string) => {
       // Ignored for desktop notifications
     },
-    onNotificationClicked: (callback: (tag: string) => void) => {
+    onNotificationClicked: (callback: (data: any) => void) => {
       onClickCallback = callback;
     },
     onSendInlineReply: (callback: (data: { contactName: string; text: string; tag: string }) => void) => {
@@ -377,9 +377,9 @@ function setupWhatsAppIntegration() {
     },
   });
 
-  ipcRenderer.on('notification:clicked-reply', (_event: any, tag: string) => {
+  ipcRenderer.on('notification:clicked-reply', (_event: any, data: any) => {
     if (onClickCallback) {
-      onClickCallback(tag);
+      onClickCallback(data);
     }
   });
 
@@ -398,85 +398,114 @@ function setupWhatsAppIntegration() {
 
         const activeNotificationCallbacks = new Map();
 
+        function norm(s) {
+          return (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+        }
+
+        function vis(e) {
+          if (!e) return false;
+          const r = e.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        }
+
+        function triggerEvents(el, types) {
+          if (!el) return;
+          const r = el.getBoundingClientRect();
+          const cx = r.left + r.width / 2;
+          const cy = r.top + r.height / 2;
+          types.forEach((type) => {
+            const Ev = type.startsWith('pointer') ? PointerEvent : MouseEvent;
+            try {
+              el.dispatchEvent(new Ev(type, {
+                bubbles: true,
+                cancelable: true,
+                clientX: cx,
+                clientY: cy,
+                button: 0,
+              }));
+            } catch (e) {}
+          });
+        }
+
+        function getSearchBox() {
+          return (
+            document.querySelector('input[aria-label*="Search" i]') ||
+            document.querySelector('input[aria-label*="Buscar" i]') ||
+            document.querySelector('input[data-tab="3"]') ||
+            document.querySelector('div[contenteditable="true"][data-tab="3"]')
+          );
+        }
+
+        function setSearchText(el, val) {
+          el.focus();
+          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+            const proto = el.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype;
+            try {
+              Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, val);
+            } catch (e) {
+              el.value = val;
+            }
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+          } else {
+            try { document.execCommand('selectAll', false, null); } catch (e) {}
+            try { document.execCommand('insertText', false, val); } catch (e) {}
+            el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+          }
+        }
+
+        function findMatchingRow(query) {
+          const rows = Array.from(document.querySelectorAll(
+            '#pane-side [role="row"], #side [role="row"], #pane-side [role="listitem"], #side [role="listitem"]'
+          )).filter(vis);
+
+          for (const row of rows) {
+            const t = row.querySelector('span[title]');
+            if (t && norm(t.getAttribute('title') || t.textContent) === query) {
+              return row;
+            }
+          }
+          return null;
+        }
+
         if (window.__walinux_ipc) {
-          window.__walinux_ipc.onNotificationClicked((tag) => {
+          window.__walinux_ipc.onNotificationClicked((arg) => {
+            const tag = typeof arg === 'string' ? arg : arg?.tag;
+            const contactName = typeof arg === 'object' ? arg?.contactName : '';
+
             const callback = activeNotificationCallbacks.get(tag);
             if (callback) {
-              callback();
+              try { callback(); } catch (e) {}
+            }
+
+            if (contactName) {
+              const targetQuery = norm(contactName);
+              setTimeout(() => {
+                const activeHeader = document.querySelector('header span[title]');
+                if (!activeHeader || norm(activeHeader.textContent) !== targetQuery) {
+                  const row = findMatchingRow(targetQuery);
+                  if (row) {
+                    const clickTarget = row.querySelector('span[title]') || row;
+                    triggerEvents(clickTarget, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
+                  } else {
+                    const sbox = getSearchBox();
+                    if (sbox) {
+                      setSearchText(sbox, contactName);
+                      setTimeout(() => {
+                        const searchedRow = findMatchingRow(targetQuery);
+                        if (searchedRow) {
+                          const clickTarget = searchedRow.querySelector('span[title]') || searchedRow;
+                          triggerEvents(clickTarget, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
+                        }
+                      }, 150);
+                    }
+                  }
+                }
+              }, 100);
             }
           });
 
           window.__walinux_ipc.onSendInlineReply((data) => {
             const { contactName, text, tag } = data;
-
-            function norm(s) {
-              return (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
-            }
-
-            function vis(e) {
-              if (!e) return false;
-              const r = e.getBoundingClientRect();
-              return r.width > 0 && r.height > 0;
-            }
-
-            function triggerEvents(el, types) {
-              if (!el) return;
-              const r = el.getBoundingClientRect();
-              const cx = r.left + r.width / 2;
-              const cy = r.top + r.height / 2;
-              types.forEach((type) => {
-                const Ev = type.startsWith('pointer') ? PointerEvent : MouseEvent;
-                try {
-                  el.dispatchEvent(new Ev(type, {
-                    bubbles: true,
-                    cancelable: true,
-                    clientX: cx,
-                    clientY: cy,
-                    button: 0,
-                  }));
-                } catch (e) {}
-              });
-            }
-
-            function getSearchBox() {
-              return (
-                document.querySelector('input[aria-label*="Search" i]') ||
-                document.querySelector('input[aria-label*="Buscar" i]') ||
-                document.querySelector('input[data-tab="3"]') ||
-                document.querySelector('div[contenteditable="true"][data-tab="3"]')
-              );
-            }
-
-            function setSearchText(el, val) {
-              el.focus();
-              if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                const proto = el.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype;
-                try {
-                  Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, val);
-                } catch (e) {
-                  el.value = val;
-                }
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-              } else {
-                try { document.execCommand('selectAll', false, null); } catch (e) {}
-                try { document.execCommand('insertText', false, val); } catch (e) {}
-                el.dispatchEvent(new InputEvent('input', { bubbles: true }));
-              }
-            }
-
-            function findMatchingRow(query) {
-              const rows = Array.from(document.querySelectorAll(
-                '#pane-side [role="row"], #side [role="row"], #pane-side [role="listitem"], #side [role="listitem"]'
-              )).filter(vis);
-
-              for (const row of rows) {
-                const t = row.querySelector('span[title]');
-                if (t && norm(t.getAttribute('title') || t.textContent) === query) {
-                  return row;
-                }
-              }
-              return null;
-            }
 
             function getComposer() {
               const candidates = Array.from(document.querySelectorAll(
