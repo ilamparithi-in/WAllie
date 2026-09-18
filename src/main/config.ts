@@ -71,6 +71,7 @@ export function loadSettings(): GlobalSettings {
         askWhereToSaveEveryTime: !!parsed.askWhereToSaveEveryTime,
         fileSecondClickAction: (['open', 'showInFolder', 'saveAs', 'download'].includes(parsed.fileSecondClickAction) ? parsed.fileSecondClickAction : 'open'),
         downloadNotificationsEnabled: parsed.downloadNotificationsEnabled !== false,
+        inlineReplyEnabled: parsed.inlineReplyEnabled !== false,
       };
     }
   } catch (error) {
@@ -95,6 +96,7 @@ export function loadSettings(): GlobalSettings {
     askWhereToSaveEveryTime: false,
     fileSecondClickAction: 'open',
     downloadNotificationsEnabled: true,
+    inlineReplyEnabled: true,
   };
 }
 

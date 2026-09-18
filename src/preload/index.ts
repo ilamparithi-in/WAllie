@@ -285,6 +285,7 @@ async function resolveIconToBase64(url: string): Promise<string | null> {
 }
 
 let onClickCallback: ((tag: string) => void) | null = null;
+let onInlineReplyCallback: ((data: { contactName: string; text: string; tag: string }) => void) | null = null;
 
 function setupWhatsAppIntegration() {
   // Light dismiss on webview click
@@ -351,21 +352,25 @@ function setupWhatsAppIntegration() {
   });
 
   contextBridge.exposeInMainWorld('__walinux_ipc', {
-    createNotification: (data: { title: string; body: string; icon: string; tag: string }) => {
+    createNotification: (data: { title: string; body: string; icon: string; tag: string; canReply?: boolean }) => {
       resolveIconToBase64(data.icon).then((base64Icon) => {
         ipcRenderer.send('notification:create', {
           title: data.title,
           body: data.body,
           icon: base64Icon || '',
           tag: data.tag,
+          canReply: data.canReply,
         });
       });
     },
-    closeNotification: (tag: string) => {
-      ipcRenderer.send('notification:close-request', tag);
+    closeNotification: (_tag: string) => {
+      // Ignored for desktop notifications
     },
     onNotificationClicked: (callback: (tag: string) => void) => {
       onClickCallback = callback;
+    },
+    onSendInlineReply: (callback: (data: { contactName: string; text: string; tag: string }) => void) => {
+      onInlineReplyCallback = callback;
     },
     onAnchorDownload: (filename: string) => {
       ipcRenderer.send('download:set-intent', { intent: 'anchor-detected', filename });
@@ -375,6 +380,12 @@ function setupWhatsAppIntegration() {
   ipcRenderer.on('notification:clicked-reply', (_event: any, tag: string) => {
     if (onClickCallback) {
       onClickCallback(tag);
+    }
+  });
+
+  ipcRenderer.on('notification:send-inline-reply', (_event: any, data: { contactName: string; text: string; tag: string }) => {
+    if (onInlineReplyCallback) {
+      onInlineReplyCallback(data);
     }
   });
 
@@ -394,6 +405,158 @@ function setupWhatsAppIntegration() {
               callback();
             }
           });
+
+          window.__walinux_ipc.onSendInlineReply((data) => {
+            const { contactName, text, tag } = data;
+
+            function norm(s) {
+              return (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+            }
+
+            function vis(e) {
+              if (!e) return false;
+              const r = e.getBoundingClientRect();
+              return r.width > 0 && r.height > 0;
+            }
+
+            function triggerEvents(el, types) {
+              if (!el) return;
+              const r = el.getBoundingClientRect();
+              const cx = r.left + r.width / 2;
+              const cy = r.top + r.height / 2;
+              types.forEach((type) => {
+                const Ev = type.startsWith('pointer') ? PointerEvent : MouseEvent;
+                try {
+                  el.dispatchEvent(new Ev(type, {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: cx,
+                    clientY: cy,
+                    button: 0,
+                  }));
+                } catch (e) {}
+              });
+            }
+
+            function getSearchBox() {
+              return (
+                document.querySelector('input[aria-label*="Search" i]') ||
+                document.querySelector('input[aria-label*="Buscar" i]') ||
+                document.querySelector('input[data-tab="3"]') ||
+                document.querySelector('div[contenteditable="true"][data-tab="3"]')
+              );
+            }
+
+            function setSearchText(el, val) {
+              el.focus();
+              if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                const proto = el.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype;
+                try {
+                  Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, val);
+                } catch (e) {
+                  el.value = val;
+                }
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+              } else {
+                try { document.execCommand('selectAll', false, null); } catch (e) {}
+                try { document.execCommand('insertText', false, val); } catch (e) {}
+                el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+              }
+            }
+
+            function findMatchingRow(query) {
+              const rows = Array.from(document.querySelectorAll(
+                '#pane-side [role="row"], #side [role="row"], #pane-side [role="listitem"], #side [role="listitem"]'
+              )).filter(vis);
+
+              for (const row of rows) {
+                const t = row.querySelector('span[title]');
+                if (t && norm(t.getAttribute('title') || t.textContent) === query) {
+                  return row;
+                }
+              }
+              return null;
+            }
+
+            function getComposer() {
+              const candidates = Array.from(document.querySelectorAll(
+                'footer div[contenteditable="true"][role="textbox"], div[contenteditable="true"][data-tab="10"], div[contenteditable="true"][data-tab="6"]'
+              )).filter(vis);
+              return candidates.length ? candidates[candidates.length - 1] : null;
+            }
+
+            function getSendButton() {
+              const icon = (
+                document.querySelector('[data-icon="wds-ic-send-filled"]') ||
+                document.querySelector('span[data-icon="send"]')
+              );
+              if (icon) {
+                return icon.closest('button, [role="button"]') || icon;
+              }
+              const candidates = Array.from(document.querySelectorAll(
+                'button[aria-label], [role="button"][aria-label]'
+              )).filter((x) => /^(send|enviar)/i.test(x.getAttribute('aria-label') || '') && vis(x));
+              return candidates.length ? candidates[candidates.length - 1] : null;
+            }
+
+            function doSendText(comp) {
+              comp.focus();
+              try {
+                document.execCommand('selectAll', false, null);
+                document.execCommand('insertText', false, text);
+              } catch (e) {}
+              comp.dispatchEvent(new InputEvent('input', { bubbles: true }));
+
+              setTimeout(() => {
+                const btn = getSendButton();
+                if (btn) {
+                  triggerEvents(btn, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
+                }
+              }, 150);
+            }
+
+            // Step 1: Trigger notification callback if available to open chat immediately
+            const notifCallback = activeNotificationCallbacks.get(tag);
+            if (notifCallback) {
+              try { notifCallback(); } catch (e) {}
+            }
+
+            // Step 2: Poll for composer or search
+            let attempts = 0;
+            let searched = false;
+            const targetQuery = norm(contactName);
+
+            const interval = setInterval(() => {
+              attempts++;
+              if (attempts > 50) {
+                clearInterval(interval);
+                return;
+              }
+
+              const comp = getComposer();
+              if (comp) {
+                clearInterval(interval);
+                doSendText(comp);
+                return;
+              }
+
+              if (!searched && attempts > 8) {
+                const sbox = getSearchBox();
+                if (sbox) {
+                  setSearchText(sbox, contactName);
+                  searched = true;
+                }
+              }
+
+              if (searched) {
+                const row = findMatchingRow(targetQuery);
+                if (row) {
+                  const clickTarget = row.querySelector('span[title]') || row;
+                  triggerEvents(clickTarget, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
+                }
+              }
+            }, 100);
+          });
         }
 
         class CustomNotification extends EventTarget {
@@ -411,12 +574,83 @@ function setupWhatsAppIntegration() {
               });
             }
 
+            function isReadOnlyChat(tag, title, opts) {
+              if (tag && (tag.endsWith('@newsletter') || tag.endsWith('@broadcast'))) {
+                return true;
+              }
+
+              if (opts && opts.data) {
+                const d = opts.data;
+                if (d.readOnly || d.isReadOnly || d.canSend === false) return true;
+                if (d.chat && (d.chat.readOnly || d.chat.isReadOnly || d.chat.canSend === false)) return true;
+                if (d.chat && d.chat.groupMetadata && d.chat.groupMetadata.announce && !d.chat.groupMetadata.canSend) return true;
+              }
+
+              try {
+                let chatCollection = null;
+                if (typeof window.require === 'function') {
+                  try {
+                    const mod = window.require('WAWebChatCollection');
+                    chatCollection = mod ? (mod.ChatCollection || mod.default) : null;
+                  } catch (e) {}
+                }
+                if (!chatCollection && window.Store && window.Store.Chat) {
+                  chatCollection = window.Store.Chat;
+                }
+
+                if (chatCollection) {
+                  let chat = null;
+                  if (tag && typeof chatCollection.get === 'function') {
+                    chat = chatCollection.get(tag);
+                  }
+                  if (!chat && chatCollection.models && Array.isArray(chatCollection.models)) {
+                    const normTitle = (title || '').trim().toLowerCase();
+                    chat = chatCollection.models.find((c) => {
+                      if (tag && c.id && (c.id._serialized === tag || c.id === tag)) return true;
+                      const cName = (c.name || c.formattedTitle || '').trim().toLowerCase();
+                      return cName && normTitle && cName === normTitle;
+                    });
+                  }
+
+                  if (chat) {
+                    if (chat.readOnly === true || chat.isReadOnly === true || chat.canSend === false) {
+                      return true;
+                    }
+                    if (chat.groupMetadata) {
+                      const gm = chat.groupMetadata;
+                      if (gm.announce) {
+                        if (gm.canSend === false) return true;
+                        if (gm.isSenderAnAdmin === false) return true;
+                      }
+                    }
+                  }
+                }
+              } catch (e) {}
+
+              try {
+                const activeHeader = document.querySelector('header span[title]');
+                if (activeHeader && title && activeHeader.textContent.trim().toLowerCase() === title.trim().toLowerCase()) {
+                  const composer = document.querySelector('footer div[contenteditable="true"][role="textbox"]');
+                  const lockBanner = document.querySelector('footer [data-icon="lock"], footer [data-icon="channel"], div[data-testid="conversation-footer-banner"]');
+                  if (!composer || lockBanner) {
+                    return true;
+                  }
+                }
+              } catch (e) {}
+
+              return false;
+            }
+
+            const isReadOnly = isReadOnlyChat(this.tag, this.title, options);
+            const canReply = !isReadOnly;
+
             if (window.__walinux_ipc) {
               window.__walinux_ipc.createNotification({
                 title: this.title,
                 body: this.body,
                 icon: this.icon,
                 tag: this.tag,
+                canReply: canReply,
               });
             }
 
@@ -427,10 +661,13 @@ function setupWhatsAppIntegration() {
           }
 
           close() {
-            if (window.__walinux_ipc) {
-              window.__walinux_ipc.closeNotification(this.tag);
-            }
-            activeNotificationCallbacks.delete(this.tag);
+            // Note: In web browsers, WhatsApp Web automatically calls .close() after ~2-3s.
+            // For desktop notifications, we do NOT forward this dismissal to D-Bus/KDE Plasma
+            // because users need time to read and type inline replies.
+            // The desktop notification manager handles its own lifecycle and timeout (25s).
+            setTimeout(() => {
+              activeNotificationCallbacks.delete(this.tag);
+            }, 120000);
             if (this.onclose) this.onclose();
             this.dispatchEvent(new Event('close'));
           }

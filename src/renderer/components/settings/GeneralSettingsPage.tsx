@@ -229,6 +229,21 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
               className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
             />
           </label>
+
+          <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-[#e9edef] text-[11px]">Inline Reply Notifications (KDE / Freedesktop)</div>
+              <div className="text-[10px] text-[#8696a0]">
+                Allow replying directly from notification popups when supported by your desktop environment
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={globalSettings?.inlineReplyEnabled ?? true}
+              onChange={(e) => handleToggleGlobalSetting('inlineReplyEnabled', e.target.checked)}
+              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+            />
+          </label>
         </div>
 
         {/* External Links & Security Section */}

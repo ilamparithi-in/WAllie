@@ -71,6 +71,7 @@ export interface GlobalSettings {
   askWhereToSaveEveryTime?: boolean;
   fileSecondClickAction?: FileSecondClickAction;
   downloadNotificationsEnabled?: boolean;
+  inlineReplyEnabled?: boolean;
 }
 
 export interface HistoricalNotification {
