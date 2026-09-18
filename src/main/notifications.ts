@@ -151,11 +151,17 @@ function ensureDbusListeners() {
     activeDbusNotifications.delete(id);
 
     if (state.mainWindow) {
+      if (state.mainWindow.isMinimized()) {
+        state.mainWindow.restore();
+      }
       state.mainWindow.show();
       state.mainWindow.focus();
     }
     switchActiveAccount(ctx.accountId);
-    ctx.senderWebContents.send('notification:clicked-reply', ctx.tag);
+    ctx.senderWebContents.send('notification:clicked-reply', {
+      tag: ctx.tag,
+      contactName: ctx.contactName,
+    });
   });
 
   dbusNotifications.on('closed', (id: number) => {

@@ -55,9 +55,9 @@ def on_stdin(channel, condition):
             placeholder = data.get('placeholder', f'Reply to {title}...')
             timeout_ms = data.get('timeoutMs', 25000)
 
-            # In KDE Plasma ActionContainer.qml, when inline-reply is the only action,
-            # the notification renders the reply input box directly.
-            actions = ['inline-reply', 'Reply'] if can_reply else ['default', 'Open Chat']
+            # In KDE Plasma, 'default' enables clicking the notification body to open the chat,
+            # while 'inline-reply' provides the text reply field.
+            actions = ['default', 'Open Chat', 'inline-reply', 'Reply'] if can_reply else ['default', 'Open Chat']
             hints = {
                 'desktop-entry': GLib.Variant('s', 'dev.ilamparithi.wallie'),
             }
