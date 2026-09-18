@@ -131,35 +131,37 @@ export function buildAccountStyling(account: Account): { fontCss: string; wallpa
   } = account.settings || {};
 
   // 1. Font CSS
-  const fontRules: string[] = [];
+  const importRules: string[] = [];
+  const styleRules: string[] = [];
+
   if (followSystemFont) {
-    fontRules.push(
+    styleRules.push(
       '#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n}'
     );
   } else if (fontFamily && fontFamily.trim()) {
-    const family = fontFamily.trim();
-    const isGeneric = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|Segoe UI|Arial|Helvetica|Times New Roman|Courier New|Ubuntu|Cantarell|DejaVu Sans)$/i.test(family);
-    let importRule = '';
+    const family = fontFamily.trim().replace(/^['"]+|['"]+$/g, '');
+    const isGeneric = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|Segoe UI|Arial|Helvetica|Times New Roman|Courier New)$/i.test(family);
     if (!isGeneric && !family.includes(',')) {
-      importRule = `@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:ital,wght@0,300..700;1,300..700&display=swap');\n`;
+      const gParam = family.replace(/\s+/g, '+');
+      importRules.push(`@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(gParam)}&display=swap');`);
     }
-    fontRules.push(
-      `${importRule}#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: "${family}", "Segoe UI", Helvetica, Arial, sans-serif !important;\n}`
+    styleRules.push(
+      `#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: "${family}", "Segoe UI", Helvetica, Arial, sans-serif !important;\n}`
     );
   }
 
   if (monoFontFamily && monoFontFamily.trim()) {
-    const mono = monoFontFamily.trim();
+    const mono = monoFontFamily.trim().replace(/^['"]+|['"]+$/g, '');
     const isGenericMono = /^(monospace|ui-monospace|Courier New|Courier|Consolas|DejaVu Sans Mono|Liberation Mono)$/i.test(mono);
-    let importRule = '';
     if (!isGenericMono && !mono.includes(',')) {
-      importRule = `@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(mono)}:ital,wght@0,300..700;1,300..700&display=swap');\n`;
+      const gParam = mono.replace(/\s+/g, '+');
+      importRules.push(`@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(gParam)}&display=swap');`);
     }
-    fontRules.push(
-      `${importRule}code, pre {\n  font-family: "${mono}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;\n}`
+    styleRules.push(
+      `code, pre {\n  font-family: "${mono}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;\n}`
     );
   }
-  const fontCss = fontRules.join('\n\n');
+  const fontCss = [...importRules, ...styleRules].join('\n\n');
 
   // 2. Chat Wallpaper CSS on #main
   let wallpaperCss = '';
