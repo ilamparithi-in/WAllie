@@ -16,14 +16,18 @@ export function getNotificationHistory(): HistoricalNotification[] {
     try {
       if (fs.existsSync(NOTIFICATION_HISTORY_FILE)) {
         const data = fs.readFileSync(NOTIFICATION_HISTORY_FILE, 'utf8');
-        state.notificationHistoryCache = JSON.parse(data);
+        const parsed = JSON.parse(data);
+        state.notificationHistoryCache = Array.isArray(parsed) ? parsed : [];
       }
     } catch (error) {
       console.error('Failed to load notification history:', error);
     }
-    if (!state.notificationHistoryCache) {
+    if (!state.notificationHistoryCache || !Array.isArray(state.notificationHistoryCache)) {
       state.notificationHistoryCache = [];
     }
+  }
+  if (!Array.isArray(state.notificationHistoryCache)) {
+    state.notificationHistoryCache = [];
   }
   return state.notificationHistoryCache;
 }
@@ -48,12 +52,14 @@ export function scheduleHistoryFlush() {
 
 export function logNotificationToHistory(notif: HistoricalNotification) {
   const history = getNotificationHistory();
-  history.unshift(notif);
-  if (history.length > MAX_NOTIFICATIONS) {
-    history.splice(MAX_NOTIFICATIONS);
+  if (Array.isArray(history)) {
+    history.unshift(notif);
+    if (history.length > MAX_NOTIFICATIONS) {
+      history.splice(MAX_NOTIFICATIONS);
+    }
+    scheduleHistoryFlush();
+    state.mainWindow?.webContents.send('notification:history-changed', history);
   }
-  scheduleHistoryFlush();
-  state.mainWindow?.webContents.send('notification:history-changed', history);
 }
 
 export interface ClearHistoryOptions {
@@ -65,6 +71,10 @@ export interface ClearHistoryOptions {
 export function clearNotificationHistoryCache(optionsOrPeriod: string | ClearHistoryOptions = 'all') {
   const now = Date.now();
   const history = getNotificationHistory();
+  if (!Array.isArray(history)) {
+    state.notificationHistoryCache = [];
+    return;
+  }
 
   let options: ClearHistoryOptions;
   if (typeof optionsOrPeriod === 'string') {

@@ -48,6 +48,26 @@ export function getInitialWindowSize(
   }
 }
 
+export function applyActiveViewBoundsImmediately(aView: WebContentsView) {
+  if (!state.mainWindow || state.mainWindow.isDestroyed() || !aView) return;
+  const [w, h] = state.mainWindow.getContentSize();
+  if (state.disclaimerOpen || state.protocolPromptOpen) {
+    aView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+  } else {
+    const scaleFactor = (state.globalSettings?.appScale || 100) / 100;
+    const scaledTitlebarHeight = Math.round(TITLEBAR_HEIGHT * scaleFactor);
+    const scaledDrawerWidth = Math.round(state.settingsDrawerWidth * scaleFactor);
+    const vWidth = w - scaledDrawerWidth;
+
+    aView.setBounds({
+      x: 0,
+      y: scaledTitlebarHeight,
+      width: Math.max(0, vWidth),
+      height: Math.max(0, h - scaledTitlebarHeight),
+    });
+  }
+}
+
 export function updateActiveViewBounds() {
   if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
 
@@ -57,26 +77,9 @@ export function updateActiveViewBounds() {
 
   resizeTimeout = setTimeout(() => {
     if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
-
-    const [w, h] = state.mainWindow.getContentSize();
     const aView = state.accountViews.get(state.activeAccountId);
-
     if (aView) {
-      if (state.disclaimerOpen || state.protocolPromptOpen) {
-        aView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
-      } else {
-        const scaleFactor = (state.globalSettings?.appScale || 100) / 100;
-        const scaledTitlebarHeight = Math.round(TITLEBAR_HEIGHT * scaleFactor);
-        const scaledDrawerWidth = Math.round(state.settingsDrawerWidth * scaleFactor);
-        const vWidth = w - scaledDrawerWidth;
-
-        aView.setBounds({
-          x: 0,
-          y: scaledTitlebarHeight,
-          width: Math.max(0, vWidth),
-          height: Math.max(0, h - scaledTitlebarHeight),
-        });
-      }
+      applyActiveViewBoundsImmediately(aView);
     }
     resizeTimeout = null;
   }, 50);
@@ -86,6 +89,14 @@ export async function switchActiveAccount(newAccountId: string) {
   if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
 
   const currentView = state.accountViews.get(state.activeAccountId);
+  if (state.activeAccountId === newAccountId && currentView) {
+    applyActiveViewBoundsImmediately(currentView);
+    if (!currentView.webContents.isDestroyed()) {
+      currentView.webContents.focus();
+    }
+    return;
+  }
+
   if (currentView) {
     state.mainWindow.contentView.removeChildView(currentView);
     if (!currentView.webContents.isDestroyed()) {
@@ -109,6 +120,7 @@ export async function switchActiveAccount(newAccountId: string) {
     if (!targetView.webContents.isDestroyed()) {
       targetView.webContents.setFrameRate(60);
     }
+    applyActiveViewBoundsImmediately(targetView);
     updateActiveViewBounds();
 
     if (!targetView.webContents.isDestroyed()) {

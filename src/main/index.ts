@@ -17,12 +17,12 @@ app.commandLine.appendSwitch('enable-touch-drag-drop');
 if (process.platform === 'linux') {
   if (process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland') {
     app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
-    app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform,WaylandWindowDecorations,TouchpadOverscrollHistoryNavigation,TouchpadPinch,PinchToZoom,OverscrollHistoryNavigation');
+    app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform,WaylandWindowDecorations,TouchpadPinch,PinchToZoom');
   } else {
-    app.commandLine.appendSwitch('enable-features', 'TouchpadOverscrollHistoryNavigation,TouchpadPinch,PinchToZoom,OverscrollHistoryNavigation');
+    app.commandLine.appendSwitch('enable-features', 'TouchpadPinch,PinchToZoom');
   }
 } else {
-  app.commandLine.appendSwitch('enable-features', 'TouchpadOverscrollHistoryNavigation,TouchpadPinch,PinchToZoom');
+  app.commandLine.appendSwitch('enable-features', 'TouchpadPinch,PinchToZoom');
 }
 app.commandLine.appendSwitch('disable-features', 'TranslateUI');
 

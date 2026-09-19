@@ -18,6 +18,75 @@ export function safeDeleteExtensionDir(extPath: string): void {
   fs.rmSync(resolved, { recursive: true, force: true });
 }
 
+export function prepareExtensionForElectron(extDir: string): void {
+  try {
+    const manifestPath = path.join(extDir, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) return;
+
+    const manifestRaw = fs.readFileSync(manifestPath, 'utf8');
+    const manifest = JSON.parse(manifestRaw);
+    let manifestModified = false;
+
+    // Filter out known unsupported permissions to eliminate ExtensionLoadWarning noise
+    if (Array.isArray(manifest.permissions)) {
+      const unsupported = ['identity', 'identity.email'];
+      const filtered = manifest.permissions.filter((p: string) => !unsupported.includes(p));
+      if (filtered.length !== manifest.permissions.length) {
+        manifest.permissions = filtered;
+        manifestModified = true;
+      }
+    }
+    if (manifestModified) {
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+    }
+
+    const swRelPath = manifest.background?.service_worker;
+    if (swRelPath) {
+      const swFullPath = path.join(extDir, swRelPath);
+      if (fs.existsSync(swFullPath)) {
+        let swContent = fs.readFileSync(swFullPath, 'utf8');
+        // Clean up any previously inserted broken shims
+        if (swContent.includes('/* __wallie_ext_shim__ */')) {
+          swContent = swContent.replace(/\/\* __wallie_ext_shim__ \*\/[\s\S]*?\/\* __wallie_ext_shim_end__ \*\/\n?/, '');
+        }
+        const shim = `/* __wallie_ext_shim__ */
+if (typeof self !== 'undefined') {
+  if (typeof self.chrome === 'undefined') { self.chrome = {}; }
+  if (!self.chrome.windows) {
+    self.chrome.windows = {
+      onRemoved: { addListener: function() {}, removeListener: function() {}, hasListener: function() { return false; } },
+      onCreated: { addListener: function() {}, removeListener: function() {}, hasListener: function() { return false; } },
+      onFocusChanged: { addListener: function() {}, removeListener: function() {}, hasListener: function() { return false; } },
+      create: function(_opts, cb) { if (typeof cb === 'function') cb(null); },
+      update: function(_id, _opts, cb) { if (typeof cb === 'function') cb(null); },
+      remove: function(_id, cb) { if (typeof cb === 'function') cb(); },
+      get: function(_id, _opts, cb) { var c = typeof _opts === 'function' ? _opts : cb; if (typeof c === 'function') c(null); },
+      getAll: function(_opts, cb) { var c = typeof _opts === 'function' ? _opts : cb; if (typeof c === 'function') c([]); },
+      getCurrent: function(_opts, cb) { var c = typeof _opts === 'function' ? _opts : cb; if (typeof c === 'function') c(null); },
+    };
+  }
+  if (!self.chrome.identity) {
+    self.chrome.identity = {
+      getProfileUserInfo: function(_opts, cb) {
+        var callback = typeof _opts === 'function' ? _opts : cb;
+        if (typeof callback === 'function') callback({ email: '', id: '' });
+      },
+      getAuthToken: function(_opts, cb) {
+        var callback = typeof _opts === 'function' ? _opts : cb;
+        if (typeof callback === 'function') callback('');
+      },
+    };
+  }
+}
+/* __wallie_ext_shim_end__ */`;
+        fs.writeFileSync(swFullPath, shim + '\n' + swContent, 'utf8');
+      }
+    }
+  } catch (err) {
+    console.error('Error preparing extension for Electron:', err);
+  }
+}
+
 export function crxToZip(crxBuffer: Buffer): Buffer {
   const magic = crxBuffer.toString('utf8', 0, 4);
   if (magic !== 'Cr24') {
@@ -187,6 +256,7 @@ export async function importExtension(accountId: string, importType: 'folder' | 
 
       const view = state.accountViews.get(accountId);
       if (view) {
+        prepareExtensionForElectron(targetDir);
         const accountSession = session.fromPartition(account.partition);
         if (accountSession.extensions) {
           await accountSession.extensions.loadExtension(targetDir);
@@ -291,6 +361,7 @@ export async function installWebStoreExtension(accountId: string, urlOrId: strin
             accountSession.removeExtension(matched.id);
           }
         }
+        prepareExtensionForElectron(targetDir);
         if (accountSession.extensions) {
           await accountSession.extensions.loadExtension(targetDir);
         } else {
@@ -325,6 +396,7 @@ export async function toggleExtension(accountId: string, extensionId: string, en
     const accountSession = session.fromPartition(account.partition);
     if (enabled) {
       try {
+        prepareExtensionForElectron(ext.path);
         if (accountSession.extensions) {
           await accountSession.extensions.loadExtension(ext.path);
         } else {
@@ -482,6 +554,7 @@ export async function checkForWebStoreUpdates(targetAccountId?: string): Promise
               }
             }
             if (ext.enabled) {
+              prepareExtensionForElectron(ext.path);
               if (accountSession.extensions) {
                 await accountSession.extensions.loadExtension(ext.path);
               } else {

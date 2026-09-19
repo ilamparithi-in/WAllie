@@ -388,20 +388,10 @@ function setupWhatsAppIntegration() {
     }
   }, { passive: false });
 
-  // Enable visual zoom (pinch-to-zoom) limits directly on the webFrame and ensure viewport allows scaling
+  // Enable visual zoom (pinch-to-zoom) limits directly on the webFrame
   const applyVisualZoomSettings = () => {
     try {
       webFrame.setVisualZoomLevelLimits(1, 5);
-    } catch (e) {}
-
-    try {
-      let meta = document.querySelector('meta[name="viewport"]');
-      if (!meta) {
-        meta = document.createElement('meta');
-        meta.setAttribute('name', 'viewport');
-        document.head.appendChild(meta);
-      }
-      meta.setAttribute('content', 'width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, user-scalable=yes');
     } catch (e) {}
   };
 
