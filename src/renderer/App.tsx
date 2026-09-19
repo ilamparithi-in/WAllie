@@ -12,7 +12,7 @@ interface DownloadState {
   filename: string;
   savePath?: string;
   percent: number;
-  state: 'progressing' | 'completed' | 'failed';
+  state: 'progressing' | 'completed' | 'failed' | 'cancelled';
   receivedBytes?: number;
   totalBytes?: number;
 }
@@ -74,6 +74,11 @@ export const App: React.FC = () => {
     window.addEventListener('wheel', preventWheelZoom, { passive: false });
 
     const unsubscribeDownload = window.electronAPI.onDownloadProgress((data) => {
+      if (data.state === 'cancelled') {
+        setDownloads((prev) => prev.filter((d) => d.id !== data.id));
+        return;
+      }
+
       setDownloads((prev) => {
         const idx = prev.findIndex((d) => d.id === data.id);
         if (idx > -1) {

@@ -200,8 +200,8 @@ export function createMainWindow() {
 
   registerContextMenu(state.mainWindow.webContents);
 
-  state.mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-    console.log(`[Renderer Console] [Level ${level}] ${message} (at ${sourceId}:${line})`);
+  state.mainWindow.webContents.on('console-message', (event) => {
+    console.log(`[Renderer Console] [${event.level}] ${event.message} (at ${event.sourceId}:${event.lineNumber})`);
   });
 
   state.mainWindow.once('ready-to-show', async () => {

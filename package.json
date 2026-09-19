@@ -16,7 +16,7 @@
   "scripts": {
     "clean": "rm -rf dist dist-pack",
     "clean:build": "npm run clean && npm run build",
-    "build:preload": "tsc src/preload/index.ts --module commonjs --target es2020 --outDir dist/preload --rootDir src && mv dist/preload/preload/index.js dist/preload/index.cjs && rm -rf dist/preload/preload dist/preload/shared",
+    "build:preload": "tsc -p tsconfig.preload.json && mv dist/preload/preload/index.js dist/preload/index.cjs && rm -rf dist/preload/preload dist/preload/shared",
     "dev": "npm run build:preload && vite",
     "build": "npm run build:preload && tsc && vite build",
     "version:info": "node scripts/version-helper.cjs",
@@ -34,27 +34,26 @@
   "author": "Ilamparithi M <ilamparithi.in@gmail.com>",
   "license": "MIT",
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/adm-zip": "^0.5.8",
-    "@types/node": "^24.0.0",
-    "@types/react": "^19.0.8",
-    "@types/react-dom": "^19.0.3",
-    "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.20",
-    "electron": "^43.0.0",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.4.3",
     "electron-builder": "^26.15.3",
-    "postcss": "^8.5.1",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.3",
-    "vite": "^6.1.0",
-    "vite-plugin-electron": "^0.29.0",
-    "vite-plugin-electron-renderer": "^0.14.6"
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vite-plugin-electron": "^1.1.2",
+    "vite-plugin-electron-renderer": "^1.0.0"
   },
   "dependencies": {
-    "adm-zip": "^0.6.0",
+    "adm-zip": "^0.6.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.475.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "tailwind-merge": "^3.0.1"
+    "lucide-react": "^1.47.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwind-merge": "^3.7.0"
   }
 }
