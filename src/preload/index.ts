@@ -351,14 +351,64 @@ function setupWhatsAppIntegration() {
     }
   }, true);
 
-  // Expose safe proxy methods to the Main World
-  contextBridge.exposeInMainWorld('__walinux_report_zoom', (scale: number) => {
-    ipcRenderer.send('zoom:visual-changed', scale);
+  // Ctrl + Mouse Wheel to Page Zoom (Physical Ctrl only, leaving native touchpad pinch-to-zoom untouched)
+  let isPhysicalCtrlDown = false;
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Control') {
+      isPhysicalCtrlDown = true;
+    }
+  }, true);
+
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'Control') {
+      isPhysicalCtrlDown = false;
+    }
+  }, true);
+
+  window.addEventListener('blur', () => {
+    isPhysicalCtrlDown = false;
   });
 
-  contextBridge.exposeInMainWorld('__walinux_trigger_zoom', (direction: 'in' | 'out') => {
-    ipcRenderer.send('zoom:trigger-step', direction);
-  });
+  let wheelZoomTimeout: NodeJS.Timeout | null = null;
+  let accumulatedDeltaY = 0;
+
+  window.addEventListener('wheel', (e) => {
+    if (isPhysicalCtrlDown && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      accumulatedDeltaY += e.deltaY;
+      if (wheelZoomTimeout) clearTimeout(wheelZoomTimeout);
+      wheelZoomTimeout = setTimeout(() => {
+        if (Math.abs(accumulatedDeltaY) > 5) {
+          const direction = accumulatedDeltaY < 0 ? 'in' : 'out';
+          ipcRenderer.send('zoom:trigger-step', direction);
+        }
+        accumulatedDeltaY = 0;
+      }, 30);
+    }
+  }, { passive: false });
+
+  // Enable visual zoom (pinch-to-zoom) limits directly on the webFrame and ensure viewport allows scaling
+  const applyVisualZoomSettings = () => {
+    try {
+      webFrame.setVisualZoomLevelLimits(1, 5);
+    } catch (e) {}
+
+    try {
+      let meta = document.querySelector('meta[name="viewport"]');
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('name', 'viewport');
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute('content', 'width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, user-scalable=yes');
+    } catch (e) {}
+  };
+
+  applyVisualZoomSettings();
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', applyVisualZoomSettings);
+  }
 
   contextBridge.exposeInMainWorld('__walinux_ipc', {
     createNotification: (data: { title: string; body: string; icon: string; tag: string; canReply?: boolean }) => {
