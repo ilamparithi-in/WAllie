@@ -138,11 +138,11 @@ export class DownloadManager {
     return null;
   }
 
-  public async handleWillDownload(
+  public handleWillDownload(
     item: Electron.DownloadItem,
     webContents: Electron.WebContents,
     accountId: string
-  ): Promise<void> {
+  ): void {
     const fileName = item.getFilename();
     const startTime = item.getStartTime();
     const { intent } = this.consumeIntent();
@@ -152,14 +152,14 @@ export class DownloadManager {
     const askEveryTime = !!state.globalSettings?.askWhereToSaveEveryTime;
     const secondClickAction = state.globalSettings?.fileSecondClickAction || 'open';
 
-    // Handle second click on an already downloaded file
+    // Handle second click on an already downloaded file (bypass if user explicitly uses context menu download)
     if (isSecondClick && !isContextMenu) {
       const existing = this.findExistingDownloadedFile(fileName);
       if (existing) {
         if (secondClickAction === 'open') {
           console.log(`[DownloadManager] Second click detected for ${fileName}. Opening existing file.`);
           item.cancel();
-          await this.openDownloadedFile(existing.savePath);
+          this.openDownloadedFile(existing.savePath);
           state.mainWindow?.webContents.send('toast:show', {
             message: `Opening ${fileName}...`,
           });
@@ -182,29 +182,23 @@ export class DownloadManager {
     const shouldPrompt = isContextMenu || askEveryTime || (isSecondClick && secondClickAction === 'saveAs');
     const defaultDir = state.globalSettings?.defaultDownloadsPath || app.getPath('downloads');
 
+    if (!fs.existsSync(defaultDir)) {
+      try {
+        fs.mkdirSync(defaultDir, { recursive: true });
+      } catch (err) {
+        console.error('Failed to create default downloads directory:', err);
+      }
+    }
+
     if (shouldPrompt) {
       const ext = path.extname(fileName).replace(/^\./, '');
       const filters = ext ? [{ name: `${ext.toUpperCase()} File`, extensions: [ext] }, { name: 'All Files', extensions: ['*'] }] : [{ name: 'All Files', extensions: ['*'] }];
-      const { filePath, canceled } = await dialog.showSaveDialog(state.mainWindow || undefined as any, {
+      item.setSaveDialogOptions({
         title: 'Save As',
         defaultPath: path.join(defaultDir, fileName),
         filters,
       });
-
-      if (canceled || !filePath) {
-        item.cancel();
-        return;
-      }
-      item.setSavePath(filePath);
     } else {
-      if (!fs.existsSync(defaultDir)) {
-        try {
-          fs.mkdirSync(defaultDir, { recursive: true });
-        } catch (err) {
-          console.error('Failed to create default downloads directory:', err);
-        }
-      }
-
       const savePath = path.join(defaultDir, fileName);
       let uniqueSavePath = savePath;
       let counter = 1;
@@ -217,12 +211,12 @@ export class DownloadManager {
       item.setSavePath(uniqueSavePath);
     }
 
-    const targetSavePath = item.getSavePath();
+    const initialSavePath = item.getSavePath() || path.join(defaultDir, fileName);
 
     state.mainWindow?.webContents.send('download:progress', {
       id: startTime,
       filename: fileName,
-      savePath: targetSavePath,
+      savePath: initialSavePath,
       percent: 0,
       state: 'progressing',
       receivedBytes: 0,
@@ -230,11 +224,12 @@ export class DownloadManager {
     });
 
     item.on('updated', (_event, stateName) => {
+      const currentSavePath = item.getSavePath() || path.join(defaultDir, fileName);
       if (stateName === 'interrupted') {
         state.mainWindow?.webContents.send('download:progress', {
           id: startTime,
           filename: fileName,
-          savePath: targetSavePath,
+          savePath: currentSavePath,
           percent: 0,
           state: 'failed',
         });
@@ -246,7 +241,7 @@ export class DownloadManager {
           state.mainWindow?.webContents.send('download:progress', {
             id: startTime,
             filename: fileName,
-            savePath: targetSavePath,
+            savePath: currentSavePath,
             percent,
             state: 'progressing',
             receivedBytes: received,
@@ -257,9 +252,8 @@ export class DownloadManager {
     });
 
     item.once('done', async (_event, stateName) => {
+      const finalPath = item.getSavePath() || path.join(defaultDir, fileName);
       if (stateName === 'completed') {
-        const finalPath = item.getSavePath();
-
         await this.addRecord({
           id: startTime,
           filename: fileName,
@@ -289,11 +283,19 @@ export class DownloadManager {
           });
           notification.show();
         }
+      } else if (stateName === 'cancelled') {
+        state.mainWindow?.webContents.send('download:progress', {
+          id: startTime,
+          filename: fileName,
+          savePath: finalPath,
+          percent: 0,
+          state: 'cancelled',
+        });
       } else {
         state.mainWindow?.webContents.send('download:progress', {
           id: startTime,
           filename: fileName,
-          savePath: targetSavePath,
+          savePath: finalPath,
           percent: 0,
           state: 'failed',
         });

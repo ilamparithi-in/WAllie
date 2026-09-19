@@ -90,7 +90,7 @@ export interface ElectronAPI {
       filename: string;
       savePath?: string;
       percent: number;
-      state: 'progressing' | 'completed' | 'failed';
+      state: 'progressing' | 'completed' | 'failed' | 'cancelled';
       receivedBytes?: number;
       totalBytes?: number;
     }) => void
@@ -241,7 +241,7 @@ const api: ElectronAPI = {
         filename: string;
         savePath?: string;
         percent: number;
-        state: 'progressing' | 'completed' | 'failed';
+        state: 'progressing' | 'completed' | 'failed' | 'cancelled';
         receivedBytes?: number;
         totalBytes?: number;
       }
@@ -306,11 +306,12 @@ function setupWhatsAppIntegration() {
     const target = e.target as HTMLElement | null;
     if (!target) return;
 
-    // 1. Context Menu "Download" detection
+    // 1. Context Menu "Download" detection (trigger Save As prompt for custom directory)
     const menuItem = target.closest('[role="button"], li, div[class*="menu-item"], div[tabindex="-1"]');
     if (menuItem) {
       const text = (menuItem.textContent || '').trim().toLowerCase();
-      const isDownloadText = text === 'download' || text.startsWith('download ') || text.includes('download');
+      const ariaLabel = (menuItem.getAttribute('aria-label') || '').trim().toLowerCase();
+      const isDownloadText = text === 'download' || text.startsWith('download') || text.includes('download') || ariaLabel.includes('download');
       const hasDownloadIcon = !!menuItem.querySelector('[data-icon*="download"], [data-testid*="download"]');
       const isInsideMenu = !!target.closest('[role="application"], [data-testid="context-menu"], [class*="popup"], [class*="menu"], [class*="dropdown"], [role="menu"]');
 

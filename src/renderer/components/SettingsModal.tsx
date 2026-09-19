@@ -344,11 +344,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     }
   };
 
-  const filteredNotifications = notificationHistory.filter((notif) => {
+  const filteredNotifications = (Array.isArray(notificationHistory) ? notificationHistory : []).filter((notif) => {
     const matchesSearch =
-      notif.title.toLowerCase().includes(notifSearch.toLowerCase()) ||
-      notif.body.toLowerCase().includes(notifSearch.toLowerCase());
-    const matchesAccount = notifAccountFilter === 'all' || notif.accountId === notifAccountFilter;
+      (notif?.title || '').toLowerCase().includes(notifSearch.toLowerCase()) ||
+      (notif?.body || '').toLowerCase().includes(notifSearch.toLowerCase());
+    const matchesAccount = notifAccountFilter === 'all' || notif?.accountId === notifAccountFilter;
     return matchesSearch && matchesAccount;
   });
 
@@ -359,7 +359,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
     // Fetch accounts and active account on open
     window.electronAPI?.getAccounts().then((accs) => {
-      setAccounts(accs);
+      setAccounts(Array.isArray(accs) ? accs : []);
     });
 
     window.electronAPI?.getActiveAccountId().then((activeId) => {
@@ -373,7 +373,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
     // Fetch initial notification history
     window.electronAPI?.getNotificationHistory().then((history) => {
-      setNotificationHistory(history);
+      setNotificationHistory(Array.isArray(history) ? history : []);
     });
 
     // Fetch dynamic build version information
@@ -383,7 +383,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
     // Listen for real-time account list changes
     const unsubscribeAccount = window.electronAPI?.onAccountListChanged((updatedAccounts, updatedActiveId) => {
-      setAccounts(updatedAccounts);
+      setAccounts(Array.isArray(updatedAccounts) ? updatedAccounts : []);
       // Stay locked onto a valid account if current one got removed
       if (!updatedAccounts.find((a) => a.id === selectedAccountIdRef.current)) {
         setSelectedAccountId(updatedActiveId);
@@ -392,7 +392,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
     // Listen for notification log changes
     const unsubscribeHistory = window.electronAPI?.onNotificationHistoryChanged((updatedHistory) => {
-      setNotificationHistory(updatedHistory);
+      setNotificationHistory(Array.isArray(updatedHistory) ? updatedHistory : []);
     });
 
     return () => {

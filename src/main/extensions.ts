@@ -188,7 +188,11 @@ export async function importExtension(accountId: string, importType: 'folder' | 
       const view = state.accountViews.get(accountId);
       if (view) {
         const accountSession = session.fromPartition(account.partition);
-        await accountSession.loadExtension(targetDir);
+        if (accountSession.extensions) {
+          await accountSession.extensions.loadExtension(targetDir);
+        } else {
+          await accountSession.loadExtension(targetDir);
+        }
       }
 
       state.mainWindow.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
@@ -281,9 +285,17 @@ export async function installWebStoreExtension(accountId: string, urlOrId: strin
         const loadedExts = accountSession.getAllExtensions();
         const matched = loadedExts.find((e) => e.id === extensionId || path.resolve(e.path) === path.resolve(targetDir));
         if (matched) {
-          accountSession.removeExtension(matched.id);
+          if (accountSession.extensions) {
+            accountSession.extensions.removeExtension(matched.id);
+          } else {
+            accountSession.removeExtension(matched.id);
+          }
         }
-        await accountSession.loadExtension(targetDir);
+        if (accountSession.extensions) {
+          await accountSession.extensions.loadExtension(targetDir);
+        } else {
+          await accountSession.loadExtension(targetDir);
+        }
       }
 
       state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
@@ -313,7 +325,11 @@ export async function toggleExtension(accountId: string, extensionId: string, en
     const accountSession = session.fromPartition(account.partition);
     if (enabled) {
       try {
-        await accountSession.loadExtension(ext.path);
+        if (accountSession.extensions) {
+          await accountSession.extensions.loadExtension(ext.path);
+        } else {
+          await accountSession.loadExtension(ext.path);
+        }
       } catch (err) {
         console.error(`Failed to load extension ${ext.name}:`, err);
       }
@@ -321,7 +337,11 @@ export async function toggleExtension(accountId: string, extensionId: string, en
       const loadedExts = accountSession.getAllExtensions();
       const matched = loadedExts.find((e) => path.resolve(e.path) === path.resolve(ext.path));
       if (matched) {
-        accountSession.removeExtension(matched.id);
+        if (accountSession.extensions) {
+          accountSession.extensions.removeExtension(matched.id);
+        } else {
+          accountSession.removeExtension(matched.id);
+        }
       }
     }
   }
@@ -455,10 +475,18 @@ export async function checkForWebStoreUpdates(targetAccountId?: string): Promise
             const loadedExts = accountSession.getAllExtensions();
             const matched = loadedExts.find((e) => e.id === extensionId || path.resolve(e.path) === path.resolve(ext.path));
             if (matched) {
-              accountSession.removeExtension(matched.id);
+              if (accountSession.extensions) {
+                accountSession.extensions.removeExtension(matched.id);
+              } else {
+                accountSession.removeExtension(matched.id);
+              }
             }
             if (ext.enabled) {
-              await accountSession.loadExtension(ext.path);
+              if (accountSession.extensions) {
+                await accountSession.extensions.loadExtension(ext.path);
+              } else {
+                await accountSession.loadExtension(ext.path);
+              }
             }
           }
 

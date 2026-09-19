@@ -1,20 +1,26 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-whatsapp-dark: #111b21;
+  --color-whatsapp-panel: #202c33;
+  --color-whatsapp-accent: #00a884;
+  --color-whatsapp-hover: #2a3942;
+  --color-whatsapp-light: #e9edef;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
 
 @layer base {
   html, body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: var(--font-sans);
   }
 }
 
-@layer utilities {
-  .app-drag {
-    -webkit-app-region: drag;
-  }
-  .app-no-drag {
-    -webkit-app-region: no-drag;
-  }
+@utility app-drag {
+  -webkit-app-region: drag;
+}
+
+@utility app-no-drag {
+  -webkit-app-region: no-drag;
 }
 
 /* Custom scrollbar */

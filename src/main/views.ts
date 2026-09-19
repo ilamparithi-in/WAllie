@@ -730,7 +730,11 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
         if (fs.existsSync(ext.path)) {
           try {
             console.log(`Loading extension for account ${account.id}: ${ext.name} from ${ext.path}`);
-            await accountSession.loadExtension(ext.path);
+            if (accountSession.extensions) {
+              await accountSession.extensions.loadExtension(ext.path);
+            } else {
+              await accountSession.loadExtension(ext.path);
+            }
           } catch (err) {
             console.error(`Failed to load extension ${ext.name} from ${ext.path}:`, err);
           }
