@@ -144,23 +144,13 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.on('zoom:visual-changed', (_event, visualScale: number) => {
-    const activeContents = getActiveWebContents();
-    if (activeContents) {
-      const baseScale = (state.globalSettings?.appScale || 100) / 100;
-      const factor = activeContents.getZoomFactor();
-      const relativeFactor = factor / baseScale;
-      const effectivePercent = Math.round(relativeFactor * visualScale * 100);
-      state.mainWindow?.webContents.send('zoom:changed', effectivePercent);
-    }
-  });
-
   ipcMain.on('zoom:trigger-step', (_event, direction: 'in' | 'out') => {
     const activeContents = getActiveWebContents();
     if (activeContents) {
       changeZoom(activeContents, direction);
     }
   });
+
 
   ipcMain.on('settings:reset-app-scale', async () => {
     if (!state.globalSettings) return;

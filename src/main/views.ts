@@ -240,7 +240,7 @@ export function pauseAllMedia() {
               });
             } catch (e) {}
           })()
-        `).catch(() => {});
+        `).catch(() => { });
       } catch (e) {
         // Ignore errors
       }
@@ -263,7 +263,7 @@ export function resumeMediaAfterCall() {
               });
             } catch (e) {}
           })()
-        `).catch(() => {});
+        `).catch(() => { });
       } catch (e) {
         // Ignore errors
       }
@@ -339,8 +339,8 @@ export function registerContextMenu(webContents: Electron.WebContents) {
     const isEditable = params.isEditable;
     const hasSelection = !!(params.selectionText && params.selectionText.trim() !== '');
     const isImage = params.mediaType === 'image' || params.hasImageContents;
-    const hasLink = !!((params.linkURL && params.linkURL.trim() !== '') || 
-                    (hasSelection && /^(https?:\/\/|www\.)[^\s]+$/i.test(params.selectionText.trim())));
+    const hasLink = !!((params.linkURL && params.linkURL.trim() !== '') ||
+      (hasSelection && /^(https?:\/\/|www\.)[^\s]+$/i.test(params.selectionText.trim())));
 
     // Image options
     if (isImage) {
@@ -535,7 +535,7 @@ export function handleExternalLinkClick(urlStr: string): void {
           } catch(e) {}
         })();
       `;
-      activeView.webContents.executeJavaScript(script).catch(() => {});
+      activeView.webContents.executeJavaScript(script).catch(() => { });
     }
   };
 
@@ -577,6 +577,17 @@ export function handleExternalLinkClick(urlStr: string): void {
 }
 
 export function registerZoomShortcuts(webContents: Electron.WebContents) {
+  if (typeof (webContents as any).setZoomMode === 'function') {
+    (webContents as any).setZoomMode('manual');
+  }
+
+  webContents.on('zoom-changed', (_event, direction) => {
+    const targetContents = getActiveWebContents() || webContents;
+    if (targetContents && !targetContents.isDestroyed()) {
+      changeZoom(targetContents, direction);
+    }
+  });
+
   webContents.on('before-input-event', (event, input) => {
     if (input.type === 'keyDown') {
       const isControl = process.platform === 'darwin' ? input.meta : input.control;
@@ -758,6 +769,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
       v8CacheOptions: 'bypassHeatCheck',
       spellcheck: false,
       visualZoom: true,
+      zoomMode: 'manual',
     } as any,
   });
 
@@ -902,43 +914,9 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   };
 
   view.webContents.on('dom-ready', () => {
+    view.webContents.setVisualZoomLevelLimits(1, 5).catch(() => {});
     checkLoginStatus();
     injectAccountStyling(account.id, view.webContents);
-
-    view.webContents.executeJavaScript(`
-      (() => {
-        if (window.__walinux_zoom_monitored) return;
-        window.__walinux_zoom_monitored = true;
-        if (window.visualViewport) {
-          const reportZoom = () => {
-            if (window.__walinux_report_zoom) {
-              window.__walinux_report_zoom(window.visualViewport.scale);
-            }
-          };
-          window.visualViewport.addEventListener('resize', reportZoom);
-        }
-
-        // Ctrl + Mouse Wheel / Touchpad Pinch to Page Zoom
-        let wheelZoomTimeout = null;
-        let accumulatedDeltaY = 0;
-        window.addEventListener('wheel', (e) => {
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            accumulatedDeltaY += e.deltaY;
-            if (wheelZoomTimeout) clearTimeout(wheelZoomTimeout);
-            wheelZoomTimeout = setTimeout(() => {
-              if (Math.abs(accumulatedDeltaY) > 5) {
-                const direction = accumulatedDeltaY < 0 ? 'in' : 'out';
-                if (window.__walinux_trigger_zoom) {
-                  window.__walinux_trigger_zoom(direction);
-                }
-              }
-              accumulatedDeltaY = 0;
-            }, 30);
-          }
-        }, { passive: false });
-      })();
-    `).catch(() => {});
   });
   view.webContents.on('page-title-updated', checkLoginStatus);
 
