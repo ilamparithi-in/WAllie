@@ -8,6 +8,7 @@ import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTruste
 import { Account, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 import { TITLEBAR_HEIGHT } from '../shared/constants';
 import { downloadManager } from './downloads';
+import { prepareExtensionForElectron } from './extensions';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -577,17 +578,6 @@ export function handleExternalLinkClick(urlStr: string): void {
 }
 
 export function registerZoomShortcuts(webContents: Electron.WebContents) {
-  if (typeof (webContents as any).setZoomMode === 'function') {
-    (webContents as any).setZoomMode('manual');
-  }
-
-  webContents.on('zoom-changed', (_event, direction) => {
-    const targetContents = getActiveWebContents() || webContents;
-    if (targetContents && !targetContents.isDestroyed()) {
-      changeZoom(targetContents, direction);
-    }
-  });
-
   webContents.on('before-input-event', (event, input) => {
     if (input.type === 'keyDown') {
       const isControl = process.platform === 'darwin' ? input.meta : input.control;
@@ -740,6 +730,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
       if (ext.enabled) {
         if (fs.existsSync(ext.path)) {
           try {
+            prepareExtensionForElectron(ext.path);
             console.log(`Loading extension for account ${account.id}: ${ext.name} from ${ext.path}`);
             if (accountSession.extensions) {
               await accountSession.extensions.loadExtension(ext.path);
@@ -769,7 +760,6 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
       v8CacheOptions: 'bypassHeatCheck',
       spellcheck: false,
       visualZoom: true,
-      zoomMode: 'manual',
     } as any,
   });
 
@@ -778,12 +768,26 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   view.webContents.setVisualZoomLevelLimits(1, 5);
   view.webContents.loadURL('https://web.whatsapp.com');
 
-  // Touchpad 2-finger horizontal swipe navigation (forward/back)
-  (view.webContents as any).on('swipe', (_event: any, direction: string) => {
-    if (direction === 'left' && view.webContents.canGoForward()) {
-      view.webContents.goForward();
-    } else if (direction === 'right' && view.webContents.canGoBack()) {
-      view.webContents.goBack();
+  view.webContents.on('did-finish-load', () => {
+    if (view.webContents.navigationHistory) {
+      view.webContents.navigationHistory.clear();
+    } else {
+      (view.webContents as any).clearHistory?.();
+    }
+  });
+
+  view.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[Account ${account.id}] Renderer process gone (${details.reason}):`, details);
+    if (details.reason !== 'clean-exit') {
+      console.log(`[Account ${account.id}] Reloading view after unexpected renderer exit...`);
+      view.webContents.reload();
+    }
+  });
+
+  view.webContents.on('did-navigate', (_event, url) => {
+    if (url === 'about:blank' || (!isWhatsAppUrl(url) && !url.startsWith('chrome-extension://'))) {
+      console.warn(`[Account ${account.id}] Navigated away to ${url}, redirecting back to WhatsApp Web`);
+      view.webContents.loadURL('https://web.whatsapp.com');
     }
   });
 
