@@ -52,19 +52,23 @@ export function applyActiveViewBoundsImmediately(aView: WebContentsView) {
   if (!state.mainWindow || state.mainWindow.isDestroyed() || !aView) return;
   const [w, h] = state.mainWindow.getContentSize();
   if (state.disclaimerOpen || state.protocolPromptOpen) {
-    aView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+    aView.setVisible(false);
   } else {
     const scaleFactor = (state.globalSettings?.appScale || 100) / 100;
     const scaledTitlebarHeight = Math.round(TITLEBAR_HEIGHT * scaleFactor);
     const scaledDrawerWidth = Math.round(state.settingsDrawerWidth * scaleFactor);
     const vWidth = w - scaledDrawerWidth;
 
+    aView.setVisible(true);
     aView.setBounds({
       x: 0,
       y: scaledTitlebarHeight,
       width: Math.max(0, vWidth),
       height: Math.max(0, h - scaledTitlebarHeight),
     });
+    if (!aView.webContents.isDestroyed()) {
+      aView.webContents.invalidate();
+    }
   }
 }
 
@@ -90,6 +94,7 @@ export async function switchActiveAccount(newAccountId: string) {
 
   const currentView = state.accountViews.get(state.activeAccountId);
   if (state.activeAccountId === newAccountId && currentView) {
+    currentView.setVisible(true);
     applyActiveViewBoundsImmediately(currentView);
     if (!currentView.webContents.isDestroyed()) {
       currentView.webContents.focus();
@@ -97,11 +102,9 @@ export async function switchActiveAccount(newAccountId: string) {
     return;
   }
 
-  if (currentView) {
-    state.mainWindow.contentView.removeChildView(currentView);
-    if (!currentView.webContents.isDestroyed()) {
-      currentView.webContents.setFrameRate(1);
-    }
+  // Hide the previous active view cleanly without detaching from the window composition
+  if (currentView && currentView !== state.accountViews.get(newAccountId)) {
+    currentView.setVisible(false);
   }
 
   state.activeAccountId = newAccountId;
@@ -116,10 +119,9 @@ export async function switchActiveAccount(newAccountId: string) {
   }
 
   if (targetView) {
+    // Add or bring the target view to the top of the stack
     state.mainWindow.contentView.addChildView(targetView);
-    if (!targetView.webContents.isDestroyed()) {
-      targetView.webContents.setFrameRate(60);
-    }
+    targetView.setVisible(true);
     applyActiveViewBoundsImmediately(targetView);
     updateActiveViewBounds();
 
@@ -146,8 +148,9 @@ export async function initializeAccountsLoad() {
       if (account.id !== state.activeAccountId && !state.accountViews.has(account.id) && preloadIds.includes(account.id)) {
         createAccountView(account).then((view) => {
           state.accountViews.set(account.id, view);
-          if (!view.webContents.isDestroyed()) {
-            view.webContents.setFrameRate(1);
+          if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+            state.mainWindow.contentView.addChildView(view);
+            view.setVisible(false);
           }
           console.log(`Preloaded account: ${account.name} (${account.id})`);
           notifyAccountListChanged();
@@ -248,7 +251,6 @@ export function createMainWindow() {
   state.mainWindow.on('focus', () => {
     const activeView = state.accountViews.get(state.activeAccountId);
     if (activeView && !activeView.webContents.isDestroyed()) {
-      activeView.webContents.setFrameRate(60);
       if (!state.disclaimerOpen && !state.protocolPromptOpen) {
         activeView.webContents.focus();
       }
@@ -258,21 +260,7 @@ export function createMainWindow() {
   state.mainWindow.on('show', () => {
     const activeView = state.accountViews.get(state.activeAccountId);
     if (activeView && !activeView.webContents.isDestroyed()) {
-      activeView.webContents.setFrameRate(60);
-    }
-  });
-
-  state.mainWindow.on('hide', () => {
-    const activeView = state.accountViews.get(state.activeAccountId);
-    if (activeView && !activeView.webContents.isDestroyed()) {
-      activeView.webContents.setFrameRate(1);
-    }
-  });
-
-  state.mainWindow.on('minimize', () => {
-    const activeView = state.accountViews.get(state.activeAccountId);
-    if (activeView && !activeView.webContents.isDestroyed()) {
-      activeView.webContents.setFrameRate(1);
+      applyActiveViewBoundsImmediately(activeView);
     }
   });
 
@@ -494,8 +482,9 @@ export async function loadAccountLogic(id: string): Promise<boolean> {
     try {
       const view = await createAccountView(account);
       state.accountViews.set(id, view);
-      if (!view.webContents.isDestroyed()) {
-        view.webContents.setFrameRate(1);
+      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        state.mainWindow.contentView.addChildView(view);
+        view.setVisible(false);
       }
       notifyAccountListChanged();
     } catch (err) {

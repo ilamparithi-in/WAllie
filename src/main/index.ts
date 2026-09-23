@@ -9,11 +9,7 @@ import { createMainWindow, createTray } from './window';
 import { checkForWebStoreUpdates } from './extensions';
 
 // Memory & CPU Optimization flags & Touchpad / Pinch Gestures
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('enable-pinch');
-app.commandLine.appendSwitch('enable-experimental-web-platform-features');
-app.commandLine.appendSwitch('enable-touch-drag-drop');
 if (process.platform === 'linux') {
   if (process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland') {
     app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
