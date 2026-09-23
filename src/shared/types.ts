@@ -64,6 +64,7 @@ export interface GlobalSettings {
   closeToTray: boolean;
   hardwareAcceleration: boolean;
   appScale?: number;
+  ctrlScrollZoomEnabled?: boolean;
   preloadAccountIds?: string[];
   showDevToolsToggle?: boolean;
   showRefreshButton?: boolean;

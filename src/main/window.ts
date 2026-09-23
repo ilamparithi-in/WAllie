@@ -264,6 +264,14 @@ export function createMainWindow() {
     }
   });
 
+  state.mainWindow.on('blur', () => {
+    for (const view of state.accountViews.values()) {
+      if (view && !view.webContents.isDestroyed()) {
+        view.webContents.send('zoom:ctrl-state-changed', false);
+      }
+    }
+  });
+
   registerZoomShortcuts(state.mainWindow.webContents);
 
   state.mainWindow.webContents.on('will-navigate', (event, url) => {

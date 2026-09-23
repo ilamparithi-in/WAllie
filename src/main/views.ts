@@ -579,8 +579,15 @@ export function handleExternalLinkClick(urlStr: string): void {
 
 export function registerZoomShortcuts(webContents: Electron.WebContents) {
   webContents.on('before-input-event', (event, input) => {
+    const isControl = process.platform === 'darwin' ? input.meta : input.control;
+    if (input.key === 'Control' || input.key === 'Meta') {
+      const isDown = input.type !== 'keyUp';
+      if (!webContents.isDestroyed()) {
+        webContents.send('zoom:ctrl-state-changed', isDown);
+      }
+    }
+
     if (input.type === 'keyDown') {
-      const isControl = process.platform === 'darwin' ? input.meta : input.control;
       const isShift = input.shift;
       const isAlt = input.alt;
 
@@ -759,11 +766,13 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
       webSecurity: true,
       v8CacheOptions: 'bypassHeatCheck',
       spellcheck: false,
+      visualZoom: true,
     } as any,
   });
 
   view.webContents.setUserAgent(DEFAULT_USER_AGENT);
   view.webContents.setZoomFactor(baseScale);
+  view.webContents.setVisualZoomLevelLimits(1, 5);
   view.webContents.loadURL('https://web.whatsapp.com');
 
   view.webContents.on('did-finish-load', () => {

@@ -40,6 +40,7 @@ export interface ElectronAPI {
   toggleDisclaimer: (isOpen: boolean) => void;
   resetZoom: () => void;
   resetAppScale: () => void;
+  triggerZoomStep: (direction: 'in' | 'out') => void;
   toggleDevTools: () => void;
 
   // Storage & Cache controls
@@ -140,6 +141,7 @@ const api: ElectronAPI = {
   toggleDisclaimer: (isOpen: boolean) => ipcRenderer.send('disclaimer:toggle', isOpen),
   resetZoom: () => ipcRenderer.send('zoom:reset'),
   resetAppScale: () => ipcRenderer.send('settings:reset-app-scale'),
+  triggerZoomStep: (direction: 'in' | 'out') => ipcRenderer.send('zoom:trigger-step', direction),
   toggleDevTools: () => ipcRenderer.send('devtools:toggle'),
 
   getStorageSizes: (accountId) => ipcRenderer.invoke('account:get-storage-sizes', accountId),
@@ -354,21 +356,26 @@ function setupWhatsAppIntegration() {
   // Ctrl + Mouse Wheel to Page Zoom (Physical Ctrl only, leaving native touchpad pinch-to-zoom untouched)
   let isPhysicalCtrlDown = false;
 
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Control') {
+  ipcRenderer.on('zoom:ctrl-state-changed', (_event: any, isDown: boolean) => {
+    isPhysicalCtrlDown = isDown;
+  });
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Control' || e.key === 'Meta' || e.ctrlKey || e.metaKey) {
       isPhysicalCtrlDown = true;
     }
-  }, true);
+  };
 
-  window.addEventListener('keyup', (e) => {
-    if (e.key === 'Control') {
+  const handleKeyUp = (e: KeyboardEvent) => {
+    if (!e.ctrlKey && !e.metaKey) {
       isPhysicalCtrlDown = false;
     }
-  }, true);
+  };
 
-  window.addEventListener('blur', () => {
-    isPhysicalCtrlDown = false;
-  });
+  window.addEventListener('keydown', handleKeyDown, true);
+  document.addEventListener('keydown', handleKeyDown, true);
+  window.addEventListener('keyup', handleKeyUp, true);
+  document.addEventListener('keyup', handleKeyUp, true);
 
   let wheelZoomTimeout: NodeJS.Timeout | null = null;
   let accumulatedDeltaY = 0;

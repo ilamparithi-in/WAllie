@@ -145,6 +145,7 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.on('zoom:trigger-step', (_event, direction: 'in' | 'out') => {
+    if (state.globalSettings?.ctrlScrollZoomEnabled === false) return;
     const activeContents = getActiveWebContents();
     if (activeContents) {
       changeZoom(activeContents, direction);
