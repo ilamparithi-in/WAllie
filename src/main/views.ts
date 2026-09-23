@@ -759,13 +759,11 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
       webSecurity: true,
       v8CacheOptions: 'bypassHeatCheck',
       spellcheck: false,
-      visualZoom: true,
     } as any,
   });
 
   view.webContents.setUserAgent(DEFAULT_USER_AGENT);
   view.webContents.setZoomFactor(baseScale);
-  view.webContents.setVisualZoomLevelLimits(1, 5);
   view.webContents.loadURL('https://web.whatsapp.com');
 
   view.webContents.on('did-finish-load', () => {
