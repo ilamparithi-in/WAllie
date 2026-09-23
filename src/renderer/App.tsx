@@ -35,6 +35,8 @@ export const App: React.FC = () => {
 
   const disclaimerRef = useRef<HTMLDivElement>(null);
   const protocolPromptRef = useRef<HTMLDivElement>(null);
+  const globalSettingsRef = useRef<GlobalSettings | null>(null);
+  globalSettingsRef.current = globalSettings;
 
   // Focus trapping hooks for overlays
   const isDisclaimerActive = Boolean((!globalSettings?.disclaimerAccepted || showDisclaimerForce) && disclaimerRef.current);
@@ -66,12 +68,26 @@ export const App: React.FC = () => {
       setGlobalSettings(settings);
     });
 
-    const preventWheelZoom = (e: WheelEvent) => {
+    let wheelZoomTimeout: NodeJS.Timeout | null = null;
+    let accumulatedDeltaY = 0;
+
+    const handleWheelZoom = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
+        if (globalSettingsRef.current?.ctrlScrollZoomEnabled !== false) {
+          accumulatedDeltaY += e.deltaY;
+          if (wheelZoomTimeout) clearTimeout(wheelZoomTimeout);
+          wheelZoomTimeout = setTimeout(() => {
+            if (Math.abs(accumulatedDeltaY) > 5) {
+              const direction = accumulatedDeltaY < 0 ? 'in' : 'out';
+              window.electronAPI?.triggerZoomStep?.(direction);
+            }
+            accumulatedDeltaY = 0;
+          }, 30);
+        }
       }
     };
-    window.addEventListener('wheel', preventWheelZoom, { passive: false });
+    window.addEventListener('wheel', handleWheelZoom, { passive: false });
 
     const unsubscribeDownload = window.electronAPI.onDownloadProgress((data) => {
       if (data.state === 'cancelled') {
@@ -136,7 +152,7 @@ export const App: React.FC = () => {
     window.electronAPI.signalProtocolReady();
 
     return () => {
-      window.removeEventListener('wheel', preventWheelZoom);
+      window.removeEventListener('wheel', handleWheelZoom);
       unsubscribeAccount?.();
       unsubscribeGlobalSettings?.();
       unsubscribeDownload?.();

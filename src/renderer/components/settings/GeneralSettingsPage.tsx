@@ -217,6 +217,21 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
 
           <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
             <div className="flex-1 min-w-0">
+              <div className="font-medium text-[#e9edef] text-[11px]">Ctrl + Scroll to Zoom Scale</div>
+              <div className="text-[10px] text-[#8696a0]">
+                Use Ctrl + Mouse Wheel to change the app and view zoom scale (touchpad pinch-to-zoom is preserved)
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={globalSettings?.ctrlScrollZoomEnabled ?? true}
+              onChange={(e) => handleToggleGlobalSetting('ctrlScrollZoomEnabled', e.target.checked)}
+              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+            />
+          </label>
+
+          <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
+            <div className="flex-1 min-w-0">
               <div className="font-medium text-[#e9edef] text-[11px]">Enable Notification Logging</div>
               <div className="text-[10px] text-[#8696a0]">
                 Log desktop notifications, message edits, and deletions to history (disabled by default)
