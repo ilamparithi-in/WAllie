@@ -100,6 +100,8 @@ export interface ElectronAPI {
   onOpenManageAccounts: (callback: (accountId: string) => void) => () => void;
   focusActiveAccount: () => void;
   getAppVersion: () => Promise<AppVersionInfo>;
+  sendSandboxAction: (action: string, data?: any) => void;
+  onSandboxUpdate: (callback: (data: any) => void) => () => void;
 }
 
 const api: ElectronAPI = {
@@ -259,6 +261,12 @@ const api: ElectronAPI = {
   },
 
   getAppVersion: () => ipcRenderer.invoke('app:get-version-info'),
+  sendSandboxAction: (action: string, data?: any) => ipcRenderer.send('sandbox:action', action, data),
+  onSandboxUpdate: (callback: (data: any) => void) => {
+    const subscription = (_event: unknown, data: any) => callback(data);
+    ipcRenderer.on('sandbox:update', subscription);
+    return () => ipcRenderer.removeListener('sandbox:update', subscription);
+  },
 };
 
 // Defined inline here because build:preload cleans dist/preload/shared.
@@ -1249,6 +1257,14 @@ async function setupWebStoreInjection() {
 
 if (!isWhatsApp) {
   contextBridge.exposeInMainWorld('electronAPI', api);
+  contextBridge.exposeInMainWorld('sandboxAPI', {
+    sendAction: (action: string, data?: any) => ipcRenderer.send('sandbox:action', action, data),
+    onUpdate: (callback: (data: any) => void) => {
+      const subscription = (_event: unknown, data: any) => callback(data);
+      ipcRenderer.on('sandbox:update', subscription);
+      return () => ipcRenderer.removeListener('sandbox:update', subscription);
+    },
+  });
 
   window.addEventListener('DOMContentLoaded', () => {
     const isDevTools = !!document.querySelector('meta[name="is-devtools"]');

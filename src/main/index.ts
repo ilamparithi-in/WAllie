@@ -88,13 +88,16 @@ if (gotTheLock) {
       app.setAsDefaultProtocolClient('wallie');
     }
 
-    // Content Security Policy for the main renderer window (React UI)
+    // Content Security Policy for the main renderer window (React UI) and sandbox toolbar
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      const isSandbox = details.url.includes('sandbox');
       callback({
         responseHeaders: {
           ...details.responseHeaders,
           'Content-Security-Policy': [
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:*"
+            isSandbox
+              ? "default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+              : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:*"
           ]
         }
       });
