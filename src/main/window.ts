@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
-import { getAppIcon, isWhatsAppUrl, getAccountById, getAccountsWithLoadedStatus, getPreloadPath } from './utils';
+import { getAppIcon, isWhatsAppUrl, getAccountById, getAccountsWithLoadedStatus, getPreloadPath, getInitialWindowSize } from './utils';
 import { createAccountView, pauseAllMedia, injectCustomCssForView, registerZoomShortcuts, registerContextMenu, handleExternalLinkClick } from './views';
 import { safeDeleteExtensionDir } from './extensions';
 import { saveSettings, saveAccounts, ACCOUNTS_FILE } from './config';
@@ -17,36 +17,7 @@ const DRAWER_WIDTH = 450;
 let closeTimeout: NodeJS.Timeout | null = null;
 let resizeTimeout: NodeJS.Timeout | null = null;
 
-/**
- * Calculates initial window dimensions, ensuring the window fits within
- * the available display work area (avoiding taskbar/dock clipping and multi-monitor overflow).
- */
-export function getInitialWindowSize(
-  targetWidth: number,
-  targetHeight: number,
-  referenceWindow?: BrowserWindow | null,
-  maxRatio = 0.9
-): { width: number; height: number } {
-  try {
-    const electronScreen = screen as unknown as Electron.Screen;
-    let display = electronScreen.getPrimaryDisplay();
-    if (referenceWindow && !referenceWindow.isDestroyed()) {
-      display = electronScreen.getDisplayMatching(referenceWindow.getBounds());
-    }
-
-    const { width: workWidth, height: workHeight } = display.workAreaSize;
-    const maxWidth = Math.floor(workWidth * maxRatio);
-    const maxHeight = Math.floor(workHeight * maxRatio);
-
-    return {
-      width: Math.max(360, Math.min(targetWidth, maxWidth)),
-      height: Math.max(360, Math.min(targetHeight, maxHeight)),
-    };
-  } catch (err) {
-    console.error('Failed to calculate initial window size:', err);
-    return { width: targetWidth, height: targetHeight };
-  }
-}
+export { getInitialWindowSize };
 
 export function applyActiveViewBoundsImmediately(aView: WebContentsView) {
   if (!state.mainWindow || state.mainWindow.isDestroyed() || !aView) return;

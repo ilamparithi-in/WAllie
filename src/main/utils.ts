@@ -1,4 +1,4 @@
-import { nativeImage, NativeImage, WebContents } from 'electron';
+import { nativeImage, NativeImage, WebContents, screen, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
@@ -9,6 +9,37 @@ const __dirname = path.dirname(__filename);
 
 import { WHATSAPP_DOMAIN_REGEX } from '../shared/constants';
 export { WHATSAPP_DOMAIN_REGEX };
+
+/**
+ * Calculates initial window dimensions, ensuring the window fits within
+ * the available display work area (avoiding taskbar/dock clipping and multi-monitor overflow).
+ */
+export function getInitialWindowSize(
+  targetWidth: number,
+  targetHeight: number,
+  referenceWindow?: BrowserWindow | null,
+  maxRatio = 0.9
+): { width: number; height: number } {
+  try {
+    const electronScreen = screen as unknown as Electron.Screen;
+    let display = electronScreen.getPrimaryDisplay();
+    if (referenceWindow && !referenceWindow.isDestroyed()) {
+      display = electronScreen.getDisplayMatching(referenceWindow.getBounds());
+    }
+
+    const { width: workWidth, height: workHeight } = display.workAreaSize;
+    const maxWidth = Math.floor(workWidth * maxRatio);
+    const maxHeight = Math.floor(workHeight * maxRatio);
+
+    return {
+      width: Math.max(360, Math.min(targetWidth, maxWidth)),
+      height: Math.max(360, Math.min(targetHeight, maxHeight)),
+    };
+  } catch (err) {
+    console.error('Failed to calculate initial window size:', err);
+    return { width: targetWidth, height: targetHeight };
+  }
+}
 
 export function getPreloadPath(): string {
   return path.join(__dirname, '../preload/index.cjs');
