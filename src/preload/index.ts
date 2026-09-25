@@ -430,6 +430,9 @@ function setupWhatsAppIntegration() {
     closeNotification: (_tag: string) => {
       // Ignored for desktop notifications
     },
+    dismissChat: (data: { tag?: string; contactName?: string }) => {
+      ipcRenderer.send('notification:dismiss-chat', data);
+    },
     onNotificationClicked: (callback: (data: any) => void) => {
       onClickCallback = callback;
     },
@@ -593,10 +596,67 @@ function setupWhatsAppIntegration() {
           return null;
         }
 
+        function getActiveChatTitle() {
+          const headerTitles = Array.from(document.querySelectorAll('header span[title]'));
+          for (const el of headerTitles) {
+            const t = (el.getAttribute('title') || el.textContent || '').trim();
+            if (t) return t;
+          }
+          return '';
+        }
+
+        function dismissActiveChat() {
+          try {
+            const currentTitle = getActiveChatTitle();
+            if (currentTitle && window.__walinux_ipc && window.__walinux_ipc.dismissChat) {
+              window.__walinux_ipc.dismissChat({ contactName: currentTitle });
+            }
+          } catch (e) {}
+        }
+
+        window.addEventListener('focus', () => {
+          dismissActiveChat();
+        });
+
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) {
+            dismissActiveChat();
+          }
+        });
+
+        document.addEventListener('click', () => {
+          setTimeout(dismissActiveChat, 100);
+        }, { passive: true });
+
+        document.addEventListener('focusin', (e) => {
+          const target = e.target;
+          if (target && (target.closest('footer') || target.getAttribute('contenteditable') === 'true')) {
+            dismissActiveChat();
+          }
+        }, { passive: true });
+
+        let lastObservedChatTitle = '';
+        let chatHeaderDismissTimer = null;
+        try {
+          const chatHeaderObserver = new MutationObserver(() => {
+            const t = getActiveChatTitle();
+            if (t && t !== lastObservedChatTitle) {
+              lastObservedChatTitle = t;
+              if (chatHeaderDismissTimer) clearTimeout(chatHeaderDismissTimer);
+              chatHeaderDismissTimer = setTimeout(dismissActiveChat, 150);
+            }
+          });
+          chatHeaderObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+        } catch (e) {}
+
         if (window.__walinux_ipc) {
           window.__walinux_ipc.onNotificationClicked((arg) => {
             const tag = typeof arg === 'string' ? arg : arg?.tag;
             const contactName = typeof arg === 'object' ? arg?.contactName : '';
+
+            if (window.__walinux_ipc && window.__walinux_ipc.dismissChat) {
+              window.__walinux_ipc.dismissChat({ tag, contactName });
+            }
 
             const callback = activeNotificationCallbacks.get(tag);
             if (callback) {
@@ -869,10 +929,11 @@ function setupWhatsAppIntegration() {
           }
 
           close() {
-            // Note: In web browsers, WhatsApp Web automatically calls .close() after ~2-3s.
-            // For desktop notifications, we do NOT forward this dismissal to D-Bus/KDE Plasma
-            // because users need time to read and type inline replies.
-            // The desktop notification manager handles its own lifecycle and timeout (25s).
+            if (this.title && window.__walinux_ipc && window.__walinux_ipc.dismissChat) {
+              if (isChatOpen(norm(this.title))) {
+                window.__walinux_ipc.dismissChat({ tag: this.tag, contactName: this.title });
+              }
+            }
             setTimeout(() => {
               activeNotificationCallbacks.delete(this.tag);
             }, 120000);

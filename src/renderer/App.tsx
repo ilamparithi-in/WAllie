@@ -294,10 +294,14 @@ export const App: React.FC = () => {
 
               {dl.state === 'completed' && (
                 <div className="flex items-center justify-between pt-1 border-t border-[#222d34]/60">
-                  <span className="text-[10px] text-[#00a884] font-medium flex items-center gap-1 truncate max-w-[130px]">
+                  <button
+                    onClick={() => dl.savePath && window.electronAPI.openDownloadedFile(dl.savePath)}
+                    className="text-[10px] text-[#00a884] hover:text-[#00c298] font-medium flex items-center gap-1 truncate max-w-[130px] cursor-pointer transition-colors"
+                    title="Click to open file"
+                  >
                     <CheckCircle className="w-3 h-3 flex-shrink-0" />
                     <span>Downloaded</span>
-                  </span>
+                  </button>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     {dl.savePath && (
                       <>

@@ -148,3 +148,6 @@ if (gotTheLock) {
     }
   });
 }
+
+export { notificationManager } from './notifications/index';
+export { downloadManager } from './downloads';

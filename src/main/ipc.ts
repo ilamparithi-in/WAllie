@@ -8,9 +8,9 @@ import { saveAccounts, saveSettings, getAccountStorageSizes, invalidateStorageCa
 import { importExtension, installWebStoreExtension, toggleExtension, removeExtension, checkForWebStoreUpdates } from './extensions';
 import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectCustomCssForView, injectAccountStyling } from './views';
 import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize, unloadAccountLogic, loadAccountLogic, notifyAccountListChanged } from './window';
-import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry, closeDbusNotificationByTag } from './notifications';
+import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry, closeDbusNotificationByTag, closeNotificationByContact } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS, AccountSettings } from '../shared/types';
-import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus } from './utils';
+import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus, getAccountForWebContents } from './utils';
 import { downloadManager } from './downloads';
 
 const execAsync = promisify(exec);
@@ -690,6 +690,18 @@ export function registerIpcHandlers() {
   ipcMain.on('notification:close-request', (_event, _tag: string) => {
     // Intentionally no-op to prevent WhatsApp Web's browser auto-dismiss timer from
     // prematurely killing desktop notifications before the user can type a reply.
+  });
+
+  ipcMain.on('notification:dismiss-chat', (event, data: { tag?: string; contactName?: string }) => {
+    if (!data || typeof data !== 'object') return;
+    const senderAccount = getAccountForWebContents(event.sender);
+    const accountId = senderAccount?.id;
+    if (data.tag && typeof data.tag === 'string') {
+      closeDbusNotificationByTag(data.tag);
+    }
+    if (data.contactName && typeof data.contactName === 'string') {
+      closeNotificationByContact(data.contactName, accountId);
+    }
   });
 
   ipcMain.handle('notification:get-history', () => {

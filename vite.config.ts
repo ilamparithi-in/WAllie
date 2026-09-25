@@ -29,6 +29,9 @@ export default defineConfig({
             outDir: 'dist/main',
             sourcemap: true,
             minify: false,
+            rollupOptions: {
+              external: ['x11'],
+            },
           },
         },
       },
