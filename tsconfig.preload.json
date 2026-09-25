@@ -7,5 +7,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/preload/index.ts"]
+  "include": ["src/preload/index.ts", "src/preload/inject/whatsappMainWorld.ts"]
 }
