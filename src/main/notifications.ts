@@ -1,4 +1,4 @@
-import { app, Notification, nativeImage, WebContents } from 'electron';
+import { app, WebContents } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { state } from './state';
@@ -6,6 +6,7 @@ import { switchActiveAccount } from './window';
 import { getAccountForWebContents } from './utils';
 import { HistoricalNotification } from '../shared/types';
 import { getAccountDisplayName } from '../shared/constants';
+import { notificationManager } from './notifications/index';
 
 export const NOTIFICATION_HISTORY_FILE = path.join(app.getPath('userData'), 'notification_history.json');
 const MAX_NOTIFICATIONS = 100;
@@ -94,7 +95,7 @@ export function clearNotificationHistoryCache(optionsOrPeriod: string | ClearHis
     }
     case 'single': {
       const startMs = options.startDate ? new Date(`${options.startDate}T00:00:00`).getTime() : 0;
-      const endMs = options.startDate ? new Date(`${options.startDate}T23:59:59.999`).getTime() : Date.now();
+      const endMs = options.endDate ? new Date(`${options.endDate}T23:59:59.999`).getTime() : Date.now();
       updatedHistory = history.filter((item) => item.timestamp < startMs || item.timestamp > endMs);
       break;
     }
@@ -124,69 +125,12 @@ export function clearNotificationHistoryCache(optionsOrPeriod: string | ClearHis
   state.mainWindow?.webContents.send('notification:history-changed', updatedHistory);
 }
 
-import { dbusNotifications } from './dbusNotifications';
-
-interface ActiveNotificationContext {
-  accountId: string;
-  senderWebContents: WebContents;
-  contactName: string;
-  tag: string;
+export async function closeDbusNotificationByTag(tag: string) {
+  await notificationManager.closeByTag(tag);
 }
 
-const activeDbusNotifications = new Map<number, ActiveNotificationContext>();
-let dbusListenersAttached = false;
-
-function ensureDbusListeners() {
-  if (dbusListenersAttached) return;
-  dbusListenersAttached = true;
-
-  dbusNotifications.on('replied', (id: number, text: string) => {
-    const ctx = activeDbusNotifications.get(id);
-    if (!ctx) return;
-    activeDbusNotifications.delete(id);
-
-    const body = text.trim();
-    if (!body) return;
-
-    ctx.senderWebContents.send('notification:send-inline-reply', {
-      contactName: ctx.contactName,
-      text: body,
-      tag: ctx.tag,
-    });
-  });
-
-  dbusNotifications.on('actionInvoked', (id: number, actionKey: string) => {
-    const ctx = activeDbusNotifications.get(id);
-    if (!ctx) return;
-    activeDbusNotifications.delete(id);
-
-    if (state.mainWindow) {
-      if (state.mainWindow.isMinimized()) {
-        state.mainWindow.restore();
-      }
-      state.mainWindow.show();
-      state.mainWindow.focus();
-    }
-    switchActiveAccount(ctx.accountId);
-    ctx.senderWebContents.send('notification:clicked-reply', {
-      tag: ctx.tag,
-      contactName: ctx.contactName,
-    });
-  });
-
-  dbusNotifications.on('closed', (id: number) => {
-    activeDbusNotifications.delete(id);
-  });
-}
-
-export function closeDbusNotificationByTag(tag: string) {
-  for (const [id, ctx] of activeDbusNotifications.entries()) {
-    if (ctx.tag === tag) {
-      dbusNotifications.close(id);
-      activeDbusNotifications.delete(id);
-      break;
-    }
-  }
+export async function closeNotificationByContact(contactName: string, accountId?: string) {
+  await notificationManager.closeByContact(contactName, accountId);
 }
 
 export async function createNotification(
@@ -220,80 +164,47 @@ export async function createNotification(
   const timeoutMs = dismissalTimeSec === -1 ? -1 : (dismissalTimeSec === 0 ? 0 : dismissalTimeSec * 1000);
 
   const isInlineReplyEnabled = state.globalSettings?.inlineReplyEnabled !== false;
-  if (isInlineReplyEnabled) {
-    ensureDbusListeners();
-    const canUseDbus = await dbusNotifications.isAvailable();
-    if (canUseDbus) {
-      const id = await dbusNotifications.notify({
-        title: brandedTitle,
-        body: data.body,
-        iconDataUrl: data.icon,
-        placeholder: `Reply to ${data.title}…`,
-        canReply: data.canReply !== false,
-        timeoutMs,
-      });
 
-      if (id > 0) {
-        activeDbusNotifications.set(id, {
-          accountId: senderAccount.id,
-          senderWebContents,
-          contactName: data.title,
-          tag: data.tag,
-        });
-        return;
-      }
-    }
-  }
-
-  let iconImage: any = null;
-  if (data.icon && data.icon.startsWith('data:image')) {
-    try {
-      iconImage = nativeImage.createFromDataURL(data.icon);
-    } catch (err) {
-      console.error('Failed to create NativeImage from base64 avatar:', err);
-    }
-  }
-
-  const nativeNotif = new Notification({
+  await notificationManager.notify({
     title: brandedTitle,
     body: data.body,
-    icon: iconImage || undefined,
-    silent: false,
+    icon: data.icon,
+    tag: data.tag,
+    contactName: data.title,
+    accountId: senderAccount.id,
+    timeoutMs,
+    canReply: isInlineReplyEnabled && data.canReply !== false,
+    replyPlaceholder: `Reply to ${data.title}…`,
     actions: [
-      { type: 'button', text: 'Open Chat' }
-    ]
-  });
-
-  const onSelectAction = () => {
-    if (state.mainWindow) {
-      state.mainWindow.show();
-      state.mainWindow.focus();
-    }
-    if (senderAccount) {
-      switchActiveAccount(senderAccount.id);
-    }
-    senderWebContents.send('notification:clicked-reply', data.tag);
-  };
-
-  nativeNotif.on('click', onSelectAction);
-  nativeNotif.on('action', (event, index) => {
-    if (index === 0) {
-      onSelectAction();
-    }
-  });
-
-  if (timeoutMs > 0) {
-    const timer = setTimeout(() => {
-      try {
-        nativeNotif.close();
-      } catch (err) {
-        // ignore
+      { id: 'default', label: 'Open Chat' },
+    ],
+    onAction: (_actionId) => {
+      if (state.mainWindow) {
+        if (state.mainWindow.isMinimized()) {
+          state.mainWindow.restore();
+        }
+        state.mainWindow.show();
+        state.mainWindow.focus();
       }
-    }, timeoutMs);
-    nativeNotif.once('close', () => clearTimeout(timer));
-  }
+      if (senderAccount) {
+        switchActiveAccount(senderAccount.id);
+      }
+      senderWebContents.send('notification:clicked-reply', {
+        tag: data.tag,
+        contactName: data.title,
+      });
+    },
+    onReply: (replyText) => {
+      const body = replyText.trim();
+      if (!body) return;
 
-  nativeNotif.show();
+      senderWebContents.send('notification:send-inline-reply', {
+        contactName: data.title,
+        text: body,
+        tag: data.tag,
+      });
+    },
+  });
 }
 
 export async function createLogEntry(data: { title: string; body: string }, senderWebContents: WebContents) {
@@ -312,3 +223,5 @@ export async function createLogEntry(data: { title: string; body: string }, send
     });
   }
 }
+
+export { notificationManager };

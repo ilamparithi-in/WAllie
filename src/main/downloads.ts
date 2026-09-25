@@ -1,8 +1,9 @@
-import { app, dialog, shell, Notification } from 'electron';
+import { app, dialog, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { state } from './state';
 import { DownloadRecord } from '../shared/types';
+import { notificationManager } from './notifications/index';
 
 export type DownloadIntent = 'first-download' | 'second-click' | 'context-menu-download' | 'none';
 
@@ -100,10 +101,14 @@ export class DownloadManager {
 
   public async openDownloadedFile(filePath: string): Promise<boolean> {
     try {
-      if (!fs.existsSync(filePath)) {
+      if (!filePath || typeof filePath !== 'string') {
         return false;
       }
-      const error = await shell.openPath(filePath);
+      const resolved = path.resolve(filePath);
+      if (!fs.existsSync(resolved)) {
+        return false;
+      }
+      const error = await shell.openPath(resolved);
       return !error;
     } catch (err) {
       console.error('Failed to open downloaded file:', err);
@@ -113,10 +118,14 @@ export class DownloadManager {
 
   public showItemInFolder(filePath: string): boolean {
     try {
-      if (!fs.existsSync(filePath)) {
+      if (!filePath || typeof filePath !== 'string') {
         return false;
       }
-      shell.showItemInFolder(filePath);
+      const resolved = path.resolve(filePath);
+      if (!fs.existsSync(resolved)) {
+        return false;
+      }
+      shell.showItemInFolder(resolved);
       return true;
     } catch (err) {
       console.error('Failed to show item in folder:', err);
@@ -274,26 +283,29 @@ export class DownloadManager {
         });
 
         if (state.globalSettings?.downloadNotificationsEnabled !== false) {
-          const notification = new Notification({
-            title: 'Download Complete',
-            body: `Successfully downloaded ${path.basename(finalPath)}`,
-          });
-          notification.on('click', () => {
-            this.openDownloadedFile(finalPath);
-          });
-          notification.show();
-
           const dismissalTimeSec = typeof state.globalSettings?.notificationDismissalTime === 'number'
             ? state.globalSettings.notificationDismissalTime
             : 10;
-          if (dismissalTimeSec > 0) {
-            const timer = setTimeout(() => {
-              try {
-                notification.close();
-              } catch (_) {}
-            }, dismissalTimeSec * 1000);
-            notification.once('close', () => clearTimeout(timer));
-          }
+          const timeoutMs = dismissalTimeSec === -1 ? -1 : (dismissalTimeSec === 0 ? 0 : dismissalTimeSec * 1000);
+
+          await notificationManager.notify({
+            title: 'Download Complete',
+            body: `Successfully downloaded ${path.basename(finalPath)}`,
+            icon: 'document-save',
+            timeoutMs,
+            actions: [
+              { id: 'default', label: 'Open' },
+              { id: 'open', label: 'Open' },
+              { id: 'show_in_folder', label: 'Show in Folder' },
+            ],
+            onAction: (actionId) => {
+              if (actionId === 'default' || actionId === 'open') {
+                this.openDownloadedFile(finalPath);
+              } else if (actionId === 'show_in_folder') {
+                this.showItemInFolder(finalPath);
+              }
+            },
+          });
         }
       } else if (stateName === 'cancelled') {
         state.mainWindow?.webContents.send('download:progress', {
