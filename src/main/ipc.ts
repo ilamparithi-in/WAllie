@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import { state } from './state';
 import { saveAccounts, saveSettings, getAccountStorageSizes, invalidateStorageCache } from './config';
 import { importExtension, installWebStoreExtension, toggleExtension, removeExtension, checkForWebStoreUpdates } from './extensions';
-import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectCustomCssForView, injectAccountStyling } from './views';
+import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectCustomCssForView, injectAccountStyling, clearPausedMediaState } from './views';
 import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize, unloadAccountLogic, loadAccountLogic, notifyAccountListChanged } from './window';
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry, closeDbusNotificationByTag, closeNotificationByContact } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS, AccountSettings } from '../shared/types';
@@ -786,5 +786,31 @@ export function registerIpcHandlers() {
       isDirty: false,
       buildDate: new Date().toISOString(),
     };
+  });
+
+  // Call status handlers (detect answered vs declined calls)
+  ipcMain.on('call:status-changed', (_event, data: { status: 'answered' | 'declined' }) => {
+    console.log(`[walinux] Call status changed: ${data.status}`);
+    if (data.status === 'answered') {
+      if (state.callWindows.size > 0) {
+        state.callWasAnswered = true;
+        clearPausedMediaState();
+      }
+    } else if (data.status === 'declined') {
+      state.callWasAnswered = false;
+    }
+  });
+
+  ipcMain.on('call:status-sync', (event, data: { status: 'answered' | 'declined' }) => {
+    console.log(`[walinux] Call status sync: ${data.status}`);
+    if (data.status === 'answered') {
+      if (state.callWindows.size > 0) {
+        state.callWasAnswered = true;
+        clearPausedMediaState();
+      }
+    } else if (data.status === 'declined') {
+      state.callWasAnswered = false;
+    }
+    event.returnValue = true;
   });
 }

@@ -273,6 +273,28 @@ export function resumeMediaAfterCall() {
   }
 }
 
+export function clearPausedMediaState() {
+  for (const view of state.accountViews.values()) {
+    if (view && !view.webContents.isDestroyed()) {
+      try {
+        view.webContents.executeJavaScript(`
+          (() => {
+            try {
+              document.querySelectorAll('video, audio').forEach(el => {
+                if (el.dataset.pausedByCall === 'true') {
+                  delete el.dataset.pausedByCall;
+                }
+              });
+            } catch (e) {}
+          })()
+        `).catch(() => { });
+      } catch (e) {
+        // Ignore errors
+      }
+    }
+  }
+}
+
 export const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0];
 
 export function changeZoom(contents: Electron.WebContents, direction: 'in' | 'out') {
@@ -865,7 +887,12 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
 
   view.webContents.on('did-create-window', (childWindow, details) => {
     console.log(`Intercepted child window creation for URL: ${details.url}`);
-    pauseAllMedia();
+    
+    // When a call window is created, pause media across views if not already in a call session
+    if (state.callWindows.size === 0) {
+      state.callWasAnswered = false;
+      pauseAllMedia();
+    }
 
     childWindow.setMenu(null);
     childWindow.setAutoHideMenuBar(true);
@@ -876,7 +903,18 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
     childWindow.on('closed', () => {
       state.callWindows.delete(childWindow);
       if (state.callWindows.size === 0) {
-        resumeMediaAfterCall();
+        if (!state.callWasAnswered) {
+          console.log('[walinux] Call was declined or dismissed; resuming paused media.');
+          resumeMediaAfterCall();
+        } else {
+          console.log('[walinux] Call was answered; keeping media paused.');
+          clearPausedMediaState();
+          setTimeout(() => {
+            if (state.callWindows.size === 0) {
+              state.callWasAnswered = false;
+            }
+          }, 3000);
+        }
       }
     });
   });
