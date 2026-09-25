@@ -214,6 +214,11 @@ export async function createNotification(
     return;
   }
 
+  const dismissalTimeSec = typeof state.globalSettings?.notificationDismissalTime === 'number'
+    ? state.globalSettings.notificationDismissalTime
+    : 10;
+  const timeoutMs = dismissalTimeSec === -1 ? -1 : (dismissalTimeSec === 0 ? 0 : dismissalTimeSec * 1000);
+
   const isInlineReplyEnabled = state.globalSettings?.inlineReplyEnabled !== false;
   if (isInlineReplyEnabled) {
     ensureDbusListeners();
@@ -225,7 +230,7 @@ export async function createNotification(
         iconDataUrl: data.icon,
         placeholder: `Reply to ${data.title}…`,
         canReply: data.canReply !== false,
-        timeoutMs: 25000,
+        timeoutMs,
       });
 
       if (id > 0) {
@@ -276,6 +281,17 @@ export async function createNotification(
       onSelectAction();
     }
   });
+
+  if (timeoutMs > 0) {
+    const timer = setTimeout(() => {
+      try {
+        nativeNotif.close();
+      } catch (err) {
+        // ignore
+      }
+    }, timeoutMs);
+    nativeNotif.once('close', () => clearTimeout(timer));
+  }
 
   nativeNotif.show();
 }

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell } from 'lucide-react';
 import type { GlobalSettings } from '../../../preload';
 
 interface GeneralSettingsPageProps {
@@ -9,6 +9,13 @@ interface GeneralSettingsPageProps {
 
 const DOMAINS_PER_PAGE = 5;
 const PRESET_SCALES = [80, 90, 100, 110, 125, 150, 200];
+const PRESET_DISMISSAL_TIMES = [
+  { value: -1, label: 'System Default' },
+  { value: 5, label: '5 seconds' },
+  { value: 10, label: '10 seconds (Default)' },
+  { value: 20, label: '20 seconds' },
+  { value: 0, label: 'Never auto-dismiss (Persistent)' },
+];
 
 export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
   globalSettings,
@@ -41,6 +48,33 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
     if (isNaN(num)) num = 100;
     num = Math.max(50, Math.min(300, num));
     handleToggleGlobalSetting('appScale', num);
+  };
+
+  const currentDismissalTime = globalSettings?.notificationDismissalTime ?? 10;
+  const isCustomDismissal = !PRESET_DISMISSAL_TIMES.some((p) => p.value === currentDismissalTime);
+  const [dismissalSelectValue, setDismissalSelectValue] = useState<string>(
+    isCustomDismissal ? 'custom' : currentDismissalTime.toString()
+  );
+  const [customDismissalInput, setCustomDismissalInput] = useState<string>(currentDismissalTime.toString());
+
+  useEffect(() => {
+    setDismissalSelectValue(isCustomDismissal ? 'custom' : currentDismissalTime.toString());
+    setCustomDismissalInput(currentDismissalTime.toString());
+  }, [currentDismissalTime, isCustomDismissal]);
+
+  const handleSelectDismissalChange = (val: string) => {
+    setDismissalSelectValue(val);
+    if (val !== 'custom') {
+      const num = parseInt(val, 10);
+      handleToggleGlobalSetting('notificationDismissalTime', num);
+    }
+  };
+
+  const handleApplyCustomDismissal = () => {
+    let num = parseInt(customDismissalInput, 10);
+    if (isNaN(num)) num = 10;
+    num = Math.max(0, Math.min(300, num));
+    handleToggleGlobalSetting('notificationDismissalTime', num);
   };
 
   const trustedDomains = useMemo(() => {
@@ -229,36 +263,112 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
               className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
             />
           </label>
+        </div>
 
-          <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-[#e9edef] text-[11px]">Enable Notification Logging</div>
-              <div className="text-[10px] text-[#8696a0]">
-                Log desktop notifications, message edits, and deletions to history (disabled by default)
-              </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={globalSettings?.notificationLoggingEnabled ?? false}
-              onChange={(e) => handleToggleGlobalSetting('notificationLoggingEnabled', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
-            />
-          </label>
+        {/* Desktop Notifications Section */}
+        <div className="mt-6 pt-4 border-t border-[#222d34]">
+          <h4 className="text-xs font-semibold text-[#e9edef] mb-1 flex items-center gap-1.5">
+            <Bell className="w-3.5 h-3.5 text-[#00a884]" />
+            <span>Desktop Notifications</span>
+          </h4>
+          <p className="text-[10px] text-[#8696a0] mb-3 leading-relaxed">
+            Configure desktop alert behavior, inline replies, and dismissal duration.
+          </p>
 
-          <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-[#e9edef] text-[11px]">Inline Reply Notifications (KDE / Freedesktop)</div>
-              <div className="text-[10px] text-[#8696a0]">
-                Allow replying directly from notification popups when supported by your desktop environment
+          <div className="space-y-2">
+            <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-[#e9edef] text-[11px]">Enable Notification Logging</div>
+                <div className="text-[10px] text-[#8696a0]">
+                  Log desktop notifications, message edits, and deletions to history (disabled by default)
+                </div>
               </div>
+              <input
+                type="checkbox"
+                checked={globalSettings?.notificationLoggingEnabled ?? false}
+                onChange={(e) => handleToggleGlobalSetting('notificationLoggingEnabled', e.target.checked)}
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+              />
+            </label>
+
+            <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-[#e9edef] text-[11px]">Inline Reply Notifications (KDE / Freedesktop)</div>
+                <div className="text-[10px] text-[#8696a0]">
+                  Allow replying directly from notification popups when supported by your desktop environment
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={globalSettings?.inlineReplyEnabled ?? true}
+                onChange={(e) => handleToggleGlobalSetting('inlineReplyEnabled', e.target.checked)}
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+              />
+            </label>
+
+            <div className="p-2 rounded hover:bg-[#182229] transition-colors space-y-2">
+              <div>
+                <div className="font-medium text-[#e9edef] text-[11px]">Notification Dismissal Time</div>
+                <div className="text-[10px] text-[#8696a0] mt-0.5">
+                  Duration desktop alerts remain on screen before closing automatically
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-0.5">
+                <select
+                  value={dismissalSelectValue}
+                  onChange={(e) => handleSelectDismissalChange(e.target.value)}
+                  className="bg-[#202c33] text-[#e9edef] text-xs px-2.5 py-1.5 rounded border border-[#2c3943] focus:border-[#00a884] focus:outline-none cursor-pointer flex-1 min-w-[150px]"
+                >
+                  {PRESET_DISMISSAL_TIMES.map((preset) => (
+                    <option key={preset.value} value={preset.value.toString()}>
+                      {preset.label}
+                    </option>
+                  ))}
+                  <option value="custom">Custom...</option>
+                </select>
+
+                {(dismissalSelectValue === 'custom' || currentDismissalTime !== 10) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleToggleGlobalSetting('notificationDismissalTime', 10);
+                      setDismissalSelectValue('10');
+                      setCustomDismissalInput('10');
+                    }}
+                    title="Reset notification dismissal timeout to 10 seconds"
+                    className="px-2.5 py-1.5 bg-[#202c33] text-[#ea4335] border border-[#ea4335]/40 hover:bg-[#ea4335] hover:text-white transition-colors rounded text-[10px] font-semibold cursor-pointer shrink-0"
+                  >
+                    Reset (10s)
+                  </button>
+                )}
+              </div>
+
+              {dismissalSelectValue === 'custom' && (
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-[10px] text-[#8696a0] shrink-0">Custom Duration (seconds, 0 for never):</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={300}
+                    value={customDismissalInput}
+                    onChange={(e) => setCustomDismissalInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleApplyCustomDismissal();
+                    }}
+                    className="w-20 bg-[#202c33] text-[#e9edef] text-xs px-2 py-1 rounded border border-[#2c3943] focus:border-[#00a884] focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCustomDismissal}
+                    className="px-3 py-1 bg-[#00a884] hover:bg-[#00c298] text-[#111b21] font-bold rounded text-xs transition-colors cursor-pointer"
+                  >
+                    Apply
+                  </button>
+                </div>
+              )}
             </div>
-            <input
-              type="checkbox"
-              checked={globalSettings?.inlineReplyEnabled ?? true}
-              onChange={(e) => handleToggleGlobalSetting('inlineReplyEnabled', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
-            />
-          </label>
+          </div>
         </div>
 
         {/* External Links & Security Section */}

@@ -81,6 +81,7 @@ export interface GlobalSettings {
   fileSecondClickAction?: FileSecondClickAction;
   downloadNotificationsEnabled?: boolean;
   inlineReplyEnabled?: boolean;
+  notificationDismissalTime?: number;
 }
 
 export interface HistoricalNotification {

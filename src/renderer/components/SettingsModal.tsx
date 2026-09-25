@@ -28,7 +28,7 @@ const SETTINGS_MENU_ITEMS: {
   description: string;
 }[] = [
   { page: 'accounts', icon: User, title: 'Manage Accounts', description: 'Customize account names and emojis' },
-  { page: 'general', icon: SettingsIcon, title: 'General Settings', description: 'Tray settings and GPU hardware acceleration' },
+  { page: 'general', icon: SettingsIcon, title: 'General Settings', description: 'Tray, desktop alerts & dismissal timeout, GPU acceleration' },
   { page: 'downloads', icon: Download, title: 'Downloads', description: 'Default folder, Save As dialog, and file click behavior' },
   { page: 'preload', icon: Users, title: 'Accounts to load on launch', description: 'Select which accounts get preloaded in the background' },
   { page: 'permissions', icon: Shield, title: 'Browser permissions', description: 'Manage camera, mic, notifications, geolocation, and clipboard access' },

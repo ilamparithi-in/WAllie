@@ -67,6 +67,14 @@ const formatHeaderDate = (dateKey: string): string => {
   });
 };
 
+const formatDismissalDisplay = (sec?: number): string => {
+  if (sec === undefined || sec === 10) return '10s (Default)';
+  if (sec === -1) return 'System Default';
+  if (sec === 0) return 'Never (Persistent)';
+  if (sec >= 60 && sec % 60 === 0) return `${sec / 60}m (${sec}s)`;
+  return `${sec}s`;
+};
+
 export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> = ({
   accounts,
   globalSettings,
@@ -228,10 +236,26 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
   return (
     <div className="flex flex-col h-full space-y-3 subpage-animate">
       {/* Subpage Intro Header */}
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] text-[#8696a0] leading-relaxed">
           Browse, filter, search, export, or prune logs of desktop notifications, message edits, and deletions.
         </p>
+        <div className="flex items-center gap-1.5 text-[10px] text-[#8696a0] bg-[#182229] px-2.5 py-1 rounded-md border border-[#222d34]">
+          <Bell className="w-3 h-3 text-[#00a884]" />
+          <span>
+            Dismissal timeout:{' '}
+            <strong className="text-[#e9edef] font-medium">
+              {formatDismissalDisplay(globalSettings?.notificationDismissalTime)}
+            </strong>
+          </span>
+          <span>•</span>
+          <button
+            onClick={() => setActivePage('general')}
+            className="underline text-[#00a884] hover:text-[#00c298] transition-colors cursor-pointer"
+          >
+            Configure
+          </button>
+        </div>
       </div>
 
       {/* Warning banner when notification logging is disabled */}

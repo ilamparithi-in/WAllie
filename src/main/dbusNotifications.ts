@@ -53,7 +53,10 @@ def on_stdin(channel, condition):
             icon = data.get('icon', '')
             can_reply = data.get('canReply', True)
             placeholder = data.get('placeholder', f'Reply to {title}...')
-            timeout_ms = data.get('timeoutMs', 25000)
+            try:
+                timeout_ms = int(data.get('timeoutMs', 25000))
+            except (ValueError, TypeError):
+                timeout_ms = 25000
 
             # In KDE Plasma, 'default' enables clicking the notification body to open the chat,
             # while 'inline-reply' provides the text reply field.
