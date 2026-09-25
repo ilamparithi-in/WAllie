@@ -171,3 +171,15 @@ export function getAccountForWebContents(webContents: WebContents): Account | un
   }
   return undefined;
 }
+
+export function showAppToast(message: string, url?: string): void {
+  const payload = { message, url };
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('toast:show', payload);
+  }
+  const activeView = state.accountViews.get(state.activeAccountId);
+  if (activeView && !activeView.webContents.isDestroyed()) {
+    activeView.webContents.send('toast:show', payload);
+  }
+}
+

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
 import { DEFAULT_USER_AGENT, saveAccounts, saveSettings } from './config';
-import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, getAppIcon, getInitialWindowSize } from './utils';
+import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, getAppIcon, getInitialWindowSize, showAppToast } from './utils';
 import { Account, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 import { TITLEBAR_HEIGHT } from '../shared/constants';
 import { downloadManager } from './downloads';
@@ -524,48 +524,7 @@ export function registerContextMenu(webContents: Electron.WebContents) {
 }
 
 export function showLinkToast(msg: string, targetUrl: string): void {
-  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-    state.mainWindow.webContents.send('toast:show', {
-      message: msg,
-      url: targetUrl,
-    });
-  }
-
-  const activeView = state.accountViews.get(state.activeAccountId);
-  if (activeView && !activeView.webContents.isDestroyed()) {
-    const safeMsg = JSON.stringify(msg);
-    const safeUrl = JSON.stringify(targetUrl);
-    const script = `
-      (function() {
-        try {
-          let container = document.getElementById('wallie-toast-container');
-          if (!container) {
-            container = document.createElement('div');
-            container.id = 'wallie-toast-container';
-            container.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:999999;display:flex;flex-direction:column;gap:8px;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;pointer-events:none;';
-            (document.body || document.documentElement).appendChild(container);
-          }
-          if (!document.getElementById('wallie-toast-style')) {
-            const style = document.createElement('style');
-            style.id = 'wallie-toast-style';
-            style.textContent = '@keyframes wallieToastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}';
-            (document.head || document.documentElement).appendChild(style);
-          }
-          const toast = document.createElement('div');
-          toast.style.cssText = 'background:#1f2c34;color:#e9edef;border:1px solid rgba(0,168,132,0.5);padding:10px 14px;border-radius:10px;box-shadow:0 10px 25px rgba(0,0,0,0.5);font-size:12px;max-width:340px;pointer-events:auto;display:flex;align-items:center;gap:10px;animation:wallieToastIn 0.2s ease-out;';
-          toast.innerHTML = '<div style="background:rgba(0,168,132,0.2);color:#00a884;padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center;shrink:0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div><div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:12px;color:#e9edef;line-height:1.3;">' + ${safeMsg} + '</div><div style="font-size:10px;color:#8696a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;" title="' + ${safeUrl} + '">' + ${safeUrl} + '</div></div>';
-          container.appendChild(toast);
-          setTimeout(() => {
-            toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateY(10px)';
-            setTimeout(() => toast.remove(), 300);
-          }, 4500);
-        } catch(e) {}
-      })();
-    `;
-    activeView.webContents.executeJavaScript(script).catch(() => { });
-  }
+  showAppToast(msg, targetUrl);
 }
 
 export function openInSandbox(urlStr: string): BrowserWindow {

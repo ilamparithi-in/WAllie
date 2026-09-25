@@ -438,8 +438,126 @@ function setupCallDetection() {
   }
 }
 
+function showGuestToast(msg: string, url?: string) {
+  if (!document.body && !document.documentElement) return;
+
+  let container = document.getElementById('wallie-toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'wallie-toast-container';
+    Object.assign(container.style, {
+      position: 'fixed',
+      bottom: '20px',
+      right: '20px',
+      zIndex: '999999',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      pointerEvents: 'none',
+    });
+    (document.body || document.documentElement).appendChild(container);
+  }
+
+  if (!document.getElementById('wallie-toast-style')) {
+    const style = document.createElement('style');
+    style.id = 'wallie-toast-style';
+    style.textContent = '@keyframes wallieToastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}';
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  const toast = document.createElement('div');
+  Object.assign(toast.style, {
+    background: '#1f2c34',
+    color: '#e9edef',
+    border: '1px solid rgba(0, 168, 132, 0.5)',
+    padding: '10px 14px',
+    borderRadius: '10px',
+    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+    fontSize: '12px',
+    maxWidth: '340px',
+    pointerEvents: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    animation: 'wallieToastIn 0.2s ease-out',
+  });
+
+  const iconBox = document.createElement('div');
+  Object.assign(iconBox.style, {
+    background: 'rgba(0, 168, 132, 0.2)',
+    color: '#00a884',
+    padding: '6px',
+    borderRadius: '6px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: '0',
+  });
+
+  const iconSvg = createSvgElement({
+    tag: 'svg',
+    attrs: { width: '14', height: '14', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' },
+    children: [
+      { tag: 'path', attrs: { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' } },
+      { tag: 'polyline', attrs: { points: '15 3 21 3 21 9' } },
+      { tag: 'line', attrs: { x1: '10', y1: '14', x2: '21', y2: '3' } },
+    ],
+  });
+  iconBox.appendChild(iconSvg);
+  toast.appendChild(iconBox);
+
+  const textCol = document.createElement('div');
+  Object.assign(textCol.style, {
+    flex: '1',
+    minWidth: '0',
+  });
+
+  const msgEl = document.createElement('div');
+  Object.assign(msgEl.style, {
+    fontWeight: '600',
+    fontSize: '12px',
+    color: '#e9edef',
+    lineHeight: '1.3',
+  });
+  msgEl.textContent = msg;
+  textCol.appendChild(msgEl);
+
+  if (url) {
+    const urlEl = document.createElement('div');
+    Object.assign(urlEl.style, {
+      fontSize: '10px',
+      color: '#8696a0',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      marginTop: '2px',
+    });
+    urlEl.title = url;
+    urlEl.textContent = url;
+    textCol.appendChild(urlEl);
+  }
+
+  toast.appendChild(textCol);
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 4500);
+}
+
 function setupWhatsAppIntegration() {
   setupCallDetection();
+
+  // In-app toast notification listener
+  ipcRenderer.on('toast:show', (_event: any, data: { message: string; url?: string }) => {
+    if (data && data.message) {
+      showGuestToast(data.message, data.url);
+    }
+  });
 
   // Light dismiss on webview click
   window.addEventListener('click', () => {
