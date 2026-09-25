@@ -790,26 +790,32 @@ export function registerIpcHandlers() {
 
   // Call status handlers (detect answered vs declined calls)
   ipcMain.on('call:status-changed', (_event, data: { status: 'answered' | 'declined' }) => {
-    console.log(`[walinux] Call status changed: ${data.status}`);
     if (data.status === 'answered') {
-      if (state.callWindows.size > 0) {
+      if (state.callWindows.size > 0 && !state.callWasAnswered) {
+        console.log(`[walinux] Call status changed: ${data.status}`);
         state.callWasAnswered = true;
         clearPausedMediaState();
       }
     } else if (data.status === 'declined') {
-      state.callWasAnswered = false;
+      if (state.callWindows.size > 0 && state.callWasAnswered) {
+        console.log(`[walinux] Call status changed: ${data.status}`);
+        state.callWasAnswered = false;
+      }
     }
   });
 
   ipcMain.on('call:status-sync', (event, data: { status: 'answered' | 'declined' }) => {
-    console.log(`[walinux] Call status sync: ${data.status}`);
     if (data.status === 'answered') {
-      if (state.callWindows.size > 0) {
+      if (state.callWindows.size > 0 && !state.callWasAnswered) {
+        console.log(`[walinux] Call status sync: ${data.status}`);
         state.callWasAnswered = true;
         clearPausedMediaState();
       }
     } else if (data.status === 'declined') {
-      state.callWasAnswered = false;
+      if (state.callWindows.size > 0 && state.callWasAnswered) {
+        console.log(`[walinux] Call status sync: ${data.status}`);
+        state.callWasAnswered = false;
+      }
     }
     event.returnValue = true;
   });

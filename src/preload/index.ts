@@ -305,7 +305,21 @@ async function resolveIconToBase64(url: string): Promise<string | null> {
 let onClickCallback: ((tag: string) => void) | null = null;
 let onInlineReplyCallback: ((data: { contactName: string; text: string; tag: string }) => void) | null = null;
 
+let callStatusReported: 'answered' | 'declined' | null = null;
+
 function setupCallDetection() {
+  function reportCallStatus(status: 'answered' | 'declined', sync = false) {
+    if (callStatusReported === status) return;
+    callStatusReported = status;
+    if (sync) {
+      try {
+        ipcRenderer.sendSync('call:status-sync', { status });
+        return;
+      } catch (err) {}
+    }
+    ipcRenderer.send('call:status-changed', { status });
+  }
+
   function checkCallElement(target: HTMLElement | null): 'answered' | 'declined' | null {
     if (!target) return null;
     const btn = target.closest('button, [role="button"], [data-testid], div[tabindex]');
@@ -365,22 +379,17 @@ function setupCallDetection() {
   document.addEventListener('click', (e) => {
     const status = checkCallElement(e.target as HTMLElement | null);
     if (status) {
-      console.log(`[walinux] Call action detected: ${status}`);
-      try {
-        ipcRenderer.sendSync('call:status-sync', { status });
-      } catch (err) {
-        ipcRenderer.send('call:status-changed', { status });
-      }
+      reportCallStatus(status, true);
     }
   }, true);
 
-  // Monitor DOM for active ongoing call controls (hangup, microphone, screenshare, camera toggle)
+  // Monitor DOM for active call termination controls (hangup/end call buttons only present during active calls)
   const checkActiveCall = () => {
     const hasActiveControls = !!document.querySelector(
-      '[data-testid*="hangup"], [data-testid*="end-call"], [data-icon*="end-call"], button[aria-label*="end call" i], button[aria-label*="hang up" i], [data-testid*="micro"], [data-icon*="mic"], [data-testid*="screen"], [data-icon*="screen"]'
+      '[data-testid*="hangup"], [data-testid*="end-call"], [data-icon*="end-call"], button[aria-label*="end call" i], button[aria-label*="hang up" i]'
     );
     if (hasActiveControls) {
-      ipcRenderer.send('call:status-changed', { status: 'answered' });
+      reportCallStatus('answered');
     }
   };
 
@@ -406,21 +415,22 @@ function setupCallDetection() {
         super(...args);
         this.addEventListener('connectionstatechange', () => {
           if (this.connectionState === 'connected') {
-            console.log('[walinux] WebRTC connectionState connected -> Call answered');
-            ipcRenderer.send('call:status-changed', { status: 'answered' });
+            reportCallStatus('answered');
+          } else if (this.connectionState === 'closed') {
+            callStatusReported = null;
           }
         });
       }
     };
   }
 
-  // Monitor getUserMedia calls (triggered when answering or placing a call)
+  // Monitor getUserMedia calls (only in call pages or active call contexts)
   if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
     const origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = function (constraints) {
       try {
-        if (constraints && (constraints.audio || constraints.video)) {
-          ipcRenderer.send('call:status-changed', { status: 'answered' });
+        if (window.location.pathname.includes('/call') && constraints && (constraints.audio || constraints.video)) {
+          reportCallStatus('answered');
         }
       } catch (e) {}
       return origGUM(constraints);
@@ -1461,7 +1471,6 @@ function monitorCallBlankScreen() {
     if (isCallActive) {
       callWasActive = true;
       blankCounter = 0;
-      ipcRenderer.send('call:status-changed', { status: 'answered' });
       return;
     }
 
