@@ -282,6 +282,18 @@ export class DownloadManager {
             this.openDownloadedFile(finalPath);
           });
           notification.show();
+
+          const dismissalTimeSec = typeof state.globalSettings?.notificationDismissalTime === 'number'
+            ? state.globalSettings.notificationDismissalTime
+            : 10;
+          if (dismissalTimeSec > 0) {
+            const timer = setTimeout(() => {
+              try {
+                notification.close();
+              } catch (_) {}
+            }, dismissalTimeSec * 1000);
+            notification.once('close', () => clearTimeout(timer));
+          }
         }
       } else if (stateName === 'cancelled') {
         state.mainWindow?.webContents.send('download:progress', {

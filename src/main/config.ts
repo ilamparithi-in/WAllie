@@ -73,6 +73,7 @@ export function loadSettings(): GlobalSettings {
         fileSecondClickAction: (['open', 'showInFolder', 'saveAs', 'download'].includes(parsed.fileSecondClickAction) ? parsed.fileSecondClickAction : 'open'),
         downloadNotificationsEnabled: parsed.downloadNotificationsEnabled !== false,
         inlineReplyEnabled: parsed.inlineReplyEnabled !== false,
+        notificationDismissalTime: typeof parsed.notificationDismissalTime === 'number' ? parsed.notificationDismissalTime : 10,
       };
     }
   } catch (error) {
@@ -99,6 +100,7 @@ export function loadSettings(): GlobalSettings {
     fileSecondClickAction: 'open',
     downloadNotificationsEnabled: true,
     inlineReplyEnabled: true,
+    notificationDismissalTime: 10,
   };
 }
 
