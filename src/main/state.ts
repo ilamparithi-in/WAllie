@@ -15,6 +15,7 @@ export const state = {
   settingsOpen: false,
   settingsDrawerWidth: 0,
   callWindows: new Set<BrowserWindow>(),
+  callWasAnswered: false,
   sandboxWindows: new Set<BrowserWindow>(),
   notificationHistoryCache: null as any[] | null,
   historyFlushTimeout: null as NodeJS.Timeout | null,

@@ -96,7 +96,7 @@ if (gotTheLock) {
           ...details.responseHeaders,
           'Content-Security-Policy': [
             isSandbox
-              ? "default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+              ? "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;"
               : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:*"
           ]
         }

@@ -305,7 +305,132 @@ async function resolveIconToBase64(url: string): Promise<string | null> {
 let onClickCallback: ((tag: string) => void) | null = null;
 let onInlineReplyCallback: ((data: { contactName: string; text: string; tag: string }) => void) | null = null;
 
+function setupCallDetection() {
+  function checkCallElement(target: HTMLElement | null): 'answered' | 'declined' | null {
+    if (!target) return null;
+    const btn = target.closest('button, [role="button"], [data-testid], div[tabindex]');
+    if (!btn) return null;
+
+    const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+    const testId = (btn.getAttribute('data-testid') || '').toLowerCase();
+    const title = (btn.getAttribute('title') || '').toLowerCase();
+    const text = (btn.textContent || '').trim().toLowerCase();
+    const iconEl = btn.querySelector('[data-icon]');
+    const icon = (iconEl?.getAttribute('data-icon') || '').toLowerCase();
+
+    // Accept / Answer keywords (covering English and common international variations)
+    const acceptKeywords = [
+      'accept', 'answer', 'pick up', 'take call', 'join call', 'annehmen', 'accepter',
+      'aceptar', 'rispondi', 'atender', 'beantwoorden', 'svara', 'besvar'
+    ];
+    const isAccept = acceptKeywords.some(kw => ariaLabel.includes(kw) || testId.includes(kw) || title.includes(kw) || text === kw || icon.includes(kw)) ||
+      testId.includes('call-accept') || testId.includes('call-answer') || icon.includes('call-accept') || icon.includes('call-answer') || icon.includes('phone-call');
+
+    if (isAccept) return 'answered';
+
+    // Decline / Reject keywords
+    const declineKeywords = [
+      'decline', 'reject', 'dismiss', 'ignore', 'ablehnen', 'refuser',
+      'rechazar', 'rifiuta', 'recusar', 'weigeren', 'avvisa', 'afvis'
+    ];
+    const isDecline = declineKeywords.some(kw => ariaLabel.includes(kw) || testId.includes(kw) || title.includes(kw) || text === kw || icon.includes(kw)) ||
+      testId.includes('call-decline') || testId.includes('call-reject') || icon.includes('call-decline') || icon.includes('call-reject') || icon.includes('call-end');
+
+    if (isDecline) return 'declined';
+
+    // Check round colored buttons (WhatsApp standard green for accept, red for decline)
+    try {
+      const style = window.getComputedStyle(btn);
+      const bg = style.backgroundColor;
+      const isRound = style.borderRadius.includes('%') || parseInt(style.borderRadius, 10) > 15;
+      if (isRound && bg) {
+        const match = bg.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (match) {
+          const r = parseInt(match[1], 10);
+          const g = parseInt(match[2], 10);
+          const b = parseInt(match[3], 10);
+          if (g > 150 && r < 100) {
+            return 'answered';
+          } else if (r > 180 && g < 100 && b < 120) {
+            return 'declined';
+          }
+        }
+      }
+    } catch (e) {}
+
+    return null;
+  }
+
+  // Intercept button clicks in capture phase before WhatsApp processes them or closes window
+  document.addEventListener('click', (e) => {
+    const status = checkCallElement(e.target as HTMLElement | null);
+    if (status) {
+      console.log(`[walinux] Call action detected: ${status}`);
+      try {
+        ipcRenderer.sendSync('call:status-sync', { status });
+      } catch (err) {
+        ipcRenderer.send('call:status-changed', { status });
+      }
+    }
+  }, true);
+
+  // Monitor DOM for active ongoing call controls (hangup, microphone, screenshare, camera toggle)
+  const checkActiveCall = () => {
+    const hasActiveControls = !!document.querySelector(
+      '[data-testid*="hangup"], [data-testid*="end-call"], [data-icon*="end-call"], button[aria-label*="end call" i], button[aria-label*="hang up" i], [data-testid*="micro"], [data-icon*="mic"], [data-testid*="screen"], [data-icon*="screen"]'
+    );
+    if (hasActiveControls) {
+      ipcRenderer.send('call:status-changed', { status: 'answered' });
+    }
+  };
+
+  const callObserver = new MutationObserver(() => {
+    checkActiveCall();
+  });
+
+  if (document.body) {
+    callObserver.observe(document.body, { childList: true, subtree: true });
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (document.body) {
+        callObserver.observe(document.body, { childList: true, subtree: true });
+      }
+    });
+  }
+
+  // Monitor WebRTC PeerConnection connection state
+  if (typeof window.RTCPeerConnection !== 'undefined') {
+    const OrigRTCPC = window.RTCPeerConnection;
+    window.RTCPeerConnection = class extends OrigRTCPC {
+      constructor(...args: any[]) {
+        super(...args);
+        this.addEventListener('connectionstatechange', () => {
+          if (this.connectionState === 'connected') {
+            console.log('[walinux] WebRTC connectionState connected -> Call answered');
+            ipcRenderer.send('call:status-changed', { status: 'answered' });
+          }
+        });
+      }
+    };
+  }
+
+  // Monitor getUserMedia calls (triggered when answering or placing a call)
+  if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+    const origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = function (constraints) {
+      try {
+        if (constraints && (constraints.audio || constraints.video)) {
+          ipcRenderer.send('call:status-changed', { status: 'answered' });
+        }
+      } catch (e) {}
+      return origGUM(constraints);
+    };
+  }
+}
+
 function setupWhatsAppIntegration() {
+  setupCallDetection();
+
   // Light dismiss on webview click
   window.addEventListener('click', () => {
     ipcRenderer.send('webview:clicked');
@@ -1228,6 +1353,7 @@ function monitorCallBlankScreen() {
     if (isCallActive) {
       callWasActive = true;
       blankCounter = 0;
+      ipcRenderer.send('call:status-changed', { status: 'answered' });
       return;
     }
 
