@@ -1,35 +1,36 @@
 const btnBack = document.getElementById('btn-back');
 const btnForward = document.getElementById('btn-forward');
 const btnReload = document.getElementById('btn-reload');
-const reloadIcon = document.getElementById('reload-icon');
+const reloadIconDefault = document.getElementById('reload-icon-default');
+const reloadIconSpinning = document.getElementById('reload-icon-spinning');
 const btnCert = document.getElementById('btn-cert');
-const lockIcon = document.getElementById('lock-icon');
+const lockIconSecure = document.getElementById('lock-icon-secure');
+const lockIconInsecure = document.getElementById('lock-icon-insecure');
 const urlInput = document.getElementById('url-input');
 const btnCopy = document.getElementById('btn-copy');
+const copyIconDefault = document.getElementById('copy-icon-default');
+const copyIconCheck = document.getElementById('copy-icon-check');
 const copiedPill = document.getElementById('copied-pill');
 const btnMenu = document.getElementById('btn-menu');
-
-const ROTATE_CW_SVG = '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>';
-const LOADER_SVG = '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>';
 
 let isCurrentlyLoading = false;
 let reloadTimeout = null;
 
 function setLoadingState(loading) {
   isCurrentlyLoading = loading;
-  if (!btnReload || !reloadIcon) return;
+  if (!btnReload || !reloadIconDefault || !reloadIconSpinning) return;
   if (loading) {
     btnReload.title = 'Loading...';
-    reloadIcon.classList.add('spinning');
-    reloadIcon.innerHTML = LOADER_SVG;
+    reloadIconDefault.classList.add('hidden');
+    reloadIconSpinning.classList.remove('hidden');
     if (reloadTimeout) clearTimeout(reloadTimeout);
     reloadTimeout = setTimeout(() => {
       setLoadingState(false);
     }, 4000);
   } else {
     btnReload.title = 'Refresh (Ctrl+R / F5)';
-    reloadIcon.classList.remove('spinning');
-    reloadIcon.innerHTML = ROTATE_CW_SVG;
+    reloadIconDefault.classList.remove('hidden');
+    reloadIconSpinning.classList.add('hidden');
     if (reloadTimeout) {
       clearTimeout(reloadTimeout);
       reloadTimeout = null;
@@ -48,15 +49,17 @@ function sendAction(action, data) {
 }
 
 function updateSecurityIcon(isSecure) {
-  if (!btnCert || !lockIcon) return;
+  if (!btnCert || !lockIconSecure || !lockIconInsecure) return;
   if (isSecure) {
     btnCert.classList.remove('insecure');
     btnCert.title = 'Secure Connection (SSL/TLS Verified) — Click to view certificate';
-    lockIcon.innerHTML = '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>';
+    lockIconSecure.classList.remove('hidden');
+    lockIconInsecure.classList.add('hidden');
   } else {
     btnCert.classList.add('insecure');
     btnCert.title = 'Insecure Connection (HTTP / Unencrypted) — Click to view security status';
-    lockIcon.innerHTML = '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>';
+    lockIconSecure.classList.add('hidden');
+    lockIconInsecure.classList.remove('hidden');
   }
 }
 
@@ -122,7 +125,8 @@ btnCopy?.addEventListener('click', () => {
   if (copiedPill) copiedPill.classList.add('show');
   if (btnCopy) {
     btnCopy.classList.add('copy-success');
-    btnCopy.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+    copyIconDefault?.classList.add('hidden');
+    copyIconCheck?.classList.remove('hidden');
   }
 
   if (copyTimeout) clearTimeout(copyTimeout);
@@ -130,7 +134,8 @@ btnCopy?.addEventListener('click', () => {
     if (copiedPill) copiedPill.classList.remove('show');
     if (btnCopy) {
       btnCopy.classList.remove('copy-success');
-      btnCopy.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+      copyIconDefault?.classList.remove('hidden');
+      copyIconCheck?.classList.add('hidden');
     }
   }, 1500);
 });
