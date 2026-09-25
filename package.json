@@ -16,7 +16,7 @@
   "scripts": {
     "clean": "rm -rf dist dist-pack",
     "clean:build": "npm run clean && npm run build",
-    "build:preload": "tsc -p tsconfig.preload.json && mv dist/preload/preload/index.js dist/preload/index.cjs && rm -rf dist/preload/preload dist/preload/shared",
+    "build:preload": "node scripts/build-preload.cjs",
     "dev": "npm run build:preload && vite",
     "build": "npm run build:preload && tsc && vite build",
     "version:info": "node scripts/version-helper.cjs",
