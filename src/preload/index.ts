@@ -493,11 +493,23 @@ function setupWhatsAppIntegration() {
 
         function getSearchBox() {
           return (
+            document.querySelector('[data-testid="chat-list-search"] div[contenteditable="true"]') ||
+            document.querySelector('[data-testid="chat-list-search"] input') ||
             document.querySelector('input[aria-label*="Search" i]') ||
             document.querySelector('input[aria-label*="Buscar" i]') ||
+            document.querySelector('div[contenteditable="true"][aria-label*="Search" i]') ||
+            document.querySelector('div[contenteditable="true"][aria-label*="Buscar" i]') ||
             document.querySelector('input[data-tab="3"]') ||
             document.querySelector('div[contenteditable="true"][data-tab="3"]')
           );
+        }
+
+        function getSearchText(el) {
+          if (!el) return '';
+          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+            return el.value || '';
+          }
+          return el.textContent || '';
         }
 
         function setSearchText(el, val) {
@@ -510,16 +522,66 @@ function setupWhatsAppIntegration() {
               el.value = val;
             }
             el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
           } else {
             try { document.execCommand('selectAll', false, null); } catch (e) {}
-            try { document.execCommand('insertText', false, val); } catch (e) {}
+            if (val) {
+              try { document.execCommand('insertText', false, val); } catch (e) {}
+            } else {
+              try { document.execCommand('delete', false, null); } catch (e) {}
+              el.textContent = '';
+            }
             el.dispatchEvent(new InputEvent('input', { bubbles: true }));
           }
         }
 
+        function restoreSearchBox(sbox, originalText) {
+          if (!sbox) return;
+          if (originalText && originalText.trim()) {
+            setSearchText(sbox, originalText);
+          } else {
+            setSearchText(sbox, '');
+            try {
+              sbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
+              sbox.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
+            } catch (e) {}
+
+            const cancelIcon = (
+              document.querySelector('span[data-icon="x-alt"]') ||
+              document.querySelector('span[data-icon="x"]') ||
+              document.querySelector('span[data-icon="back"]') ||
+              document.querySelector('span[data-icon="arrow-back"]')
+            );
+            if (cancelIcon) {
+              const clickTarget = cancelIcon.closest('button') || cancelIcon;
+              triggerEvents(clickTarget, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
+            } else {
+              const cancelBtn = (
+                document.querySelector('button[aria-label*="Cancel" i]') ||
+                document.querySelector('button[aria-label*="Clear" i]') ||
+                document.querySelector('button[aria-label*="Back" i]')
+              );
+              if (cancelBtn) {
+                triggerEvents(cancelBtn, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
+              }
+            }
+            try { sbox.blur(); } catch (e) {}
+          }
+        }
+
+        function isChatOpen(query) {
+          const headerTitles = Array.from(document.querySelectorAll('header span[title]'));
+          for (const el of headerTitles) {
+            if (norm(el.getAttribute('title') || el.textContent) === query) {
+              return true;
+            }
+          }
+          return false;
+        }
+
         function findMatchingRow(query) {
           const rows = Array.from(document.querySelectorAll(
-            '#pane-side [role="row"], #side [role="row"], #pane-side [role="listitem"], #side [role="listitem"]'
+            '#pane-side [role="row"], #side [role="row"], #pane-side [role="listitem"], #side [role="listitem"], [data-testid="chat-list"] [role="listitem"]'
           )).filter(vis);
 
           for (const row of rows) {
@@ -541,31 +603,67 @@ function setupWhatsAppIntegration() {
               try { callback(); } catch (e) {}
             }
 
-            if (contactName) {
-              const targetQuery = norm(contactName);
-              setTimeout(() => {
-                const activeHeader = document.querySelector('header span[title]');
-                if (!activeHeader || norm(activeHeader.textContent) !== targetQuery) {
-                  const row = findMatchingRow(targetQuery);
-                  if (row) {
-                    const clickTarget = row.querySelector('span[title]') || row;
-                    triggerEvents(clickTarget, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
-                  } else {
-                    const sbox = getSearchBox();
-                    if (sbox) {
-                      setSearchText(sbox, contactName);
-                      setTimeout(() => {
-                        const searchedRow = findMatchingRow(targetQuery);
-                        if (searchedRow) {
-                          const clickTarget = searchedRow.querySelector('span[title]') || searchedRow;
-                          triggerEvents(clickTarget, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
-                        }
-                      }, 150);
-                    }
-                  }
+            if (!contactName) return;
+
+            const targetQuery = norm(contactName);
+
+            // Step 1: Give WhatsApp native notification callback ~400ms to open the chat
+            let attempts = 0;
+            const checkNativeInterval = setInterval(() => {
+              attempts++;
+              if (isChatOpen(targetQuery)) {
+                clearInterval(checkNativeInterval);
+                return;
+              }
+
+              // After timeout, check visible sidebar or fall back to search
+              if (attempts >= 5) {
+                clearInterval(checkNativeInterval);
+
+                const row = findMatchingRow(targetQuery);
+                if (row) {
+                  const clickTarget = row.querySelector('span[title]') || row;
+                  triggerEvents(clickTarget, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
+                  return;
                 }
-              }, 100);
-            }
+
+                // Chat is not in the visible sidebar list (scrolled away or virtualized) -> fallback to search
+                const sbox = getSearchBox();
+                if (sbox) {
+                  const prevSearchText = getSearchText(sbox);
+                  setSearchText(sbox, contactName);
+
+                  let searchAttempts = 0;
+                  const searchPoll = setInterval(() => {
+                    searchAttempts++;
+                    const searchedRow = findMatchingRow(targetQuery);
+                    if (searchedRow) {
+                      clearInterval(searchPoll);
+                      const clickTarget = searchedRow.querySelector('span[title]') || searchedRow;
+                      triggerEvents(clickTarget, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
+
+                      // Wait for chat to open, then restore search box to previous state
+                      let openAttempts = 0;
+                      const openPoll = setInterval(() => {
+                        openAttempts++;
+                        if (isChatOpen(targetQuery) || openAttempts >= 12) {
+                          clearInterval(openPoll);
+                          setTimeout(() => {
+                            restoreSearchBox(sbox, prevSearchText);
+                          }, 150);
+                        }
+                      }, 50);
+                      return;
+                    }
+
+                    if (searchAttempts > 20) {
+                      clearInterval(searchPoll);
+                      restoreSearchBox(sbox, prevSearchText);
+                    }
+                  }, 50);
+                }
+              }
+            }, 80);
           });
 
           window.__walinux_ipc.onSendInlineReply((data) => {
@@ -617,12 +715,17 @@ function setupWhatsAppIntegration() {
             // Step 2: Poll for composer or search
             let attempts = 0;
             let searched = false;
+            let prevSearchText = '';
+            let sboxEl = null;
             const targetQuery = norm(contactName);
 
             const interval = setInterval(() => {
               attempts++;
               if (attempts > 50) {
                 clearInterval(interval);
+                if (searched && sboxEl) {
+                  restoreSearchBox(sboxEl, prevSearchText);
+                }
                 return;
               }
 
@@ -630,12 +733,19 @@ function setupWhatsAppIntegration() {
               if (comp) {
                 clearInterval(interval);
                 doSendText(comp);
+                if (searched && sboxEl) {
+                  setTimeout(() => {
+                    restoreSearchBox(sboxEl, prevSearchText);
+                  }, 300);
+                }
                 return;
               }
 
               if (!searched && attempts > 8) {
                 const sbox = getSearchBox();
                 if (sbox) {
+                  sboxEl = sbox;
+                  prevSearchText = getSearchText(sbox);
                   setSearchText(sbox, contactName);
                   searched = true;
                 }
