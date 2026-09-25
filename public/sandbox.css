@@ -198,3 +198,7 @@ html, body {
 .copy-success {
   color: #00a884 !important;
 }
+
+.hidden {
+  display: none !important;
+}
