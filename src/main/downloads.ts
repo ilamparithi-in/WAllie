@@ -2,6 +2,7 @@ import { app, dialog, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { state } from './state';
+import { showAppToast } from './utils';
 import { DownloadRecord } from '../shared/types';
 import { notificationManager } from './notifications/index';
 
@@ -169,17 +170,13 @@ export class DownloadManager {
           console.log(`[DownloadManager] Second click detected for ${fileName}. Opening existing file.`);
           item.cancel();
           this.openDownloadedFile(existing.savePath);
-          state.mainWindow?.webContents.send('toast:show', {
-            message: `Opening ${fileName}...`,
-          });
+          showAppToast(`Opening ${fileName}...`);
           return;
         } else if (secondClickAction === 'showInFolder') {
           console.log(`[DownloadManager] Second click detected for ${fileName}. Revealing in folder.`);
           item.cancel();
           this.showItemInFolder(existing.savePath);
-          state.mainWindow?.webContents.send('toast:show', {
-            message: `Revealed ${fileName} in folder.`,
-          });
+          showAppToast(`Revealed ${fileName} in folder.`);
           return;
         }
         // If secondClickAction === 'download', fall through to download again
