@@ -7,7 +7,7 @@ interface Window {
   __walinux_ipc?: {
     onNotificationClicked: (callback: (data: any) => void) => void;
     onSendInlineReply: (callback: (data: { contactName: string; text: string; tag: string }) => void) => void;
-    onAnchorDownload?: (filename: string) => void;
+    onAnchorDownload?: (filename: string, size?: number, hash?: string) => void;
     createNotification: (data: any) => void;
     closeNotification: (tag: string) => void;
     dismissChat?: (data: { tag?: string; contactName?: string }) => void;
@@ -526,7 +526,33 @@ interface Window {
     const originalAnchorClick = (window as any).HTMLAnchorElement.prototype.click;
     (window as any).HTMLAnchorElement.prototype.click = function(this: any) {
       if (this.download && window.__walinux_ipc && window.__walinux_ipc.onAnchorDownload) {
-        window.__walinux_ipc.onAnchorDownload(this.download);
+        const filename = this.download;
+        const href = this.href;
+
+        if (typeof href === 'string' && href.startsWith('blob:')) {
+          fetch(href)
+            .then((r) => r.blob())
+            .then(async (blob) => {
+              const size = blob.size;
+              let hash: string | undefined;
+              // For files <= 64 MB, compute SHA-256
+              if (size <= 64 * 1024 * 1024 && window.crypto && window.crypto.subtle) {
+                try {
+                  const buf = await blob.arrayBuffer();
+                  const hashBuf = await window.crypto.subtle.digest('SHA-256', buf);
+                  hash = Array.from(new Uint8Array(hashBuf))
+                    .map((b) => b.toString(16).padStart(2, '0'))
+                    .join('');
+                } catch (e) {}
+              }
+              window.__walinux_ipc?.onAnchorDownload?.(filename, size, hash);
+            })
+            .catch(() => {
+              window.__walinux_ipc?.onAnchorDownload?.(filename);
+            });
+        } else {
+          window.__walinux_ipc.onAnchorDownload(filename);
+        }
       }
       return originalAnchorClick.apply(this, arguments);
     };
