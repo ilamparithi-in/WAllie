@@ -285,8 +285,8 @@ const FontCombobox: React.FC<FontComboboxProps> = ({
                       setGFontStatus({
                         success: true,
                         message: res.isVariable
-                          ? `Using variable-weight version from Google Fonts (continuous range active)!`
-                          : `Loaded from Google Fonts (standard discrete weights).`,
+                          ? `Using variable-weight version from Google Fonts`
+                          : `Loaded from Google Fonts (discrete weights).`,
                       });
                     } else {
                       setGFontStatus({ success: false, message: `"${value}" is not available on Google Fonts.` });
@@ -422,15 +422,32 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
   onClearCustomCss,
 }) => {
   const [previewWeight, setPreviewWeight] = useState<number>(545);
+  const [isResolvingDesktopGFont, setIsResolvingDesktopGFont] = useState(false);
+  const [desktopGFontStatus, setDesktopGFontStatus] = useState<{ success: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    if (followSystemFont && desktopFont?.name && !desktopFont.isVariable && preferGoogleFont) {
+      setDesktopGFontStatus({
+        success: true,
+        message: 'Google Fonts version active.',
+      });
+    } else if (!preferGoogleFont) {
+      setDesktopGFontStatus(null);
+    }
+  }, [followSystemFont, desktopFont?.name, desktopFont?.isVariable, preferGoogleFont]);
 
   // Dynamically load Google Fonts stylesheet in the settings window for preview
   useEffect(() => {
     const fonts = [
       { name: cleanFamily(fontFamily), preferGoogle: preferGoogleFont },
       { name: cleanFamily(monoFontFamily), preferGoogle: preferGoogleMonoFont },
-    ].filter((f) => Boolean(f.name));
+    ];
+    if (followSystemFont && preferGoogleFont && desktopFont?.name) {
+      fonts.push({ name: cleanFamily(desktopFont.name), preferGoogle: true });
+    }
+    const filteredFonts = fonts.filter((f) => Boolean(f.name));
 
-    fonts.forEach(async ({ name, preferGoogle }) => {
+    filteredFonts.forEach(async ({ name, preferGoogle }) => {
       const isGeneric = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|Segoe UI|Arial|Helvetica|Times New Roman|Courier New)$/i.test(name);
       if (isGeneric || name.includes(',')) return;
 
@@ -450,9 +467,9 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
       }
       link.href = url;
     });
-  }, [fontFamily, monoFontFamily, preferGoogleFont, preferGoogleMonoFont, systemFontsMeta]);
+  }, [fontFamily, monoFontFamily, preferGoogleFont, preferGoogleMonoFont, systemFontsMeta, followSystemFont, desktopFont?.name]);
 
-  const activeBodyFont = cleanFamily(fontFamily);
+  const activeBodyFont = followSystemFont ? (desktopFont?.name || '') : cleanFamily(fontFamily);
   const activeMonoFont = cleanFamily(monoFontFamily);
 
   return (
@@ -517,11 +534,69 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
         </label>
 
         {followSystemFont && desktopFont?.name && !desktopFont.isVariable && (
-          <div className="p-2.5 rounded bg-[#182229] border border-[#222d34] text-[10.5px] text-[#e5a50a] flex items-start gap-2">
-            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            <span>
-              <strong>Note:</strong> Your desktop font "{desktopFont.name}" is not a variable-width font. WhatsApp Web uses custom font weights (like 545 for buttons and tabs), which may not render at their intended intermediate weight.
-            </span>
+          <div className="p-2.5 rounded bg-[#182229] border border-[#222d34] space-y-2">
+            {!preferGoogleFont && (
+              <div className="text-[10.5px] text-[#e5a50a] flex items-start gap-1.5">
+                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Note:</strong> Your desktop font "{desktopFont.name}" is not a variable-width font. WhatsApp Web uses custom font weights (like 545 for buttons and tabs), which may not render at their intended intermediate weight.
+                </span>
+              </div>
+            )}
+
+            <label className="flex items-center gap-2 text-xs text-[#e9edef] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={preferGoogleFont || false}
+                disabled={isResolvingDesktopGFont}
+                onChange={async (e) => {
+                  const checked = e.target.checked;
+                  onTogglePreferGoogleFont?.(checked);
+                  setDesktopGFontStatus(null);
+                  if (checked) {
+                    setIsResolvingDesktopGFont(true);
+                    try {
+                      const res = await resolveGoogleFont(desktopFont.name);
+                      if (res) {
+                        onUpdateFont(desktopFont.name, res.url);
+                        setDesktopGFontStatus({
+                          success: true,
+                          message: res.isVariable
+                            ? `Using variable-weight version from Google Fonts`
+                            : `Loaded from Google Fonts (discrete weights).`,
+                        });
+                      } else {
+                        setDesktopGFontStatus({
+                          success: false,
+                          message: `"${desktopFont.name}" is not available on Google Fonts.`,
+                        });
+                      }
+                    } catch {
+                      setDesktopGFontStatus({
+                        success: false,
+                        message: `Failed to connect to Google Fonts.`,
+                      });
+                    } finally {
+                      setIsResolvingDesktopGFont(false);
+                    }
+                  } else {
+                    onUpdateFont('', '');
+                    setDesktopGFontStatus(null);
+                  }
+                }}
+                className="w-3.5 h-3.5 accent-[#00a884] cursor-pointer rounded"
+              />
+              <span className="text-[11px] text-[#c2c5d1]">
+                Fetch "{desktopFont.name}" from Google Fonts instead {isResolvingDesktopGFont ? '(checking...)' : '(to get variable weight file if available)'}
+              </span>
+            </label>
+
+            {desktopGFontStatus && (
+              <div className={`text-[10px] pl-5.5 flex items-center gap-1 ${desktopGFontStatus.success ? 'text-[#00a884]' : 'text-[#f87171]'}`}>
+                {desktopGFontStatus.success ? <Check className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                <span>{desktopGFontStatus.message}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -565,139 +640,138 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
                 defaultLabel="Default Monospace Font"
               />
             </div>
+          </div>
+        )}
 
-            {/* Authentic WhatsApp Chat Conversation Preview */}
-            <div className="rounded-lg border border-[#222d34] bg-[#0b141a] p-3 space-y-2.5 overflow-hidden shadow-sm">
-              <div className="flex items-center justify-between text-[11px] text-[#8696a0] pb-1 border-b border-[#182229]">
-                <span className="font-medium text-[#c2c5d1]">Conversation Preview</span>
-                <span className="text-[10px] text-[#8696a0] font-mono truncate max-w-[240px]">
-                  {activeBodyFont || 'Default'} • {activeMonoFont || 'Default Code'}
-                </span>
-              </div>
+        {/* Authentic WhatsApp Chat Conversation Preview */}
+        <div className="rounded-lg border border-[#222d34] bg-[#0b141a] p-3 space-y-2.5 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between text-[11px] text-[#8696a0] pb-1 border-b border-[#182229]">
+            <span className="font-medium text-[#c2c5d1]">Conversation Preview</span>
+            <span className="text-[10px] text-[#8696a0] font-mono truncate max-w-[240px]">
+              {activeBodyFont || 'Default'} • {activeMonoFont || 'Default Code'}
+            </span>
+          </div>
 
-              {/* Message Bubbles Container */}
-              <div className="space-y-2 py-1">
-                {/* Outgoing Message Bubble */}
-                <div className="flex justify-end">
-                  <div className="max-w-[85%] rounded-lg rounded-tr-none bg-[#005c4b] px-3 py-1.5 text-[#e9edef] shadow-sm">
-                    <div
-                      className="text-[13px] leading-relaxed"
-                      style={{
-                        fontFamily: activeBodyFont
-                          ? `"${activeBodyFont}", system-ui, sans-serif`
-                          : 'inherit',
-                      }}
-                    >
-                      Hey! How does the new chat typography look?
-                    </div>
-                    <div className="flex items-center justify-end gap-1 text-[10px] text-[#8696a0] mt-0.5">
-                      <span>10:42 AM</span>
-                      <span className="text-[#53bdeb] text-[11px] font-bold">✓✓</span>
-                    </div>
-                  </div>
+          {/* Message Bubbles Container */}
+          <div className="space-y-2 py-1">
+            {/* Outgoing Message Bubble */}
+            <div className="flex justify-end">
+              <div className="max-w-[85%] rounded-lg rounded-tr-none bg-[#005c4b] px-3 py-1.5 text-[#e9edef] shadow-sm">
+                <div
+                  className="text-[13px] leading-relaxed"
+                  style={{
+                    fontFamily: activeBodyFont
+                      ? `"${activeBodyFont}", system-ui, sans-serif`
+                      : 'inherit',
+                  }}
+                >
+                  Hey! How does the new chat typography look?
                 </div>
-
-                {/* Incoming Message Bubble */}
-                <div className="flex justify-start">
-                  <div className="max-w-[85%] rounded-lg rounded-tl-none bg-[#202c33] px-3 py-1.5 text-[#e9edef] shadow-sm space-y-1.5">
-                    <div
-                      className="text-[13px] leading-relaxed"
-                      style={{
-                        fontFamily: activeBodyFont
-                          ? `"${activeBodyFont}", system-ui, sans-serif`
-                          : 'inherit',
-                      }}
-                    >
-                      Looks clean! Here is a code block test:
-                    </div>
-
-                    {/* Monospace Code Block */}
-                    <div
-                      className="bg-[#111b21] p-2 rounded border border-[#2a3942] text-[11.5px] text-[#00a884] overflow-x-auto leading-normal"
-                      style={{
-                        fontFamily: activeMonoFont
-                          ? `"${activeMonoFont}", ui-monospace, monospace`
-                          : 'ui-monospace, monospace',
-                      }}
-                    >
-                      <code>const status = "Font active &amp; ready!";</code>
-                    </div>
-
-                    <div className="flex items-center justify-end text-[10px] text-[#8696a0]">
-                      <span>10:43 AM</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Weight Verification & Slider Bar */}
-                <div className="pt-2.5 border-t border-[#182229] space-y-2 px-1">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[#8696a0] font-medium">Weight Slider:</span>
-                      <span className="font-mono text-[#00a884] font-bold bg-[#00a884]/10 px-1.5 py-0.5 rounded border border-[#00a884]/20 text-[10px]">
-                        {previewWeight}
-                      </span>
-                    </div>
-                    {/* Quick presets */}
-                    <div className="flex items-center gap-1">
-                      {[300, 400, 500, 545, 600, 700].map((w) => (
-                        <button
-                          key={w}
-                          type="button"
-                          onClick={() => setPreviewWeight(w)}
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${
-                            previewWeight === w
-                              ? 'bg-[#00a884] text-[#111b21] font-bold'
-                              : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#233138]'
-                          }`}
-                        >
-                          {w}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-[10px] text-[#8696a0] font-mono">100</span>
-                    <input
-                      type="range"
-                      min={100}
-                      max={900}
-                      step={1}
-                      value={previewWeight}
-                      onChange={(e) => setPreviewWeight(Number(e.target.value))}
-                      className="flex-1 accent-[#00a884] h-1.5 bg-[#202c33] rounded-lg appearance-none cursor-pointer"
-                    />
-                    <span className="text-[10px] text-[#8696a0] font-mono">900</span>
-                  </div>
-
-                  {/* Sample WhatsApp UI Button & Text rendered at current preview weight */}
-                  <div className="flex items-center justify-between pt-1">
-                    <div
-                      className="text-[12px] text-[#e9edef] truncate mr-2"
-                      style={{
-                        fontFamily: activeBodyFont ? `"${activeBodyFont}", system-ui, sans-serif` : 'inherit',
-                        fontWeight: previewWeight,
-                      }}
-                    >
-                      Sample text at weight {previewWeight}: The quick brown fox jumps over the lazy dog.
-                    </div>
-                    <button
-                      type="button"
-                      className="px-3 py-1 rounded-full bg-[#00a884] text-[#111b21] text-[12px] shrink-0 font-medium shadow-sm transition-all"
-                      style={{
-                        fontFamily: activeBodyFont ? `"${activeBodyFont}", system-ui, sans-serif` : 'inherit',
-                        fontWeight: previewWeight,
-                      }}
-                    >
-                      Join community ({previewWeight})
-                    </button>
-                  </div>
+                <div className="flex items-center justify-end gap-1 text-[10px] text-[#8696a0] mt-0.5">
+                  <span>10:42 AM</span>
+                  <span className="text-[#53bdeb] text-[11px] font-bold">✓✓</span>
                 </div>
               </div>
             </div>
+
+            {/* Incoming Message Bubble */}
+            <div className="flex justify-start">
+              <div className="max-w-[85%] rounded-lg rounded-tl-none bg-[#202c33] px-3 py-1.5 text-[#e9edef] shadow-sm space-y-1.5">
+                <div
+                  className="text-[13px] leading-relaxed"
+                  style={{
+                    fontFamily: activeBodyFont
+                      ? `"${activeBodyFont}", system-ui, sans-serif`
+                      : 'inherit',
+                  }}
+                >
+                  Looks clean! Here is a code block test:
+                </div>
+
+                {/* Monospace Code Block */}
+                <div
+                  className="bg-[#111b21] p-2 rounded border border-[#2a3942] text-[11.5px] text-[#00a884] overflow-x-auto leading-normal"
+                  style={{
+                    fontFamily: activeMonoFont
+                      ? `"${activeMonoFont}", ui-monospace, monospace`
+                      : 'ui-monospace, monospace',
+                  }}
+                >
+                  <code>const status = "Font active &amp; ready!";</code>
+                </div>
+
+                <div className="flex items-center justify-end text-[10px] text-[#8696a0]">
+                  <span>10:43 AM</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Weight Verification & Slider Bar */}
+            <div className="pt-2.5 border-t border-[#182229] space-y-2 px-1">
+              <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-2">
+                  <span className="text-[#8696a0] font-medium">Weight Slider:</span>
+                  <span className="font-mono text-[#00a884] font-bold bg-[#00a884]/10 px-1.5 py-0.5 rounded border border-[#00a884]/20 text-[10px]">
+                    {previewWeight}
+                  </span>
+                </div>
+                {/* Quick presets */}
+                <div className="flex items-center gap-1">
+                  {[300, 400, 500, 545, 600, 700].map((w) => (
+                    <button
+                      key={w}
+                      type="button"
+                      onClick={() => setPreviewWeight(w)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${previewWeight === w
+                        ? 'bg-[#00a884] text-[#111b21] font-bold'
+                        : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#233138]'
+                        }`}
+                    >
+                      {w}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <span className="text-[10px] text-[#8696a0] font-mono">100</span>
+                <input
+                  type="range"
+                  min={100}
+                  max={900}
+                  step={1}
+                  value={previewWeight}
+                  onChange={(e) => setPreviewWeight(Number(e.target.value))}
+                  className="flex-1 accent-[#00a884] h-1.5 bg-[#202c33] rounded-lg appearance-none cursor-pointer"
+                />
+                <span className="text-[10px] text-[#8696a0] font-mono">900</span>
+              </div>
+
+              {/* Sample WhatsApp UI Button & Text rendered at current preview weight */}
+              <div className="flex items-center justify-between pt-1">
+                <div
+                  className="text-[12px] text-[#e9edef] truncate mr-2"
+                  style={{
+                    fontFamily: activeBodyFont ? `"${activeBodyFont}", system-ui, sans-serif` : 'inherit',
+                    fontWeight: previewWeight,
+                  }}
+                >
+                  Sample text at weight {previewWeight}: The quick brown fox jumps over the lazy dog.
+                </div>
+                <button
+                  type="button"
+                  className="px-3 py-1 rounded-full bg-[#00a884] text-[#111b21] text-[12px] shrink-0 font-medium shadow-sm transition-all"
+                  style={{
+                    fontFamily: activeBodyFont ? `"${activeBodyFont}", system-ui, sans-serif` : 'inherit',
+                    fontWeight: previewWeight,
+                  }}
+                >
+                  Join community ({previewWeight})
+                </button>
+              </div>
+            </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Chat Wallpaper Section */}
@@ -761,31 +835,28 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => handleSelectPresetTheme('none')}
-            className={`px-3 py-1.5 rounded text-[10px] font-semibold transition-colors border whitespace-nowrap ${
-              selectedAccount?.settings?.selectedTheme === 'none' || !selectedAccount?.settings?.selectedTheme
-                ? 'bg-[#00a884] text-[#111b21] border-[#00a884]'
-                : 'bg-[#202c33] text-[#aebac1] border-[#222d34] hover:bg-[#2a3942]'
-            }`}
+            className={`px-3 py-1.5 rounded text-[10px] font-semibold transition-colors border whitespace-nowrap ${selectedAccount?.settings?.selectedTheme === 'none' || !selectedAccount?.settings?.selectedTheme
+              ? 'bg-[#00a884] text-[#111b21] border-[#00a884]'
+              : 'bg-[#202c33] text-[#aebac1] border-[#222d34] hover:bg-[#2a3942]'
+              }`}
           >
             Default Theme
           </button>
           <button
             onClick={() => handleSelectPresetTheme('oled')}
-            className={`px-3 py-1.5 rounded text-[10px] font-semibold transition-colors border whitespace-nowrap ${
-              selectedAccount?.settings?.selectedTheme === 'oled'
-                ? 'bg-[#00a884] text-[#111b21] border-[#00a884]'
-                : 'bg-[#202c33] text-[#aebac1] border-[#222d34] hover:bg-[#2a3942]'
-            }`}
+            className={`px-3 py-1.5 rounded text-[10px] font-semibold transition-colors border whitespace-nowrap ${selectedAccount?.settings?.selectedTheme === 'oled'
+              ? 'bg-[#00a884] text-[#111b21] border-[#00a884]'
+              : 'bg-[#202c33] text-[#aebac1] border-[#222d34] hover:bg-[#2a3942]'
+              }`}
           >
             OLED Dark
           </button>
           <button
             onClick={() => handleSelectPresetTheme('compact')}
-            className={`px-3 py-1.5 rounded text-[10px] font-semibold transition-colors border whitespace-nowrap ${
-              selectedAccount?.settings?.selectedTheme === 'compact'
-                ? 'bg-[#00a884] text-[#111b21] border-[#00a884]'
-                : 'bg-[#202c33] text-[#aebac1] border-[#222d34] hover:bg-[#2a3942]'
-            }`}
+            className={`px-3 py-1.5 rounded text-[10px] font-semibold transition-colors border whitespace-nowrap ${selectedAccount?.settings?.selectedTheme === 'compact'
+              ? 'bg-[#00a884] text-[#111b21] border-[#00a884]'
+              : 'bg-[#202c33] text-[#aebac1] border-[#222d34] hover:bg-[#2a3942]'
+              }`}
           >
             Compact UI
           </button>

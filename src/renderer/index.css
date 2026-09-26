@@ -53,3 +53,119 @@
 .subpage-animate {
   animation: subpage-fade-in 0.22s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
+
+/* Windows 10 Fluent Window Open/Close Animations */
+@keyframes win10-window-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes win10-window-exit {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes win10-backdrop-enter {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes win10-backdrop-exit {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.win10-window-enter {
+  animation: win10-window-enter 0.22s cubic-bezier(0, 0, 0, 1) forwards;
+}
+
+.win10-window-exit {
+  animation: win10-window-exit 0.18s cubic-bezier(1, 0, 1, 1) forwards;
+}
+
+.win10-backdrop-enter {
+  animation: win10-backdrop-enter 0.22s cubic-bezier(0, 0, 0, 1) forwards;
+}
+
+.win10-backdrop-exit {
+  animation: win10-backdrop-exit 0.18s cubic-bezier(1, 0, 1, 1) forwards;
+}
+
+/* Windows 10 Toast Notification Slide Animations (matching settings sidebar ease) */
+@keyframes win10-toast-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes win10-toast-exit {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+.win10-toast-enter {
+  animation: win10-toast-enter 0.3s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+}
+
+.win10-toast-exit {
+  animation: win10-toast-exit 0.3s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+}
+
+/* Modal Fade Animations */
+@keyframes modal-fade-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-fade-out {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.modal-fade-enter {
+  animation: modal-fade-in 0.2s ease-out forwards;
+}
+
+.modal-fade-exit {
+  animation: modal-fade-out 0.18s ease-in forwards;
+}
+

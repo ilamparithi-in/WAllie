@@ -30,6 +30,13 @@ export interface SystemFontInfo {
   isVariable: boolean;
 }
 
+export interface GroupInviteDetails {
+  code: string;
+  name?: string;
+  iconUrl?: string;
+  description?: string;
+}
+
 export const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
   cameraEnabled: true,
   micEnabled: true,

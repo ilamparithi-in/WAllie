@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Titlebar } from './components/Titlebar';
 import { SettingsModal } from './components/SettingsModal';
-import { Download, CheckCircle, XCircle, X, Shield, ExternalLink, FolderOpen, Users, MessageSquare, Send, Link as LinkIcon, AlertTriangle } from 'lucide-react';
+import { Download, CheckCircle, XCircle, X, Shield, ExternalLink, FolderOpen, Users, MessageSquare, Send, Link as LinkIcon, AlertTriangle, Maximize2, RotateCcw } from 'lucide-react';
 import { parseProtocolUrl } from './utils/protocolUrl';
 import { WhatsAppFormattedText } from './components/WhatsAppFormattedText';
 
-import type { AccountInfo, GlobalSettings } from '../preload';
+import type { AccountInfo, GlobalSettings, GroupInviteDetails } from '../preload';
 
 import { useFocusTrap } from './hooks/useFocusTrap';
 
@@ -19,6 +19,124 @@ interface DownloadState {
   totalBytes?: number;
 }
 
+interface ToastItem {
+  id: number;
+  message: string;
+  url?: string;
+  isExiting?: boolean;
+}
+
+const ToastCard: React.FC<{
+  toast: ToastItem;
+  onDismiss: (id: number) => void;
+  onReopen: (url: string) => void;
+}> = ({ toast, onDismiss, onReopen }) => {
+  const isCancelled = toast.message.toLowerCase().includes('cancel');
+  const canReopen = Boolean(isCancelled && toast.url);
+  const [progress, setProgress] = useState(100);
+  const [isHovered, setIsHovered] = useState(false);
+  const startTimeRef = useRef<number>(Date.now());
+  const animationFrameRef = useRef<number | null>(null);
+  const duration = 4500;
+
+  useEffect(() => {
+    if (toast.isExiting) return;
+
+    if (isHovered) {
+      setProgress(100);
+      startTimeRef.current = Date.now();
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      return;
+    }
+
+    startTimeRef.current = Date.now();
+    const updateProgress = () => {
+      const elapsed = Date.now() - startTimeRef.current;
+      const remaining = Math.max(0, 100 - (elapsed / duration) * 100);
+      setProgress(remaining);
+
+      if (elapsed >= duration) {
+        onDismiss(toast.id);
+      } else {
+        animationFrameRef.current = requestAnimationFrame(updateProgress);
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(updateProgress);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isHovered, toast.isExiting, toast.id, onDismiss]);
+
+  return (
+    <div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onClick={() => {
+        if (canReopen && toast.url && !toast.isExiting) {
+          onReopen(toast.url);
+          onDismiss(toast.id);
+        }
+      }}
+      className={`relative overflow-hidden flex items-center gap-3 p-3.5 bg-[#1f2c34] border ${
+        isCancelled ? 'border-[#f15c6d]/40' : 'border-[#00a884]/40'
+      } text-[#e9edef] rounded-xl shadow-2xl backdrop-blur-md ${
+        toast.isExiting ? 'win10-toast-exit' : 'win10-toast-enter'
+      } ${
+        canReopen ? 'cursor-pointer hover:bg-[#25323a] hover:border-[#f15c6d]/80 transition-all select-none' : ''
+      }`}
+      title={canReopen ? 'Click to reopen prompt' : undefined}
+    >
+      {/* KDE-style Expiration Progress Bar at the Top */}
+      <div className="absolute top-0 left-0 right-0 h-[3px] bg-black/25 overflow-hidden rounded-t-xl">
+        <div
+          className={`h-full transition-none ${
+            isCancelled ? 'bg-[#f15c6d]' : 'bg-[#00a884]'
+          }`}
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      <div
+        className={`p-2 ${
+          isCancelled ? 'bg-[#f15c6d]/20 text-[#f15c6d]' : 'bg-[#00a884]/20 text-[#00a884]'
+        } rounded-lg shrink-0 mt-0.5`}
+      >
+        {isCancelled ? <XCircle className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold leading-tight text-[#e9edef]">{toast.message}</p>
+        {toast.url && (
+          <p className="text-[10px] text-[#8696a0] truncate mt-0.5" title={toast.url}>
+            {toast.url}
+          </p>
+        )}
+        {canReopen && (
+          <p className="text-[9px] text-[#f15c6d] font-medium mt-1">
+            Click to reopen prompt
+          </p>
+        )}
+      </div>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDismiss(toast.id);
+        }}
+        className="text-[#8696a0] hover:text-[#e9edef] transition-colors p-1 rounded-md hover:bg-[#2a3942]"
+        title="Dismiss"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+};
+
 export const App: React.FC = () => {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -28,9 +146,18 @@ export const App: React.FC = () => {
   const [isHandlingProtocol, setIsHandlingProtocol] = useState(false);
   const [settingsInitialPage, setSettingsInitialPage] = useState<'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads' | undefined>(undefined);
   const [settingsInitialAccountId, setSettingsInitialAccountId] = useState<string | undefined>(undefined);
-  const [toasts, setToasts] = useState<{ id: number; message: string; url?: string }[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
   const isNavConfirmActiveRef = useRef(false);
   const deferredToastsRef = useRef<{ message: string; url?: string }[]>([]);
+
+  const dismissToast = (id: number) => {
+    setToasts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, isExiting: true } : t))
+    );
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 300);
+  };
 
   const showToast = (message: string, url?: string) => {
     if (isNavConfirmActiveRef.current) {
@@ -38,12 +165,16 @@ export const App: React.FC = () => {
       deferredToastsRef.current.push({ message, url });
       return;
     }
+    // Deduplicate active toasts with exact same message
+    const isDuplicate = toasts.some((t) => t.message === message && !t.isExiting);
+    if (isDuplicate) return;
+
     const toastId = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id: toastId, message, url }]);
+    setToasts((prev) => {
+      if (prev.some((t) => t.message === message && !t.isExiting)) return prev;
+      return [...prev, { id: toastId, message, url, isExiting: false }];
+    });
     window.electronAPI?.showToast?.(message, url);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== toastId));
-    }, 4500);
   };
 
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
@@ -57,11 +188,143 @@ export const App: React.FC = () => {
   const globalSettingsRef = useRef<GlobalSettings | null>(null);
   globalSettingsRef.current = globalSettings;
 
+  const [groupDetails, setGroupDetails] = useState<GroupInviteDetails | null>(null);
+  const [isLoadingGroupDetails, setIsLoadingGroupDetails] = useState(false);
+
+  // Modal closing animation state
+  const [isProtocolClosing, setIsProtocolClosing] = useState(false);
+  const protocolClosingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isDisclaimerClosing, setIsDisclaimerClosing] = useState(false);
+  const disclaimerClosingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Nested Avatar Zoom Modal State
+  const [avatarModalData, setAvatarModalData] = useState<{ url: string; title: string } | null>(null);
+  const [isAvatarClosing, setIsAvatarClosing] = useState(false);
+  const [avatarZoom, setAvatarZoom] = useState(1);
+  const [avatarPan, setAvatarPan] = useState({ x: 0, y: 0 });
+  const [isAvatarDragging, setIsAvatarDragging] = useState(false);
+  const avatarDragStart = useRef({ x: 0, y: 0, startPanX: 0, startPanY: 0 });
+  const imageViewportRef = useRef<HTMLDivElement>(null);
+  const dragDistanceRef = useRef(0);
+
+  const openAvatarModal = (url: string, title?: string) => {
+    setAvatarModalData({ url, title: title || 'Group Display Picture' });
+    setIsAvatarClosing(false);
+    setAvatarZoom(1);
+    setAvatarPan({ x: 0, y: 0 });
+    dragDistanceRef.current = 0;
+  };
+
+  const closeAvatarModal = () => {
+    if (isAvatarClosing) return;
+    setIsAvatarClosing(true);
+    setTimeout(() => {
+      setAvatarModalData(null);
+      setIsAvatarClosing(false);
+      setAvatarZoom(1);
+      setAvatarPan({ x: 0, y: 0 });
+      dragDistanceRef.current = 0;
+    }, 180);
+  };
+
+  // Attach non-passive wheel listener for smooth zooming without browser errors
+  useEffect(() => {
+    const el = imageViewportRef.current;
+    if (!el || !avatarModalData) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const factor = e.deltaY < 0 ? 1.15 : 0.87;
+      setAvatarZoom((prev) => {
+        const next = Math.min(Math.max(1, prev * factor), 8);
+        if (next === 1) {
+          setAvatarPan({ x: 0, y: 0 });
+        }
+        return next;
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [avatarModalData]);
+
+  const handleCloseProtocolPrompt = (isCancelled = true) => {
+    if (isProtocolClosing) return;
+    setIsProtocolClosing(true);
+    if (isCancelled && pendingUrl) {
+      showToast('Opening link cancelled', pendingUrl);
+    }
+    if (protocolClosingTimerRef.current) clearTimeout(protocolClosingTimerRef.current);
+    protocolClosingTimerRef.current = setTimeout(() => {
+      setPendingUrl(null);
+      setIsProtocolClosing(false);
+      window.electronAPI.toggleProtocolPrompt(false);
+    }, 180);
+  };
+
+  // Keyboard navigation & Escape handlers
+  useEffect(() => {
+    if (!avatarModalData) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeAvatarModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [avatarModalData, isAvatarClosing]);
+
+  useEffect(() => {
+    if (!pendingUrl || avatarModalData) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isHandlingProtocol) {
+        e.preventDefault();
+        handleCloseProtocolPrompt(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pendingUrl, avatarModalData, isHandlingProtocol, isProtocolClosing]);
+
   // Focus trapping hooks for overlays
   const isDisclaimerActive = Boolean((!globalSettings?.disclaimerAccepted || showDisclaimerForce) && disclaimerRef.current);
-  const isProtocolPromptActive = Boolean(pendingUrl && protocolPromptRef.current);
+  const isProtocolPromptActive = Boolean(pendingUrl && protocolPromptRef.current && !avatarModalData);
   useFocusTrap(disclaimerRef, isDisclaimerActive);
   useFocusTrap(protocolPromptRef, isProtocolPromptActive);
+
+  // Fetch group invite details if a group invite link is pending
+  useEffect(() => {
+    if (!pendingUrl) {
+      setGroupDetails(null);
+      setIsLoadingGroupDetails(false);
+      return;
+    }
+    const parsed = parseProtocolUrl(pendingUrl);
+    if (parsed.type === 'group_invite' && parsed.code) {
+      setIsLoadingGroupDetails(true);
+      setGroupDetails(null);
+      let isCancelled = false;
+      window.electronAPI?.getGroupInviteDetails?.(parsed.code)
+        .then((details) => {
+          if (!isCancelled) {
+            setGroupDetails(details);
+            setIsLoadingGroupDetails(false);
+          }
+        })
+        .catch(() => {
+          if (!isCancelled) {
+            setIsLoadingGroupDetails(false);
+          }
+        });
+      return () => {
+        isCancelled = true;
+      };
+    } else {
+      setGroupDetails(null);
+      setIsLoadingGroupDetails(false);
+    }
+  }, [pendingUrl]);
 
   useEffect(() => {
     if (!window.electronAPI) return;
@@ -178,15 +441,7 @@ export const App: React.FC = () => {
     });
 
     const unsubscribeToast = window.electronAPI.onToastShow((data) => {
-      if (isNavConfirmActiveRef.current) {
-        deferredToastsRef.current.push({ message: data.message, url: data.url });
-        return;
-      }
-      const toastId = Date.now() + Math.random();
-      setToasts((prev) => [...prev, { id: toastId, message: data.message, url: data.url }]);
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== toastId));
-      }, 4500);
+      showToast(data.message, data.url);
     });
 
     const unsubscribeNavConfirm = window.electronAPI.onNavConfirmationActive?.((isActive) => {
@@ -201,6 +456,10 @@ export const App: React.FC = () => {
       }
     });
 
+    const unsubscribeReopenPrompt = window.electronAPI.onProtocolReopenPrompt?.((url) => {
+      handleReopenPrompt(url);
+    });
+
     window.electronAPI.signalProtocolReady();
 
     return () => {
@@ -213,8 +472,22 @@ export const App: React.FC = () => {
       unsubscribeOpenManage?.();
       unsubscribeToast?.();
       unsubscribeNavConfirm?.();
+      unsubscribeReopenPrompt?.();
     };
   }, []);
+
+  const handleReopenPrompt = async (url: string) => {
+    if (protocolClosingTimerRef.current) {
+      clearTimeout(protocolClosingTimerRef.current);
+    }
+    setIsProtocolClosing(false);
+    const accs = await window.electronAPI.getAccounts();
+    const loggedInAccs = accs.filter((a) => a.loggedIn);
+    const promptList = loggedInAccs.length > 0 ? loggedInAccs : accs;
+    setPromptAccounts(promptList);
+    setPendingUrl(url);
+    window.electronAPI.toggleProtocolPrompt(true);
+  };
 
   const handleToggleSettings = () => {
     setIsSettingsOpen((prev) => {
@@ -246,11 +519,29 @@ export const App: React.FC = () => {
       ...globalSettings,
       disclaimerAccepted: true
     };
-    const success = await window.electronAPI.saveGlobalSettings(updatedSettings);
-    if (success) {
-      setGlobalSettings(updatedSettings);
+    setIsDisclaimerClosing(true);
+    if (disclaimerClosingTimerRef.current) clearTimeout(disclaimerClosingTimerRef.current);
+    disclaimerClosingTimerRef.current = setTimeout(async () => {
+      const success = await window.electronAPI.saveGlobalSettings(updatedSettings);
+      if (success) {
+        setGlobalSettings(updatedSettings);
+        setShowDisclaimerForce(false);
+        setIsDisclaimerClosing(false);
+        window.electronAPI.toggleDisclaimer(false);
+      } else {
+        setIsDisclaimerClosing(false);
+      }
+    }, 180);
+  };
+
+  const handleCloseDisclaimerForce = () => {
+    setIsDisclaimerClosing(true);
+    if (disclaimerClosingTimerRef.current) clearTimeout(disclaimerClosingTimerRef.current);
+    disclaimerClosingTimerRef.current = setTimeout(() => {
+      setShowDisclaimerForce(false);
+      setIsDisclaimerClosing(false);
       window.electronAPI.toggleDisclaimer(false);
-    }
+    }, 180);
   };
 
   const handleDeclineDisclaimer = () => {
@@ -400,189 +691,16 @@ export const App: React.FC = () => {
         }}
       />
 
-      {/* Custom Protocol Account Switcher Prompt */}
-      {pendingUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm select-text font-sans p-4">
-          <div
-            ref={protocolPromptRef}
-            className="bg-[#222e35] border border-[#2c3943] w-[540px] max-w-[94vw] max-h-[90vh] rounded-xl shadow-2xl overflow-hidden flex flex-col p-6 animate-in fade-in duration-200"
-          >
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-[#e9edef] text-sm font-semibold">Open WhatsApp Link</h2>
-              <button
-                onClick={() => {
-                  if (pendingUrl) {
-                    showToast('Opening link cancelled', pendingUrl);
-                  }
-                  setPendingUrl(null);
-                  window.electronAPI.toggleProtocolPrompt(false);
-                }}
-                disabled={isHandlingProtocol}
-                onMouseDown={(e) => e.preventDefault()}
-                tabIndex={-1}
-                className="text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none disabled:opacity-50"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Clear High-Visibility Warning Banner About Page Reload */}
-            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-[#f15c6d]/10 border border-[#f15c6d]/30 text-[#f15c6d] text-xs mb-3.5 select-text">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-[#f15c6d]" />
-              <div className="leading-relaxed">
-                <span className="font-semibold text-[#f15c6d]">Page will be reloaded:</span> Opening this external link will refresh the selected WhatsApp account. Any unsaved drafts or active calls may be lost unless saved. If a confirmation prompt appears, you can choose whether to reload (without losing this link) or stay (cancel).
-              </div>
-            </div>
-
-            {/* Formatted Link Preview Card */}
-            {(() => {
-              const parsed = parseProtocolUrl(pendingUrl);
-              return (
-                <div className="bg-[#111b21] border border-[#2c3943] rounded-lg p-3.5 mb-3.5 text-left">
-                  <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-[#202c33]">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {parsed.type === 'group_invite' ? (
-                        <Users className="w-4 h-4 text-[#00a884] shrink-0" />
-                      ) : parsed.type === 'send_message' ? (
-                        <MessageSquare className="w-4 h-4 text-[#00a884] shrink-0" />
-                      ) : (
-                        <LinkIcon className="w-4 h-4 text-[#8696a0] shrink-0" />
-                      )}
-                      <span className="text-[#e9edef] text-xs font-semibold truncate">{parsed.title}</span>
-                    </div>
-                    <span
-                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${parsed.type === 'unknown'
-                        ? 'bg-[#202c33] text-[#8696a0] border border-[#2a3942]'
-                        : 'bg-[#00a884]/15 text-[#00a884] border border-[#00a884]/30'
-                        }`}
-                    >
-                      {parsed.badge}
-                    </span>
-                  </div>
-
-                  {parsed.type === 'group_invite' && (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-[#8696a0] text-[11px] shrink-0">Invite Code:</span>
-                        <code className="text-[#00a884] bg-[#202c33] px-2 py-0.5 rounded text-[11px] font-mono border border-[#2c3943] break-all select-all">
-                          {parsed.code}
-                        </code>
-                      </div>
-                      <p className="text-[#8696a0] text-[11px] leading-relaxed">
-                        Opens the group invite preview to let you join this group chat.
-                      </p>
-                    </div>
-                  )}
-
-                  {parsed.type === 'send_message' && (
-                    <div className="space-y-2.5">
-                      {parsed.phone && (
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="text-[#8696a0] text-[11px] shrink-0">Recipient:</span>
-                          <span className="text-[#e9edef] text-xs font-semibold font-mono">
-                            {parsed.phone.startsWith('+') ? parsed.phone : `+${parsed.phone}`}
-                          </span>
-                        </div>
-                      )}
-                      {parsed.text ? (
-                        <div className="space-y-1">
-                          <span className="text-[#8696a0] text-[11px] font-medium">Prefilled Message:</span>
-                          <div className="bg-[#202c33] p-3 rounded-lg border border-[#2c3943] max-h-48 overflow-y-auto">
-                            <WhatsAppFormattedText text={parsed.text} className="text-[#d1d7db] text-xs" />
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-[#8696a0] text-[11px] leading-relaxed">
-                          Opens a direct chat with the recipient.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {parsed.type === 'unknown' && (
-                    <div className="space-y-1">
-                      <span className="text-[#8696a0] text-[11px]">Requested URI:</span>
-                      <div className="font-mono text-[11px] text-[#8696a0] bg-[#202c33] p-2.5 rounded border border-[#2c3943] break-all select-all max-h-28 overflow-y-auto">
-                        {parsed.rawUrl}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            <p className="text-[#8696a0] text-xs leading-relaxed mb-2.5">
-              Select which WhatsApp account you'd like to open this link in:
-            </p>
-
-            <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
-              {promptAccounts.map((account) => (
-                <button
-                  key={account.id}
-                  onClick={async () => {
-                    if (isHandlingProtocol) return;
-                    setIsHandlingProtocol(true);
-                    try {
-                      const res = await window.electronAPI.handleProtocolUrl(account.id, pendingUrl);
-                      if (res && res.success) {
-                        showToast(`Opening link in ${account.name}...`, pendingUrl);
-                        setPendingUrl(null);
-                        window.electronAPI.toggleProtocolPrompt(false);
-                      } else if (res && res.cancelled) {
-                        showToast('Opening link cancelled', pendingUrl);
-                        console.log('User cancelled page unload. Keeping pending URL prompt open.');
-                      }
-                    } finally {
-                      setIsHandlingProtocol(false);
-                    }
-                  }}
-                  disabled={isHandlingProtocol}
-                  onMouseDown={(e) => e.preventDefault()}
-                  className={`flex items-center gap-3 p-3 bg-[#111b21] hover:bg-[#202c33] border border-[#2c3943] hover:border-[#00a884] rounded-lg text-left transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none ${isHandlingProtocol ? 'opacity-60 cursor-wait' : ''
-                    }`}
-                >
-                  <div className="w-8 h-8 rounded-full bg-[#00a884]/10 border border-[#00a884]/20 flex items-center justify-center text-[#00a884] font-semibold text-xs shrink-0">
-                    {account.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[#e9edef] text-xs font-semibold truncate">{account.name}</div>
-                    <div className="text-[#8696a0] text-[10px] truncate">
-                      {account.loggedIn ? 'Logged in' : 'Not logged in'}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-[#2c3943]">
-              <span className="text-[10px] text-[#8696a0] truncate">
-                Default account can be set in Settings &gt; Manage Accounts
-              </span>
-              <button
-                onClick={() => {
-                  if (pendingUrl) {
-                    showToast('Opening link cancelled', pendingUrl);
-                  }
-                  setPendingUrl(null);
-                  window.electronAPI.toggleProtocolPrompt(false);
-                }}
-                disabled={isHandlingProtocol}
-                onMouseDown={(e) => e.preventDefault()}
-                className="px-4 py-2 text-xs font-semibold text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none disabled:opacity-50 shrink-0"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Legal Disclaimer Modal Overlay */}
-      {showDisclaimerOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b141a]/95 select-text font-sans p-4 bg-[radial-gradient(ellipse_at_center,rgba(0,168,132,0.12),transparent_70%)] animate-in fade-in duration-300">
+      {(showDisclaimerOverlay || isDisclaimerClosing) && (
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-[#0b141a]/95 select-text font-sans p-4 bg-[radial-gradient(ellipse_at_center,rgba(0,168,132,0.12),transparent_70%)] ${
+          isDisclaimerClosing ? 'win10-backdrop-exit' : 'win10-backdrop-enter'
+        }`}>
           <div
             ref={disclaimerRef}
-            className="bg-[#222e35]/95 backdrop-blur-md border border-[#2c3943]/80 w-full max-w-2xl rounded-2xl shadow-2xl p-7 flex flex-col max-h-[90vh] overflow-hidden transform scale-100 animate-in zoom-in-95 duration-200"
+            className={`bg-[#222e35]/95 backdrop-blur-md border border-[#2c3943]/80 w-full max-w-2xl rounded-2xl shadow-2xl p-7 flex flex-col max-h-[90vh] overflow-hidden ${
+              isDisclaimerClosing ? 'win10-window-exit' : 'win10-window-enter'
+            }`}
           >
             <div className="text-center">
               <div className="w-16 h-16 rounded-2xl bg-[#111b21]/50 border border-[#2c3943]/60 flex items-center justify-center mx-auto mb-3 overflow-hidden p-2.5 shadow-lg">
@@ -674,10 +792,7 @@ export const App: React.FC = () => {
             ) : (
               <div className="flex justify-end border-t border-[#2c3943]/60 pt-4">
                 <button
-                  onClick={() => {
-                    setShowDisclaimerForce(false);
-                    window.electronAPI.toggleDisclaimer(false);
-                  }}
+                  onClick={handleCloseDisclaimerForce}
                   onMouseDown={(e) => e.preventDefault()}
                   className="px-6 py-2 rounded-lg text-xs font-semibold bg-[#00a884] hover:bg-[#00c298] text-[#111b21] transition-all duration-200 shadow-md cursor-pointer focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
                 >
@@ -689,40 +804,347 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* Toast Notifications */}
-      {toasts.length > 0 && (
-        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm pointer-events-auto">
-          {toasts.map((toast) => {
-            const isCancelled = toast.message.toLowerCase().includes('cancel');
-            return (
-              <div
-                key={toast.id}
-                className={`flex items-center gap-3 p-3.5 bg-[#1f2c34] border ${isCancelled ? 'border-[#f15c6d]/40' : 'border-[#00a884]/40'
-                  } text-[#e9edef] rounded-xl shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-3 duration-200`}
+      {/* Custom Protocol Account Switcher Prompt - rendered on top of all open modals */}
+      {(pendingUrl || isProtocolClosing) && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isHandlingProtocol) {
+              handleCloseProtocolPrompt(true);
+            }
+          }}
+          className={`fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm select-text font-sans p-4 ${
+            isProtocolClosing ? 'win10-backdrop-exit' : 'win10-backdrop-enter'
+          }`}
+        >
+          <div
+            ref={protocolPromptRef}
+            className={`bg-[#222e35] border border-[#2c3943] w-[540px] max-w-[94vw] max-h-[90vh] rounded-xl shadow-2xl overflow-hidden flex flex-col p-6 ${
+              isProtocolClosing ? 'win10-window-exit' : 'win10-window-enter'
+            }`}
+          >
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-[#e9edef] text-sm font-semibold">Open WhatsApp Link</h2>
+              <button
+                onClick={() => handleCloseProtocolPrompt(true)}
+                disabled={isHandlingProtocol}
+                onMouseDown={(e) => e.preventDefault()}
+                tabIndex={-1}
+                className="text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none disabled:opacity-50"
               >
-                <div
-                  className={`p-2 ${isCancelled ? 'bg-[#f15c6d]/20 text-[#f15c6d]' : 'bg-[#00a884]/20 text-[#00a884]'
-                    } rounded-lg shrink-0`}
-                >
-                  {isCancelled ? <XCircle className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold leading-tight text-[#e9edef]">{toast.message}</p>
-                  {toast.url && (
-                    <p className="text-[10px] text-[#8696a0] truncate mt-0.5" title={toast.url}>
-                      {toast.url}
-                    </p>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Clear High-Visibility Warning Banner About Page Reload */}
+            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-[#f15c6d]/10 border border-[#f15c6d]/30 text-[#f15c6d] text-xs mb-3.5 select-text">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-[#f15c6d]" />
+              <div className="leading-relaxed">
+                <span className="font-semibold text-[#f15c6d]">Page will be reloaded:</span> Opening this external link will refresh the selected WhatsApp account. Any unsaved drafts or active calls may be lost unless saved. If a confirmation prompt appears, you can choose whether to reload (without losing this link) or stay (cancel).
+              </div>
+            </div>
+
+            {/* Formatted Link Preview Card */}
+            {pendingUrl && (() => {
+              const parsed = parseProtocolUrl(pendingUrl);
+              return (
+                <div className="bg-[#111b21] border border-[#2c3943] rounded-lg p-3.5 mb-3.5 text-left">
+                  <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-[#202c33]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {parsed.type === 'group_invite' ? (
+                        <Users className="w-4 h-4 text-[#00a884] shrink-0" />
+                      ) : parsed.type === 'send_message' ? (
+                        <MessageSquare className="w-4 h-4 text-[#00a884] shrink-0" />
+                      ) : (
+                        <LinkIcon className="w-4 h-4 text-[#8696a0] shrink-0" />
+                      )}
+                      <span className="text-[#e9edef] text-xs font-semibold truncate">
+                        {parsed.type === 'group_invite' ? 'Join Group/Community' : parsed.title}
+                      </span>
+                    </div>
+                    <span
+                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${parsed.type === 'unknown'
+                        ? 'bg-[#202c33] text-[#8696a0] border border-[#2a3942]'
+                        : 'bg-[#00a884]/15 text-[#00a884] border border-[#00a884]/30'
+                        }`}
+                    >
+                      {parsed.badge}
+                    </span>
+                  </div>
+
+                  {parsed.type === 'group_invite' && (
+                    <div className="space-y-3">
+                      {isLoadingGroupDetails && (
+                        <div className="flex items-center gap-2 p-2 bg-[#202c33]/50 rounded-lg border border-[#2c3943]/60 text-xs text-[#8696a0]">
+                          <div className="w-3.5 h-3.5 rounded-full border-2 border-[#00a884] border-t-transparent animate-spin shrink-0" />
+                          <span>Fetching group details...</span>
+                        </div>
+                      )}
+
+                      {groupDetails?.name && (
+                        <div className="flex items-center gap-3.5 p-3 bg-[#202c33] rounded-lg border border-[#2c3943]">
+                          {groupDetails.iconUrl ? (
+                            <div
+                              onClick={() => openAvatarModal(groupDetails.iconUrl!, groupDetails.name)}
+                              className="relative group/avatar shrink-0 cursor-zoom-in rounded-full"
+                              title="Click to enlarge display picture"
+                            >
+                              <img
+                                src={groupDetails.iconUrl}
+                                alt={groupDetails.name}
+                                className="w-13 h-13 rounded-full object-cover border-2 border-[#2a3942] group-hover/avatar:border-[#00a884] transition-all shadow-md"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  const fallback = e.currentTarget.parentElement?.nextElementSibling as HTMLElement | null;
+                                  if (fallback) fallback.style.display = 'flex';
+                                }}
+                              />
+                              <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center transition-opacity text-white">
+                                <Maximize2 className="w-3.5 h-3.5" />
+                              </div>
+                            </div>
+                          ) : null}
+                          <div
+                            className="w-13 h-13 rounded-full bg-[#00a884]/20 border border-[#00a884]/30 items-center justify-center text-[#00a884] shrink-0"
+                            style={{ display: groupDetails.iconUrl ? 'none' : 'flex' }}
+                          >
+                            <Users className="w-6 h-6" />
+                          </div>
+                          <div className="flex-1 min-w-0 flex flex-col justify-center">
+                            <h3 className="text-[#e9edef] text-sm font-semibold leading-snug break-words">
+                              {groupDetails.name}
+                            </h3>
+                            {groupDetails.description && groupDetails.description !== groupDetails.name && (
+                              <p className="text-[#8696a0] text-[11px] line-clamp-2 mt-1 leading-relaxed">
+                                {groupDetails.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-[#8696a0] text-[11px] shrink-0">Invite Code:</span>
+                        <code className="text-[#00a884] bg-[#202c33] px-2 py-0.5 rounded text-[11px] font-mono border border-[#2c3943] break-all select-all">
+                          {parsed.code}
+                        </code>
+                      </div>
+
+                      <p className="text-[#8696a0] text-[11px] leading-relaxed">
+                        Opens the group invite preview to let you join this group chat.
+                      </p>
+                    </div>
+                  )}
+
+                  {parsed.type === 'send_message' && (
+                    <div className="space-y-2.5">
+                      {parsed.phone && (
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-[#8696a0] text-[11px] shrink-0">Recipient:</span>
+                          <span className="text-[#e9edef] text-xs font-semibold font-mono">
+                            {parsed.phone.startsWith('+') ? parsed.phone : `+${parsed.phone}`}
+                          </span>
+                        </div>
+                      )}
+                      {parsed.text ? (
+                        <div className="space-y-1">
+                          <span className="text-[#8696a0] text-[11px] font-medium">Prefilled Message:</span>
+                          <div className="bg-[#202c33] p-3 rounded-lg border border-[#2c3943] max-h-48 overflow-y-auto">
+                            <WhatsAppFormattedText text={parsed.text} className="text-[#d1d7db] text-xs" />
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-[#8696a0] text-[11px] leading-relaxed">
+                          Opens a direct chat with the recipient.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {parsed.type === 'unknown' && (
+                    <div className="space-y-1">
+                      <span className="text-[#8696a0] text-[11px]">Requested URI:</span>
+                      <div className="font-mono text-[11px] text-[#8696a0] bg-[#202c33] p-2.5 rounded border border-[#2c3943] break-all select-all max-h-28 overflow-y-auto">
+                        {parsed.rawUrl}
+                      </div>
+                    </div>
                   )}
                 </div>
+              );
+            })()}
+
+            <p className="text-[#8696a0] text-xs leading-relaxed mb-2.5">
+              Select which WhatsApp account you'd like to open this link in:
+            </p>
+
+            <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
+              {promptAccounts.map((account) => (
                 <button
-                  onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
-                  className="text-[#8696a0] hover:text-[#e9edef] transition-colors p-1 rounded-md hover:bg-[#2a3942]"
+                  key={account.id}
+                  onClick={async () => {
+                    if (!pendingUrl || isHandlingProtocol) return;
+                    const urlToOpen = pendingUrl;
+                    setIsHandlingProtocol(true);
+                    try {
+                      const res = await window.electronAPI.handleProtocolUrl(account.id, urlToOpen);
+                      if (res && res.success) {
+                        showToast(`Opening link in ${account.name}...`, urlToOpen);
+                        handleCloseProtocolPrompt(false);
+                      } else if (res && res.cancelled) {
+                        showToast('Opening link cancelled', urlToOpen);
+                        console.log('User cancelled page unload. Keeping pending URL prompt open.');
+                      }
+                    } finally {
+                      setIsHandlingProtocol(false);
+                    }
+                  }}
+                  disabled={isHandlingProtocol}
+                  onMouseDown={(e) => e.preventDefault()}
+                  className={`flex items-center gap-3 p-3 bg-[#111b21] hover:bg-[#202c33] border border-[#2c3943] hover:border-[#00a884] rounded-lg text-left transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none ${isHandlingProtocol ? 'opacity-60 cursor-wait' : ''
+                    }`}
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <div className="w-8 h-8 rounded-full bg-[#00a884]/10 border border-[#00a884]/20 flex items-center justify-center text-[#00a884] font-semibold text-xs shrink-0">
+                    {account.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[#e9edef] text-xs font-semibold truncate">{account.name}</div>
+                    <div className="text-[#8696a0] text-[10px] truncate">
+                      {account.loggedIn ? 'Logged in' : 'Not logged in'}
+                    </div>
+                  </div>
                 </button>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-[#2c3943]">
+              <span className="text-[10px] text-[#8696a0] truncate">
+                Default account can be set in Settings &gt; Manage Accounts
+              </span>
+              <button
+                onClick={() => handleCloseProtocolPrompt(true)}
+                disabled={isHandlingProtocol}
+                onMouseDown={(e) => e.preventDefault()}
+                className="px-4 py-2 text-xs font-semibold text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none disabled:opacity-50 shrink-0"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notifications */}
+      {toasts.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-sm pointer-events-auto">
+          {toasts.map((toast) => (
+            <ToastCard
+              key={toast.id}
+              toast={toast}
+              onDismiss={dismissToast}
+              onReopen={handleReopenPrompt}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Nested Avatar / Display Picture Modal with Scroll Zoom & Escape */}
+      {avatarModalData && (
+        <div
+          className={`fixed inset-0 z-[70] bg-black/90 backdrop-blur-md select-none overflow-hidden ${
+            isAvatarClosing ? 'modal-fade-exit' : 'modal-fade-enter'
+          }`}
+        >
+          {/* Top header bar */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-0 left-0 right-0 h-14 px-6 flex items-center justify-between z-20 bg-black/40 backdrop-blur-sm border-b border-white/5 pointer-events-auto"
+          >
+            <div className="flex items-center gap-2 max-w-[70%]">
+              <span className="text-[#e9edef] text-sm font-semibold truncate">
+                {avatarModalData.title}
+              </span>
+              <span className="text-[10px] text-[#8696a0] bg-[#202c33] px-2 py-0.5 rounded-full border border-[#2c3943]">
+                {Math.round(avatarZoom * 100)}%
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-[#8696a0] mr-2 hidden sm:inline-block">
+                Scroll to zoom • Drag to pan • Esc to close
+              </span>
+              {avatarZoom > 1 && (
+                <button
+                  onClick={() => {
+                    setAvatarZoom(1);
+                    setAvatarPan({ x: 0, y: 0 });
+                  }}
+                  className="p-1.5 text-[#8696a0] hover:text-[#e9edef] rounded-lg bg-[#202c33] hover:bg-[#2a3942] border border-[#2c3943] transition-colors"
+                  title="Reset Zoom"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={closeAvatarModal}
+                className="p-1.5 text-[#8696a0] hover:text-[#e9edef] rounded-lg bg-[#202c33] hover:bg-[#2a3942] border border-[#2c3943] transition-colors"
+                title="Close (Esc)"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Zoomable Image Viewport - fills the whole screen below top bar without silhouette confinement */}
+          <div
+            ref={imageViewportRef}
+            onClick={(e) => {
+              // Only close if user clicked directly on the dark backdrop and didn't drag
+              if (e.target === e.currentTarget && dragDistanceRef.current < 5) {
+                closeAvatarModal();
+              }
+            }}
+            onMouseDown={(e) => {
+              dragDistanceRef.current = 0;
+              if (avatarZoom <= 1) return;
+              e.preventDefault();
+              setIsAvatarDragging(true);
+              avatarDragStart.current = {
+                x: e.clientX,
+                y: e.clientY,
+                startPanX: avatarPan.x,
+                startPanY: avatarPan.y,
+              };
+            }}
+            onMouseMove={(e) => {
+              if (!isAvatarDragging) return;
+              const dx = e.clientX - avatarDragStart.current.x;
+              const dy = e.clientY - avatarDragStart.current.y;
+              dragDistanceRef.current += Math.hypot(dx, dy);
+              setAvatarPan({
+                x: avatarDragStart.current.startPanX + dx,
+                y: avatarDragStart.current.startPanY + dy,
+              });
+            }}
+            onMouseUp={() => setIsAvatarDragging(false)}
+            onMouseLeave={() => setIsAvatarDragging(false)}
+            onDoubleClick={() => {
+              setAvatarZoom(1);
+              setAvatarPan({ x: 0, y: 0 });
+            }}
+            className={`absolute inset-0 top-14 overflow-hidden flex items-center justify-center select-none ${
+              avatarZoom > 1 ? (isAvatarDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in'
+            }`}
+          >
+            <img
+              src={avatarModalData.url}
+              alt={avatarModalData.title}
+              draggable={false}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                transform: `translate(${avatarPan.x}px, ${avatarPan.y}px) scale(${avatarZoom})`,
+                transition: isAvatarDragging ? 'none' : 'transform 0.12s ease-out',
+              }}
+              className="max-h-[calc(100vh-4rem)] max-w-[calc(100vw-2rem)] object-contain shadow-2xl pointer-events-auto select-none rounded-lg"
+            />
+          </div>
         </div>
       )}
     </div>
