@@ -104,21 +104,24 @@ interface Window {
         sbox.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
       } catch (e) {}
 
+      const searchContainer = sbox.closest('[data-testid="chat-list-search"], #side') || sbox.parentElement?.parentElement || document.getElementById('side');
+      const scope = searchContainer || document;
+
       const cancelIcon = (
-        document.querySelector('span[data-icon="x-alt"]') ||
-        document.querySelector('span[data-icon="x"]') ||
-        document.querySelector('span[data-icon="back"]') ||
-        document.querySelector('span[data-icon="arrow-back"]')
+        scope.querySelector('span[data-icon="x-alt"]') ||
+        scope.querySelector('span[data-icon="x"]') ||
+        scope.querySelector('span[data-icon="back"]') ||
+        scope.querySelector('span[data-icon="arrow-back"]')
       );
       if (cancelIcon) {
         const clickTarget = cancelIcon.closest('button') || cancelIcon;
         triggerEvents(clickTarget, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
-      } else {
-        const cancelBtn = (
-          document.querySelector('button[aria-label*="Cancel" i]') ||
-          document.querySelector('button[aria-label*="Clear" i]') ||
-          document.querySelector('button[aria-label*="Back" i]')
-        );
+      } else if (searchContainer) {
+        const cancelBtn = Array.from(searchContainer.querySelectorAll('button[aria-label], [role="button"][aria-label]')).find((btn) => {
+          const label = (btn.getAttribute('aria-label') || '').toLowerCase();
+          if (label.includes('feedback')) return false;
+          return /\b(cancel|clear|back|close|cerrar|cancelar)\b/i.test(label);
+        });
         if (cancelBtn) {
           triggerEvents(cancelBtn, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
         }
@@ -292,16 +295,22 @@ interface Window {
       }
 
       function getSendButton(): Element | null {
+        const footer = document.querySelector('footer, #main footer');
+        const scope = footer || document;
         const icon = (
-          document.querySelector('[data-icon="wds-ic-send-filled"]') ||
-          document.querySelector('span[data-icon="send"]')
+          scope.querySelector('[data-icon="wds-ic-send-filled"]') ||
+          scope.querySelector('span[data-icon="send"]')
         );
         if (icon) {
           return icon.closest('button, [role="button"]') || icon;
         }
-        const candidates = Array.from(document.querySelectorAll(
+        const candidates = Array.from(scope.querySelectorAll(
           'button[aria-label], [role="button"][aria-label]'
-        )).filter((x) => /^(send|enviar)/i.test(x.getAttribute('aria-label') || '') && vis(x));
+        )).filter((x) => {
+          const label = (x.getAttribute('aria-label') || '').toLowerCase();
+          if (label.includes('feedback')) return false;
+          return /^(send|enviar)\b/i.test(label) && vis(x);
+        });
         return candidates.length ? candidates[candidates.length - 1] : null;
       }
 
