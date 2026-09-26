@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell } from 'lucide-react';
-import type { GlobalSettings } from '../../../preload';
+import type { GlobalSettings, AccountInfo } from '../../../preload';
 
 interface GeneralSettingsPageProps {
   globalSettings: GlobalSettings | null;
   handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<void> | void;
+  accounts?: AccountInfo[];
 }
 
 const DOMAINS_PER_PAGE = 5;
@@ -20,6 +21,7 @@ const PRESET_DISMISSAL_TIMES = [
 export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
   globalSettings,
   handleToggleGlobalSetting,
+  accounts = [],
 }) => {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -395,6 +397,29 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
               className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
             />
           </label>
+
+          {accounts.length > 0 && (
+            <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors mt-2">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-[#e9edef] text-[11px]">Default Account for WhatsApp Links</div>
+                <div className="text-[10px] text-[#8696a0] leading-normal">
+                  Select which account automatically opens when clicking external whatsapp:// links
+                </div>
+              </div>
+              <select
+                value={globalSettings?.defaultProtocolAccountId || 'ask'}
+                onChange={(e) => handleToggleGlobalSetting('defaultProtocolAccountId', e.target.value)}
+                className="bg-[#202c33] text-[#e9edef] px-2.5 py-1.5 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] cursor-pointer ml-2"
+              >
+                <option value="ask">Ask Everytime</option>
+                {accounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="mt-4 p-3.5 bg-[#111b21] border border-[#222d34] rounded-lg space-y-3">
             <div className="flex items-center justify-between">

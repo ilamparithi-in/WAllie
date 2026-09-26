@@ -10,7 +10,7 @@ import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectC
 import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize, unloadAccountLogic, loadAccountLogic, notifyAccountListChanged } from './window';
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry, closeDbusNotificationByTag, closeNotificationByContact } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS, AccountSettings } from '../shared/types';
-import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus, getAccountForWebContents } from './utils';
+import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus, getAccountForWebContents, showAppToast } from './utils';
 import { downloadManager } from './downloads';
 
 const execAsync = promisify(exec);
@@ -711,6 +711,12 @@ export function registerIpcHandlers() {
   ipcMain.handle('notification:clear-history', (_event, options?: any) => {
     clearNotificationHistoryCache(options);
     return true;
+  });
+
+  ipcMain.on('toast:show', (_event, payload: { message: string; url?: string }) => {
+    if (payload?.message) {
+      showAppToast(payload.message, payload.url, true);
+    }
   });
 
   // Custom Protocol URL Handlers

@@ -653,6 +653,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                     <GeneralSettingsPage
                       globalSettings={globalSettings}
                       handleToggleGlobalSetting={handleToggleGlobalSetting}
+                      accounts={accounts}
                     />
                   )}
 

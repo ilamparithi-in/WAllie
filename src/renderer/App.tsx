@@ -29,6 +29,22 @@ export const App: React.FC = () => {
   const [settingsInitialPage, setSettingsInitialPage] = useState<'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads' | undefined>(undefined);
   const [settingsInitialAccountId, setSettingsInitialAccountId] = useState<string | undefined>(undefined);
   const [toasts, setToasts] = useState<{ id: number; message: string; url?: string }[]>([]);
+  const isNavConfirmActiveRef = useRef(false);
+  const deferredToastsRef = useRef<{ message: string; url?: string }[]>([]);
+
+  const showToast = (message: string, url?: string) => {
+    if (isNavConfirmActiveRef.current) {
+      console.log('Nav confirmation is open. Deferring toast:', message);
+      deferredToastsRef.current.push({ message, url });
+      return;
+    }
+    const toastId = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id: toastId, message, url }]);
+    window.electronAPI?.showToast?.(message, url);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== toastId));
+    }, 4500);
+  };
 
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [activeAccountId, setActiveAccountId] = useState<string>('');
@@ -124,23 +140,34 @@ export const App: React.FC = () => {
     const unsubscribeProtocol = window.electronAPI.onProtocolReceived(async (url) => {
       console.log('Renderer received custom protocol URL:', url);
       const accs = await window.electronAPI.getAccounts();
-      const loggedInAccs = accs.filter((a) => a.loggedIn);
-      if (loggedInAccs.length <= 1) {
-        const targetId = loggedInAccs.length === 1
-          ? loggedInAccs[0].id
-          : (await window.electronAPI.getActiveAccountId() || accs[0]?.id || 'acc_default');
-        const res = await window.electronAPI.handleProtocolUrl(targetId, url);
-        if (res && res.cancelled) {
-          // If cancelled by nav confirmation, keep the prompt open so URI is not lost!
-          setPromptAccounts(accs.length > 0 ? accs : loggedInAccs);
-          setPendingUrl(url);
-          window.electronAPI.toggleProtocolPrompt(true);
+      const currentGlobal = globalSettingsRef.current;
+      const defaultAccountId = currentGlobal?.defaultProtocolAccountId;
+
+      // If a specific default account is set and valid (and not 'ask'):
+      if (defaultAccountId && defaultAccountId !== 'ask') {
+        const targetAcc = accs.find((a) => a.id === defaultAccountId);
+        if (targetAcc) {
+          const res = await window.electronAPI.handleProtocolUrl(targetAcc.id, url);
+          if (res && res.success) {
+            showToast(`Opening link in ${targetAcc.name}...`, url);
+          } else if (res && res.cancelled) {
+            showToast('Opening link cancelled', url);
+            // Open prompt so the user hasn't lost the link and can choose
+            const loggedInAccs = accs.filter((a) => a.loggedIn);
+            setPromptAccounts(loggedInAccs.length > 0 ? loggedInAccs : accs);
+            setPendingUrl(url);
+            window.electronAPI.toggleProtocolPrompt(true);
+          }
+          return;
         }
-      } else {
-        setPromptAccounts(loggedInAccs);
-        setPendingUrl(url);
-        window.electronAPI.toggleProtocolPrompt(true);
       }
+
+      // Default behavior ("Ask Everytime"):
+      const loggedInAccs = accs.filter((a) => a.loggedIn);
+      const promptList = loggedInAccs.length > 0 ? loggedInAccs : accs;
+      setPromptAccounts(promptList);
+      setPendingUrl(url);
+      window.electronAPI.toggleProtocolPrompt(true);
     });
 
     const unsubscribeOpenManage = window.electronAPI.onOpenManageAccounts((accountId) => {
@@ -151,11 +178,27 @@ export const App: React.FC = () => {
     });
 
     const unsubscribeToast = window.electronAPI.onToastShow((data) => {
+      if (isNavConfirmActiveRef.current) {
+        deferredToastsRef.current.push({ message: data.message, url: data.url });
+        return;
+      }
       const toastId = Date.now() + Math.random();
-      setToasts((prev) => [...prev, { id: toastId, ...data }]);
+      setToasts((prev) => [...prev, { id: toastId, message: data.message, url: data.url }]);
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== toastId));
       }, 4500);
+    });
+
+    const unsubscribeNavConfirm = window.electronAPI.onNavConfirmationActive?.((isActive) => {
+      isNavConfirmActiveRef.current = isActive;
+      if (!isActive && deferredToastsRef.current.length > 0) {
+        // Nav confirmation was accepted or cancelled — flush deferred toasts
+        const queued = [...deferredToastsRef.current];
+        deferredToastsRef.current = [];
+        queued.forEach((item) => {
+          showToast(item.message, item.url);
+        });
+      }
     });
 
     window.electronAPI.signalProtocolReady();
@@ -169,6 +212,7 @@ export const App: React.FC = () => {
       unsubscribeProtocol?.();
       unsubscribeOpenManage?.();
       unsubscribeToast?.();
+      unsubscribeNavConfirm?.();
     };
   }, []);
 
@@ -367,6 +411,9 @@ export const App: React.FC = () => {
               <h2 className="text-[#e9edef] text-sm font-semibold">Open WhatsApp Link</h2>
               <button
                 onClick={() => {
+                  if (pendingUrl) {
+                    showToast('Opening link cancelled', pendingUrl);
+                  }
                   setPendingUrl(null);
                   window.electronAPI.toggleProtocolPrompt(false);
                 }}
@@ -383,7 +430,7 @@ export const App: React.FC = () => {
             <div className="flex items-start gap-2.5 p-3 rounded-lg bg-[#f15c6d]/10 border border-[#f15c6d]/30 text-[#f15c6d] text-xs mb-3.5 select-text">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-[#f15c6d]" />
               <div className="leading-relaxed">
-                <span className="font-semibold text-[#f15c6d]">Page will be reloaded:</span> Opening this external link will refresh the selected WhatsApp account. Any unsaved drafts or active calls may be lost unless saved. If a confirmation prompt appears, you can choose whether to reload or stay without losing this link.
+                <span className="font-semibold text-[#f15c6d]">Page will be reloaded:</span> Opening this external link will refresh the selected WhatsApp account. Any unsaved drafts or active calls may be lost unless saved. If a confirmation prompt appears, you can choose whether to reload (without losing this link) or stay (cancel).
               </div>
             </div>
 
@@ -404,11 +451,10 @@ export const App: React.FC = () => {
                       <span className="text-[#e9edef] text-xs font-semibold truncate">{parsed.title}</span>
                     </div>
                     <span
-                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${
-                        parsed.type === 'unknown'
-                          ? 'bg-[#202c33] text-[#8696a0] border border-[#2a3942]'
-                          : 'bg-[#00a884]/15 text-[#00a884] border border-[#00a884]/30'
-                      }`}
+                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${parsed.type === 'unknown'
+                        ? 'bg-[#202c33] text-[#8696a0] border border-[#2a3942]'
+                        : 'bg-[#00a884]/15 text-[#00a884] border border-[#00a884]/30'
+                        }`}
                     >
                       {parsed.badge}
                     </span>
@@ -479,9 +525,11 @@ export const App: React.FC = () => {
                     try {
                       const res = await window.electronAPI.handleProtocolUrl(account.id, pendingUrl);
                       if (res && res.success) {
+                        showToast(`Opening link in ${account.name}...`, pendingUrl);
                         setPendingUrl(null);
                         window.electronAPI.toggleProtocolPrompt(false);
                       } else if (res && res.cancelled) {
+                        showToast('Opening link cancelled', pendingUrl);
                         console.log('User cancelled page unload. Keeping pending URL prompt open.');
                       }
                     } finally {
@@ -490,9 +538,8 @@ export const App: React.FC = () => {
                   }}
                   disabled={isHandlingProtocol}
                   onMouseDown={(e) => e.preventDefault()}
-                  className={`flex items-center gap-3 p-3 bg-[#111b21] hover:bg-[#202c33] border border-[#2c3943] hover:border-[#00a884] rounded-lg text-left transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none ${
-                    isHandlingProtocol ? 'opacity-60 cursor-wait' : ''
-                  }`}
+                  className={`flex items-center gap-3 p-3 bg-[#111b21] hover:bg-[#202c33] border border-[#2c3943] hover:border-[#00a884] rounded-lg text-left transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none ${isHandlingProtocol ? 'opacity-60 cursor-wait' : ''
+                    }`}
                 >
                   <div className="w-8 h-8 rounded-full bg-[#00a884]/10 border border-[#00a884]/20 flex items-center justify-center text-[#00a884] font-semibold text-xs shrink-0">
                     {account.name.charAt(0).toUpperCase()}
@@ -507,15 +554,21 @@ export const App: React.FC = () => {
               ))}
             </div>
 
-            <div className="flex justify-end mt-4 pt-3 border-t border-[#2c3943]">
+            <div className="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-[#2c3943]">
+              <span className="text-[10px] text-[#8696a0] truncate">
+                Default account can be set in Settings &gt; Manage Accounts
+              </span>
               <button
                 onClick={() => {
+                  if (pendingUrl) {
+                    showToast('Opening link cancelled', pendingUrl);
+                  }
                   setPendingUrl(null);
                   window.electronAPI.toggleProtocolPrompt(false);
                 }}
                 disabled={isHandlingProtocol}
                 onMouseDown={(e) => e.preventDefault()}
-                className="px-4 py-2 text-xs font-semibold text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none disabled:opacity-50"
+                className="px-4 py-2 text-xs font-semibold text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none disabled:opacity-50 shrink-0"
               >
                 Cancel
               </button>
@@ -531,11 +584,11 @@ export const App: React.FC = () => {
             ref={disclaimerRef}
             className="bg-[#222e35]/95 backdrop-blur-md border border-[#2c3943]/80 w-full max-w-2xl rounded-2xl shadow-2xl p-7 flex flex-col max-h-[90vh] overflow-hidden transform scale-100 animate-in zoom-in-95 duration-200"
           >
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-2xl bg-[#111b21]/50 border border-[#2c3943]/60 flex items-center justify-center mx-auto mb-3 overflow-hidden p-2.5 shadow-lg">
-                  <img src="./icon.png" alt="WAllie Logo" className="w-full h-full object-contain" />
-                </div>
-                <h2 className="text-lg font-bold text-[#e9edef] tracking-wide">Legal Disclaimer</h2>
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-2xl bg-[#111b21]/50 border border-[#2c3943]/60 flex items-center justify-center mx-auto mb-3 overflow-hidden p-2.5 shadow-lg">
+                <img src="./icon.png" alt="WAllie Logo" className="w-full h-full object-contain" />
+              </div>
+              <h2 className="text-lg font-bold text-[#e9edef] tracking-wide">Legal Disclaimer</h2>
               <p className="text-[11px] text-[#8696a0] mt-0.5">WAllie - Unofficial WhatsApp Desktop Client</p>
             </div>
 
@@ -610,8 +663,8 @@ export const App: React.FC = () => {
                     onMouseDown={(e) => e.preventDefault()}
                     disabled={!disclaimerChecked}
                     className={`px-6 py-2 rounded-lg text-xs font-bold text-[#111b21] transition-all duration-200 flex items-center gap-1.5 shadow-lg focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none ${disclaimerChecked
-                        ? 'bg-[#00a884] hover:bg-[#00c298] hover:shadow-[#00a884]/20 cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0'
-                        : 'bg-[#00a884]/40 text-[#111b21]/50 cursor-not-allowed'
+                      ? 'bg-[#00a884] hover:bg-[#00c298] hover:shadow-[#00a884]/20 cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0'
+                      : 'bg-[#00a884]/40 text-[#111b21]/50 cursor-not-allowed'
                       }`}
                   >
                     Accept & Continue
@@ -639,30 +692,37 @@ export const App: React.FC = () => {
       {/* Toast Notifications */}
       {toasts.length > 0 && (
         <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm pointer-events-auto">
-          {toasts.map((toast) => (
-            <div
-              key={toast.id}
-              className="flex items-center gap-3 p-3.5 bg-[#1f2c34] border border-[#00a884]/40 text-[#e9edef] rounded-xl shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-3 duration-200"
-            >
-              <div className="p-2 bg-[#00a884]/20 text-[#00a884] rounded-lg shrink-0">
-                <ExternalLink className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold leading-tight text-[#e9edef]">{toast.message}</p>
-                {toast.url && (
-                  <p className="text-[10px] text-[#8696a0] truncate mt-0.5" title={toast.url}>
-                    {toast.url}
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
-                className="text-[#8696a0] hover:text-[#e9edef] transition-colors p-1 rounded-md hover:bg-[#2a3942]"
+          {toasts.map((toast) => {
+            const isCancelled = toast.message.toLowerCase().includes('cancel');
+            return (
+              <div
+                key={toast.id}
+                className={`flex items-center gap-3 p-3.5 bg-[#1f2c34] border ${isCancelled ? 'border-[#f15c6d]/40' : 'border-[#00a884]/40'
+                  } text-[#e9edef] rounded-xl shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-3 duration-200`}
               >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
+                <div
+                  className={`p-2 ${isCancelled ? 'bg-[#f15c6d]/20 text-[#f15c6d]' : 'bg-[#00a884]/20 text-[#00a884]'
+                    } rounded-lg shrink-0`}
+                >
+                  {isCancelled ? <XCircle className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold leading-tight text-[#e9edef]">{toast.message}</p>
+                  {toast.url && (
+                    <p className="text-[10px] text-[#8696a0] truncate mt-0.5" title={toast.url}>
+                      {toast.url}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+                  className="text-[#8696a0] hover:text-[#e9edef] transition-colors p-1 rounded-md hover:bg-[#2a3942]"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

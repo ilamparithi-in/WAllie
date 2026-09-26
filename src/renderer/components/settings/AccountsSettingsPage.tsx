@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Trash2, Database, Shield, Puzzle, Palette, Bell } from 'lucide-react';
+import { User, Trash2, Database, Shield, Puzzle, Palette, Bell, ExternalLink } from 'lucide-react';
 import type { AccountInfo, GlobalSettings } from '../../../preload';
 
 interface AccountsSettingsPageProps {
@@ -33,6 +33,33 @@ export const AccountsSettingsPage: React.FC<AccountsSettingsPageProps> = ({
         <p className="text-[11px] text-[#8696a0] mt-2 mb-4 leading-relaxed">
           Set custom names and emojis, configure startup preloading, delete accounts, or jump to profile-specific settings.
         </p>
+
+        {/* Default Account for External Links */}
+        <div className="p-3 bg-[#182229] border border-[#222d34] rounded-lg mb-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-xs text-[#e9edef] flex items-center gap-1.5">
+                <ExternalLink className="w-3.5 h-3.5 text-[#00a884]" />
+                <span>Default Account for External Links</span>
+              </div>
+              <p className="text-[10px] text-[#8696a0] mt-0.5 leading-relaxed">
+                Choose which account automatically opens when clicking external whatsapp:// or chat links.
+              </p>
+            </div>
+            <select
+              value={globalSettings?.defaultProtocolAccountId || 'ask'}
+              onChange={(e) => handleToggleGlobalSetting('defaultProtocolAccountId', e.target.value)}
+              className="bg-[#202c33] text-[#e9edef] px-2.5 py-1.5 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] cursor-pointer"
+            >
+              <option value="ask">Ask Everytime</option>
+              {accounts.map((acc) => (
+                <option key={acc.id} value={acc.id}>
+                  {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
         <div className="space-y-3 pb-4">
           {accounts.map((acc) => (
