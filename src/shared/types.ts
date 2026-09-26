@@ -84,6 +84,7 @@ export interface GlobalSettings {
   downloadNotificationsEnabled?: boolean;
   inlineReplyEnabled?: boolean;
   notificationDismissalTime?: number;
+  defaultProtocolAccountId?: string;
 }
 
 export interface HistoricalNotification {

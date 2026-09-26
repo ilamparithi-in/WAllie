@@ -172,9 +172,14 @@ export function getAccountForWebContents(webContents: WebContents): Account | un
   return undefined;
 }
 
-export function showAppToast(message: string, url?: string): void {
+export function showAppToast(message: string, url?: string, skipMainWindow = false): void {
+  if (state.isNavConfirmActive) {
+    console.log('Nav confirmation active in main process, deferring toast:', message);
+    state.deferredToasts.push({ message, url });
+    return;
+  }
   const payload = { message, url };
-  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+  if (!skipMainWindow && state.mainWindow && !state.mainWindow.isDestroyed()) {
     state.mainWindow.webContents.send('toast:show', payload);
   }
   const activeView = state.accountViews.get(state.activeAccountId);

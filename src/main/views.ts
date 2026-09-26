@@ -879,6 +879,10 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   });
 
   view.webContents.on('will-prevent-unload', (event) => {
+    state.isNavConfirmActive = true;
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('nav-confirmation:active', true);
+    }
     const parentWindow = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined;
     const choice = dialog.showMessageBoxSync(parentWindow!, {
       type: 'question',
@@ -890,6 +894,17 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
       detail: 'Changes that you made may not be saved.',
       noLink: true,
     });
+    state.isNavConfirmActive = false;
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('nav-confirmation:active', false);
+    }
+    if (state.deferredToasts.length > 0) {
+      const queued = [...state.deferredToasts];
+      state.deferredToasts = [];
+      for (const item of queued) {
+        showAppToast(item.message, item.url);
+      }
+    }
     if (choice === 0) {
       event.preventDefault();
       (view.webContents as any)._lastUnloadCancelled = false;

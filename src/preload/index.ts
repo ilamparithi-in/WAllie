@@ -76,8 +76,10 @@ export interface ElectronAPI {
   handleProtocolUrl: (accountId: string, url: string) => Promise<{ success: boolean; cancelled?: boolean; error?: string }>;
   signalProtocolReady: () => void;
   toggleProtocolPrompt: (isOpen: boolean) => void;
+  showToast: (message: string, url?: string) => void;
   onToastShow: (callback: (data: { message: string; url?: string }) => void) => () => void;
   toggleWallieDevTools: () => void;
+  onNavConfirmationActive: (callback: (isActive: boolean) => void) => () => void;
 
   // Event listeners
   onAccountListChanged: (callback: (accounts: AccountInfo[], activeId: string) => void) => () => void;
@@ -180,10 +182,16 @@ const api: ElectronAPI = {
   signalProtocolReady: () => ipcRenderer.send('protocol:ready'),
   toggleProtocolPrompt: (isOpen) => ipcRenderer.send('protocol:toggle-prompt', isOpen),
   toggleWallieDevTools: () => ipcRenderer.send('devtools:toggle-wallie'),
+  showToast: (message, url) => ipcRenderer.send('toast:show', { message, url }),
   onToastShow: (callback) => {
     const subscription = (_event: unknown, data: { message: string; url?: string }) => callback(data);
     ipcRenderer.on('toast:show', subscription);
     return () => ipcRenderer.removeListener('toast:show', subscription);
+  },
+  onNavConfirmationActive: (callback) => {
+    const subscription = (_event: unknown, isActive: boolean) => callback(isActive);
+    ipcRenderer.on('nav-confirmation:active', subscription);
+    return () => ipcRenderer.removeListener('nav-confirmation:active', subscription);
   },
 
   onAccountListChanged: (callback) => {
@@ -469,11 +477,12 @@ function showGuestToast(msg: string, url?: string) {
     (document.head || document.documentElement).appendChild(style);
   }
 
+  const isCancelled = msg.toLowerCase().includes('cancel');
   const toast = document.createElement('div');
   Object.assign(toast.style, {
     background: '#1f2c34',
     color: '#e9edef',
-    border: '1px solid rgba(0, 168, 132, 0.5)',
+    border: isCancelled ? '1px solid rgba(241, 92, 109, 0.5)' : '1px solid rgba(0, 168, 132, 0.5)',
     padding: '10px 14px',
     borderRadius: '10px',
     boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
@@ -488,8 +497,8 @@ function showGuestToast(msg: string, url?: string) {
 
   const iconBox = document.createElement('div');
   Object.assign(iconBox.style, {
-    background: 'rgba(0, 168, 132, 0.2)',
-    color: '#00a884',
+    background: isCancelled ? 'rgba(241, 92, 109, 0.2)' : 'rgba(0, 168, 132, 0.2)',
+    color: isCancelled ? '#f15c6d' : '#00a884',
     padding: '6px',
     borderRadius: '6px',
     display: 'flex',
@@ -498,15 +507,25 @@ function showGuestToast(msg: string, url?: string) {
     flexShrink: '0',
   });
 
-  const iconSvg = createSvgElement({
-    tag: 'svg',
-    attrs: { width: '14', height: '14', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' },
-    children: [
-      { tag: 'path', attrs: { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' } },
-      { tag: 'polyline', attrs: { points: '15 3 21 3 21 9' } },
-      { tag: 'line', attrs: { x1: '10', y1: '14', x2: '21', y2: '3' } },
-    ],
-  });
+  const iconSvg = isCancelled
+    ? createSvgElement({
+        tag: 'svg',
+        attrs: { width: '14', height: '14', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' },
+        children: [
+          { tag: 'circle', attrs: { cx: '12', cy: '12', r: '10' } },
+          { tag: 'line', attrs: { x1: '15', y1: '9', x2: '9', y2: '15' } },
+          { tag: 'line', attrs: { x1: '9', y1: '9', x2: '15', y2: '15' } },
+        ],
+      })
+    : createSvgElement({
+        tag: 'svg',
+        attrs: { width: '14', height: '14', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' },
+        children: [
+          { tag: 'path', attrs: { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' } },
+          { tag: 'polyline', attrs: { points: '15 3 21 3 21 9' } },
+          { tag: 'line', attrs: { x1: '10', y1: '14', x2: '21', y2: '3' } },
+        ],
+      });
   iconBox.appendChild(iconSvg);
   toast.appendChild(iconBox);
 

@@ -20,5 +20,7 @@ export const state = {
   notificationHistoryCache: null as any[] | null,
   historyFlushTimeout: null as NodeJS.Timeout | null,
   pendingProtocolUrl: null as string | null,
+  isNavConfirmActive: false,
+  deferredToasts: [] as { message: string; url?: string }[],
   isQuitting: false,
 };
