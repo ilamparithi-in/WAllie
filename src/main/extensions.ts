@@ -6,6 +6,7 @@ import { state } from './state';
 import { saveAccounts, CHROME_VERSION, DEFAULT_USER_AGENT } from './config';
 import { ExtensionInfo } from '../shared/types';
 import { getAccountById } from './utils';
+import { notificationManager } from './notifications/index';
 
 const EXTENSIONS_BASE = path.join(app.getPath('userData'), 'extensions');
 
@@ -481,20 +482,40 @@ export async function checkForWebStoreUpdates(targetAccountId?: string): Promise
 
     for (const ext of webstoreExtensions) {
       const extensionId = ext.id;
-      const updateCheckUrl = `https://clients2.google.com/service/update2/crx?x=id%3D${extensionId}%26v%3D${ext.version}%26uc`;
-      const downloadUrl = `https://clients2.google.com/service/update2/crx?response=redirect&os=linux&arch=x86-64&os_arch=x86-64&prod=chromecrx&prodchannel=unknown&prodversion=${CHROME_VERSION}&acceptformat=crx3&x=id%3D${extensionId}%26uc`;
+      const updateCheckUrl = `https://clients2.google.com/service/update2/crx?os=linux&arch=x86-64&os_arch=x86-64&prod=chromecrx&prodchannel=unknown&prodversion=${CHROME_VERSION}&acceptformat=crx3&x=id%3D${extensionId}%26v%3D${ext.version}%26uc`;
+      let downloadUrl = `https://clients2.google.com/service/update2/crx?response=redirect&os=linux&arch=x86-64&os_arch=x86-64&prod=chromecrx&prodchannel=unknown&prodversion=${CHROME_VERSION}&acceptformat=crx3&x=id%3D${extensionId}%26uc`;
       const tmpDir = path.join(app.getPath('userData'), 'extensions', account.id, `${extensionId}_tmp`);
 
       try {
         // Check update XML first to save bandwidth
-        const checkResponse = await fetch(updateCheckUrl);
+        const checkResponse = await fetch(updateCheckUrl, {
+          headers: {
+            'User-Agent': DEFAULT_USER_AGENT,
+            'Referer': `https://chrome.google.com/webstore/detail/${extensionId}?hl=en`
+          }
+        });
+
         if (checkResponse.ok) {
           const xml = await checkResponse.text();
-          const versionMatch = xml.match(/version="([\d\.]+)"/);
-          if (versionMatch) {
-            const newVersion = versionMatch[1];
-            if (!isNewerVersion(ext.version, newVersion)) {
+          const updateCheckMatch = xml.match(/<updatecheck\b([^>]*)\/?>/i);
+          if (updateCheckMatch) {
+            const attrs = updateCheckMatch[1];
+            const statusMatch = attrs.match(/\bstatus=["']([^"']+)["']/i);
+            const status = statusMatch ? statusMatch[1].toLowerCase() : null;
+
+            if (status === 'noupdate') {
+              continue; // Up to date
+            }
+
+            const versionMatch = attrs.match(/\bversion=["']([^"']+)["']/i);
+            const remoteVersion = versionMatch ? versionMatch[1] : null;
+            if (remoteVersion && !isNewerVersion(ext.version, remoteVersion)) {
               continue; // Skip download, already up to date
+            }
+
+            const codebaseMatch = attrs.match(/\bcodebase=["']([^"']+)["']/i);
+            if (codebaseMatch && codebaseMatch[1]) {
+              downloadUrl = codebaseMatch[1];
             }
           }
         }
@@ -533,17 +554,10 @@ export async function checkForWebStoreUpdates(targetAccountId?: string): Promise
         if (isNewerVersion(ext.version, newVersion)) {
           console.log(`Updating extension ${ext.name} (${ext.id}) from v${ext.version} to v${newVersion} for account ${account.name}`);
 
-          if (fs.existsSync(ext.path)) {
-            safeDeleteExtensionDir(ext.path);
-          }
-          fs.renameSync(tmpDir, ext.path);
-
-          ext.version = newVersion;
-          if (manifest.name) ext.name = manifest.name;
-
           const view = state.accountViews.get(account.id);
+          let accountSession: Electron.Session | null = null;
           if (view) {
-            const accountSession = session.fromPartition(account.partition);
+            accountSession = session.fromPartition(account.partition);
             const loadedExts = accountSession.getAllExtensions();
             const matched = loadedExts.find((e) => e.id === extensionId || path.resolve(e.path) === path.resolve(ext.path));
             if (matched) {
@@ -553,13 +567,22 @@ export async function checkForWebStoreUpdates(targetAccountId?: string): Promise
                 accountSession.removeExtension(matched.id);
               }
             }
-            if (ext.enabled) {
-              prepareExtensionForElectron(ext.path);
-              if (accountSession.extensions) {
-                await accountSession.extensions.loadExtension(ext.path);
-              } else {
-                await accountSession.loadExtension(ext.path);
-              }
+          }
+
+          if (fs.existsSync(ext.path)) {
+            safeDeleteExtensionDir(ext.path);
+          }
+          fs.renameSync(tmpDir, ext.path);
+
+          ext.version = newVersion;
+          if (manifest.name) ext.name = manifest.name;
+
+          if (view && accountSession && ext.enabled) {
+            prepareExtensionForElectron(ext.path);
+            if (accountSession.extensions) {
+              await accountSession.extensions.loadExtension(ext.path);
+            } else {
+              await accountSession.loadExtension(ext.path);
             }
           }
 
@@ -580,6 +603,14 @@ export async function checkForWebStoreUpdates(targetAccountId?: string): Promise
   if (updatedCount > 0) {
     await saveAccounts();
     state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+    try {
+      await notificationManager.notify({
+        title: 'Extensions Updated',
+        body: `Updated ${updatedCount} extension${updatedCount > 1 ? 's' : ''}: ${updatedList.join(', ')}`,
+      });
+    } catch (notifErr) {
+      console.warn('Failed to send extension update notification:', notifErr);
+    }
   }
 
   return { updatedCount, updatedList };
