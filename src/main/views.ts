@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
 import { DEFAULT_USER_AGENT, saveAccounts, saveSettings } from './config';
-import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, getAppIcon, getInitialWindowSize, showAppToast } from './utils';
+import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, getAppIcon, getInitialWindowSize, showAppToast, getSystemDesktopFontName } from './utils';
 import { Account, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 import { resolveGoogleFontUrl } from '../shared/fonts';
 import { TITLEBAR_HEIGHT } from '../shared/constants';
@@ -129,8 +129,10 @@ export async function buildAccountStyling(account: Account): Promise<{ fontCss: 
     selectedTheme = 'none',
     fontFamily = '',
     fontUrl = '',
+    preferGoogleFont = false,
     monoFontFamily = '',
     monoFontUrl = '',
+    preferGoogleMonoFont = false,
     followSystemFont = false,
     customWallpaper = '',
   } = account.settings || {};
@@ -140,9 +142,27 @@ export async function buildAccountStyling(account: Account): Promise<{ fontCss: 
   const styleRules: string[] = [];
 
   if (followSystemFont) {
-    styleRules.push(
-      '#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}'
-    );
+    if (preferGoogleFont) {
+      const desktopName = await getSystemDesktopFontName();
+      const targetFamily = desktopName || fontFamily;
+      if (targetFamily) {
+        const url = await resolveGoogleFontUrl(targetFamily, fontUrl);
+        if (url) {
+          importRules.push(`@import url('${url}');`);
+        }
+        styleRules.push(
+          `#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: "${targetFamily}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
+        );
+      } else {
+        styleRules.push(
+          '#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}'
+        );
+      }
+    } else {
+      styleRules.push(
+        '#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}'
+      );
+    }
   } else if (fontFamily && fontFamily.trim()) {
     const family = fontFamily.trim().replace(/^['"]+|['"]+$/g, '');
     const isGeneric = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|Segoe UI|Arial|Helvetica|Times New Roman|Courier New)$/i.test(family);

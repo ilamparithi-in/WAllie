@@ -22,6 +22,7 @@ export class DownloadManager {
   private history: DownloadRecord[] = [];
   private lastManualDownloadPath?: string;
   private lastOpenedPath?: string;
+  private lastOpenedFilename?: string;
   private lastOpenedTimestamp: number = 0;
   private pendingIntent: {
     intent: DownloadIntent;
@@ -280,11 +281,12 @@ export class DownloadManager {
       if (this.lastOpenedPath === existing.savePath && Date.now() - this.lastOpenedTimestamp < 1500) {
         return { handled: true, isExisting: true };
       }
-      this.lastOpenedPath = existing.savePath;
+      this.lastOpenedPath = path.resolve(existing.savePath);
+      this.lastOpenedFilename = trimmed.toLowerCase();
       this.lastOpenedTimestamp = Date.now();
       console.log(`[DownloadManager] Opening file directly on card click: ${existing.savePath}`);
       await this.openDownloadedFile(existing.savePath);
-      showAppToast(`Opening ${trimmed}...`);
+      showAppToast(`Opened ${trimmed}`);
       return { handled: true, isExisting: true };
     } else if (action === 'showInFolder') {
       if (this.lastOpenedPath === existing.savePath && Date.now() - this.lastOpenedTimestamp < 1500) {
@@ -376,7 +378,12 @@ export class DownloadManager {
     // If file already exists and matches on disk, handle as second click (open / showInFolder)
     // unless user explicitly selected "Download" from context menu or action is 'download'
     if (!isContextMenu && existing) {
-      if (this.lastOpenedPath === existing.savePath && Date.now() - this.lastOpenedTimestamp < 5000) {
+      const isRecentlyOpened = (
+        (this.lastOpenedPath && (this.lastOpenedPath === path.resolve(existing.savePath) || path.basename(this.lastOpenedPath).toLowerCase() === fileName.toLowerCase())) ||
+        (this.lastOpenedFilename && (this.lastOpenedFilename === fileName.toLowerCase() || (intentFilename && this.lastOpenedFilename === intentFilename.toLowerCase())))
+      ) && Date.now() - this.lastOpenedTimestamp < 5000;
+
+      if (isRecentlyOpened) {
         console.log(`[DownloadManager] Download cancelled as file was already opened on click: ${fileName}`);
         item.cancel();
         return;
@@ -384,15 +391,17 @@ export class DownloadManager {
       if (secondClickAction === 'open') {
         console.log(`[DownloadManager] Matching downloaded file detected for ${fileName}. Opening existing file.`);
         item.cancel();
-        this.lastOpenedPath = existing.savePath;
+        this.lastOpenedPath = path.resolve(existing.savePath);
+        this.lastOpenedFilename = fileName.toLowerCase();
         this.lastOpenedTimestamp = Date.now();
         this.openDownloadedFile(existing.savePath);
-        showAppToast(`Opening ${fileName}...`);
+        showAppToast(`Opened ${fileName}`);
         return;
       } else if (secondClickAction === 'showInFolder') {
         console.log(`[DownloadManager] Matching downloaded file detected for ${fileName}. Revealing in folder.`);
         item.cancel();
-        this.lastOpenedPath = existing.savePath;
+        this.lastOpenedPath = path.resolve(existing.savePath);
+        this.lastOpenedFilename = fileName.toLowerCase();
         this.lastOpenedTimestamp = Date.now();
         this.showItemInFolder(existing.savePath);
         showAppToast(`Revealed ${fileName} in folder.`);

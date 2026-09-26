@@ -97,7 +97,7 @@ if (gotTheLock) {
           'Content-Security-Policy': [
             isSandbox
               ? "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;"
-              : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws://localhost:* http://localhost:* https://fonts.googleapis.com"
+              : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.whatsapp.net https://*.whatsapp.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws://localhost:* http://localhost:* https://fonts.googleapis.com"
           ]
         }
       });

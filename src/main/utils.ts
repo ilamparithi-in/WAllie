@@ -172,19 +172,58 @@ export function getAccountForWebContents(webContents: WebContents): Account | un
   return undefined;
 }
 
+let lastToastMessage = '';
+let lastToastTime = 0;
+
 export function showAppToast(message: string, url?: string, skipMainWindow = false): void {
+  const now = Date.now();
+  if (message === lastToastMessage && now - lastToastTime < 1500) {
+    return;
+  }
+  lastToastMessage = message;
+  lastToastTime = now;
+
   if (state.isNavConfirmActive) {
     console.log('Nav confirmation active in main process, deferring toast:', message);
     state.deferredToasts.push({ message, url });
     return;
   }
   const payload = { message, url };
+  const activeView = state.accountViews.get(state.activeAccountId);
+
+  // 1. Dispatch to mainWindow (for host UI, overlays, and modals)
   if (!skipMainWindow && state.mainWindow && !state.mainWindow.isDestroyed()) {
     state.mainWindow.webContents.send('toast:show', payload);
   }
-  const activeView = state.accountViews.get(state.activeAccountId);
+
+  // 2. Dispatch to active guest view so when activeView is visible or becomes visible upon modal close,
+  // the toast stays seamlessly on the screen without disappearing
   if (activeView && !activeView.webContents.isDestroyed()) {
     activeView.webContents.send('toast:show', payload);
   }
+}
+
+let cachedDesktopFontName: string | null = null;
+
+export async function getSystemDesktopFontName(): Promise<string> {
+  if (cachedDesktopFontName !== null) {
+    return cachedDesktopFontName;
+  }
+  try {
+    const { exec } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const execAsync = promisify(exec);
+    const { stdout } = await execAsync('gsettings get org.gnome.desktop.interface font-name');
+    const cleaned = stdout.trim().replace(/^['"]+|['"]+$/g, '');
+    const parts = cleaned.split(/\s+/);
+    if (parts.length > 1 && !isNaN(Number(parts[parts.length - 1]))) {
+      cachedDesktopFontName = parts.slice(0, -1).join(' ');
+    } else {
+      cachedDesktopFontName = cleaned;
+    }
+  } catch {
+    cachedDesktopFontName = '';
+  }
+  return cachedDesktopFontName;
 }
 
