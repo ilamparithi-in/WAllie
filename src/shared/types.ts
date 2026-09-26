@@ -16,9 +16,18 @@ export interface AccountSettings {
   customCss?: string;
   selectedTheme?: string;
   fontFamily?: string;
+  fontUrl?: string;
+  preferGoogleFont?: boolean;
   monoFontFamily?: string;
+  monoFontUrl?: string;
+  preferGoogleMonoFont?: boolean;
   followSystemFont?: boolean;
   customWallpaper?: string;
+}
+
+export interface SystemFontInfo {
+  name: string;
+  isVariable: boolean;
 }
 
 export const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
@@ -30,7 +39,11 @@ export const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
   customCss: '',
   selectedTheme: 'none',
   fontFamily: '',
+  fontUrl: '',
+  preferGoogleFont: false,
   monoFontFamily: '',
+  monoFontUrl: '',
+  preferGoogleMonoFont: false,
   followSystemFont: false,
   customWallpaper: '',
 };

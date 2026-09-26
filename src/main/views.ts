@@ -6,6 +6,7 @@ import { state } from './state';
 import { DEFAULT_USER_AGENT, saveAccounts, saveSettings } from './config';
 import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, getAppIcon, getInitialWindowSize, showAppToast } from './utils';
 import { Account, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
+import { resolveGoogleFontUrl } from '../shared/fonts';
 import { TITLEBAR_HEIGHT } from '../shared/constants';
 import { downloadManager } from './downloads';
 import { prepareExtensionForElectron } from './extensions';
@@ -122,12 +123,14 @@ footer {
 }
 `;
 
-export function buildAccountStyling(account: Account): { fontCss: string; wallpaperCss: string; customCss: string } {
+export async function buildAccountStyling(account: Account): Promise<{ fontCss: string; wallpaperCss: string; customCss: string }> {
   const {
     customCss = '',
     selectedTheme = 'none',
     fontFamily = '',
+    fontUrl = '',
     monoFontFamily = '',
+    monoFontUrl = '',
     followSystemFont = false,
     customWallpaper = '',
   } = account.settings || {};
@@ -138,17 +141,19 @@ export function buildAccountStyling(account: Account): { fontCss: string; wallpa
 
   if (followSystemFont) {
     styleRules.push(
-      '#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n}'
+      '#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}'
     );
   } else if (fontFamily && fontFamily.trim()) {
     const family = fontFamily.trim().replace(/^['"]+|['"]+$/g, '');
     const isGeneric = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|Segoe UI|Arial|Helvetica|Times New Roman|Courier New)$/i.test(family);
     if (!isGeneric && !family.includes(',')) {
-      const gParam = family.replace(/\s+/g, '+');
-      importRules.push(`@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(gParam)}&display=swap');`);
+      const url = await resolveGoogleFontUrl(family, fontUrl);
+      if (url) {
+        importRules.push(`@import url('${url}');`);
+      }
     }
     styleRules.push(
-      `#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: "${family}", "Segoe UI", Helvetica, Arial, sans-serif !important;\n}`
+      `#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: "${family}", "Segoe UI", Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
     );
   }
 
@@ -156,11 +161,13 @@ export function buildAccountStyling(account: Account): { fontCss: string; wallpa
     const mono = monoFontFamily.trim().replace(/^['"]+|['"]+$/g, '');
     const isGenericMono = /^(monospace|ui-monospace|Courier New|Courier|Consolas|DejaVu Sans Mono|Liberation Mono)$/i.test(mono);
     if (!isGenericMono && !mono.includes(',')) {
-      const gParam = mono.replace(/\s+/g, '+');
-      importRules.push(`@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(gParam)}&display=swap');`);
+      const url = await resolveGoogleFontUrl(mono, monoFontUrl);
+      if (url) {
+        importRules.push(`@import url('${url}');`);
+      }
     }
     styleRules.push(
-      `code, pre {\n  font-family: "${mono}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;\n}`
+      `code, pre {\n  font-family: "${mono}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
     );
   }
   const fontCss = [...importRules, ...styleRules].join('\n\n');
@@ -188,7 +195,7 @@ export async function injectAccountStyling(accountId: string, webContents: Elect
   const account = getAccountById(accountId);
   if (!account || !account.settings) return;
 
-  const { fontCss, wallpaperCss, customCss } = buildAccountStyling(account);
+  const { fontCss, wallpaperCss, customCss } = await buildAccountStyling(account);
 
   const jsPayload = `
     (() => {
