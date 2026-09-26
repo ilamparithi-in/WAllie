@@ -73,7 +73,7 @@ export interface ElectronAPI {
 
   // Custom protocol controls
   onProtocolReceived: (callback: (url: string) => void) => () => void;
-  handleProtocolUrl: (accountId: string, url: string) => void;
+  handleProtocolUrl: (accountId: string, url: string) => Promise<{ success: boolean; cancelled?: boolean; error?: string }>;
   signalProtocolReady: () => void;
   toggleProtocolPrompt: (isOpen: boolean) => void;
   onToastShow: (callback: (data: { message: string; url?: string }) => void) => () => void;
@@ -176,7 +176,7 @@ const api: ElectronAPI = {
     ipcRenderer.on('protocol:received-url', subscription);
     return () => ipcRenderer.removeListener('protocol:received-url', subscription);
   },
-  handleProtocolUrl: (accountId, url) => ipcRenderer.send('protocol:handle-url', accountId, url),
+  handleProtocolUrl: (accountId, url) => ipcRenderer.invoke('protocol:handle-url', accountId, url),
   signalProtocolReady: () => ipcRenderer.send('protocol:ready'),
   toggleProtocolPrompt: (isOpen) => ipcRenderer.send('protocol:toggle-prompt', isOpen),
   toggleWallieDevTools: () => ipcRenderer.send('devtools:toggle-wallie'),
