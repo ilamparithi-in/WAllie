@@ -141,20 +141,19 @@ export function animateSettingsTransition(targetOpen: boolean) {
     closeTimeout = null;
   }
 
-  state.settingsOpen = targetOpen;
+  if (resizeTimeout) {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = null;
+  }
 
-  if (targetOpen) {
-    state.settingsDrawerWidth = DRAWER_WIDTH;
-    updateActiveViewBounds();
+  state.settingsOpen = targetOpen;
+  state.settingsDrawerWidth = targetOpen ? DRAWER_WIDTH : 0;
+
+  const aView = state.accountViews.get(state.activeAccountId);
+  if (aView) {
+    applyActiveViewBoundsImmediately(aView);
   } else {
-    closeTimeout = setTimeout(() => {
-      if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
-      if (!state.settingsOpen) {
-        state.settingsDrawerWidth = 0;
-        updateActiveViewBounds();
-      }
-      closeTimeout = null;
-    }, 300);
+    updateActiveViewBounds();
   }
 }
 

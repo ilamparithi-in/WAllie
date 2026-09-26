@@ -490,14 +490,16 @@ export const App: React.FC = () => {
   };
 
   const handleToggleSettings = () => {
-    setIsSettingsOpen((prev) => {
-      const next = !prev;
-      window.electronAPI?.toggleSettings(next);
-      if (!next) {
+    if (isSettingsOpen) {
+      window.electronAPI?.toggleSettings(false);
+      requestAnimationFrame(() => {
+        setIsSettingsOpen(false);
         setSettingsInitialPage('main');
-      }
-      return next;
-    });
+      });
+    } else {
+      setIsSettingsOpen(true);
+      window.electronAPI?.toggleSettings(true);
+    }
   };
 
   const handleOpenNotificationHistory = () => {
@@ -507,10 +509,12 @@ export const App: React.FC = () => {
   };
 
   const handleCloseSettings = () => {
-    setIsSettingsOpen(false);
-    setSettingsInitialPage(undefined);
-    setSettingsInitialAccountId(undefined);
     window.electronAPI?.toggleSettings(false);
+    requestAnimationFrame(() => {
+      setIsSettingsOpen(false);
+      setSettingsInitialPage(undefined);
+      setSettingsInitialAccountId(undefined);
+    });
   };
 
   const handleAcceptDisclaimer = async () => {
