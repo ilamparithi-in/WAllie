@@ -658,6 +658,23 @@ function setupWhatsAppIntegration() {
     // 2. Message / Document card detection
     const msgContainer = target.closest('[data-id], div[class*="message-in"], div[class*="message-out"], [data-testid="msg-container"]');
     if (msgContainer) {
+      // Ignore clicks on message menu controls (down chevron), forward button, reactions, timestamps, or headers
+      const isMenuOrAction = !!target.closest(
+        '[data-testid*="down-context"], [data-testid*="context"], [data-icon*="down-context"], [data-icon*="context"], [data-js-context-icon], [data-icon="chevron-down"], [data-icon="down"], [data-testid*="menu"], [aria-label*="context" i], [aria-label*="menu" i], [aria-label*="forward" i], [data-testid="msg-meta"], [data-testid*="reaction"], [data-testid="forwarded-header"], [role="menu"], [role="menuitem"]'
+      );
+      const svgTitle = target.closest('svg')?.querySelector('title')?.textContent?.trim().toLowerCase();
+      const isActionSvg = !!svgTitle && ['down-context', 'chevron-down', 'down', 'ic-fast-forward', 'menu', 'context'].includes(svgTitle);
+
+      if (isMenuOrAction || isActionSvg) {
+        return;
+      }
+
+      // Ensure the click was actually on or inside the document card itself, never on surrounding message controls
+      const docCard = target.closest('[data-testid="document-thumb"], [data-testid="audio-play"], [data-testid="audio-download"]');
+      if (!docCard) {
+        return;
+      }
+
       const filename = extractFilenameFromMessage(msgContainer);
       const isDocCard = !!msgContainer.querySelector('[data-icon*="document"], [data-icon="default-doc"], [data-testid="document-thumb"]');
       const hasExtension = /\.[a-z0-9]{2,6}$/i.test(filename.trim());
