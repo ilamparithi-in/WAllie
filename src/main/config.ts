@@ -69,6 +69,7 @@ export function loadSettings(): GlobalSettings {
         externalLinkWarningEnabled: parsed.externalLinkWarningEnabled !== false,
         trustedDomains: Array.isArray(parsed.trustedDomains) ? parsed.trustedDomains : ['whatsapp.com', 'whatsapp.net'],
         defaultDownloadsPath: typeof parsed.defaultDownloadsPath === 'string' && parsed.defaultDownloadsPath ? parsed.defaultDownloadsPath : app.getPath('downloads'),
+        lastManualDownloadPath: typeof parsed.lastManualDownloadPath === 'string' && parsed.lastManualDownloadPath ? parsed.lastManualDownloadPath : undefined,
         askWhereToSaveEveryTime: !!parsed.askWhereToSaveEveryTime,
         fileSecondClickAction: (['open', 'showInFolder', 'saveAs', 'download'].includes(parsed.fileSecondClickAction) ? parsed.fileSecondClickAction : 'open'),
         downloadNotificationsEnabled: parsed.downloadNotificationsEnabled !== false,

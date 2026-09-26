@@ -54,6 +54,7 @@ export interface DownloadRecord {
   filename: string;
   savePath: string;
   fileSize?: number;
+  fileHash?: string;
   mimeType?: string;
   timestamp: number;
   accountId?: string;
@@ -77,6 +78,7 @@ export interface GlobalSettings {
   externalLinkWarningEnabled?: boolean;
   trustedDomains?: string[];
   defaultDownloadsPath?: string;
+  lastManualDownloadPath?: string;
   askWhereToSaveEveryTime?: boolean;
   fileSecondClickAction?: FileSecondClickAction;
   downloadNotificationsEnabled?: boolean;

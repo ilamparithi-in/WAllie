@@ -1,24 +1,39 @@
 import { app, dialog, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { state } from './state';
 import { showAppToast } from './utils';
 import { DownloadRecord } from '../shared/types';
 import { notificationManager } from './notifications/index';
+import { saveSettings } from './config';
+
+export const LARGE_FILE_THRESHOLD = 64 * 1024 * 1024; // 64 MB
+
+export interface FileMatchOptions {
+  size?: number;
+  hash?: string;
+}
 
 export type DownloadIntent = 'first-download' | 'second-click' | 'context-menu-download' | 'none';
 
 export class DownloadManager {
   private downloadsFile: string;
   private history: DownloadRecord[] = [];
+  private lastManualDownloadPath?: string;
+  private lastOpenedPath?: string;
+  private lastOpenedTimestamp: number = 0;
   private pendingIntent: {
     intent: DownloadIntent;
     filename?: string;
+    size?: number;
+    hash?: string;
     timestamp: number;
   } = { intent: 'none', timestamp: 0 };
 
   constructor() {
     this.downloadsFile = path.join(app.getPath('userData'), 'downloads.json');
+    this.lastManualDownloadPath = state.globalSettings?.lastManualDownloadPath;
     this.loadHistory();
   }
 
@@ -65,24 +80,39 @@ export class DownloadManager {
     await this.saveHistory();
   }
 
-  public setIntent(intent: DownloadIntent | 'anchor-detected', filename?: string): void {
+  public setIntent(intent: DownloadIntent | 'anchor-detected', filename?: string, size?: number, hash?: string): void {
     if (intent === 'anchor-detected') {
       if (this.pendingIntent.intent !== 'none' && Date.now() - this.pendingIntent.timestamp <= 5000) {
         if (filename && !this.pendingIntent.filename) {
           this.pendingIntent.filename = filename;
         }
+        if (size !== undefined && this.pendingIntent.size === undefined) {
+          this.pendingIntent.size = size;
+        }
+        if (hash && !this.pendingIntent.hash) {
+          this.pendingIntent.hash = hash;
+        }
         return;
       }
+      this.pendingIntent = {
+        intent: 'none',
+        filename,
+        size,
+        hash,
+        timestamp: Date.now(),
+      };
       return;
     }
     this.pendingIntent = {
       intent,
       filename,
+      size,
+      hash,
       timestamp: Date.now(),
     };
   }
 
-  public consumeIntent(): { intent: DownloadIntent; filename?: string } {
+  public consumeIntent(): { intent: DownloadIntent; filename?: string; size?: number; hash?: string } {
     const now = Date.now();
     // Allow up to 5 seconds between DOM click and will-download event
     if (now - this.pendingIntent.timestamp <= 5000) {
@@ -93,11 +123,182 @@ export class DownloadManager {
     return { intent: 'none' };
   }
 
-  public findExistingDownloadedFile(filename: string): DownloadRecord | undefined {
-    // Check from newest to oldest for a record matching filename where file exists on disk
-    return this.history.find(
-      (rec) => rec.filename === filename && rec.state === 'completed' && fs.existsSync(rec.savePath)
-    );
+  public doesFileMatch(
+    candidatePath: string,
+    candidateFilename: string,
+    targetFilename: string,
+    cachedSize?: number,
+    cachedHash?: string,
+    options?: FileMatchOptions
+  ): boolean {
+    if (!fs.existsSync(candidatePath)) return false;
+
+    // 1. Filename match (case-insensitive & trimmed)
+    const norm = (s: string) => s.trim().toLowerCase();
+    const cleanTarget = norm(targetFilename);
+    const cleanCandidateName = norm(candidateFilename);
+    const cleanBase = norm(path.basename(candidatePath));
+
+    if (cleanCandidateName !== cleanTarget && cleanBase !== cleanTarget) {
+      return false;
+    }
+
+    // If no size or hash options provided, matching name & existence is sufficient
+    if (!options || (options.size === undefined && !options.hash)) {
+      return true;
+    }
+
+    let diskSize = cachedSize;
+    if (diskSize === undefined) {
+      try {
+        diskSize = fs.statSync(candidatePath).size;
+      } catch {
+        return false;
+      }
+    }
+
+    // 2. Check if it's considered a large file (> 20 MB)
+    const targetSize = options.size !== undefined ? options.size : diskSize;
+    const isLarge = targetSize > LARGE_FILE_THRESHOLD || diskSize > LARGE_FILE_THRESHOLD;
+
+    if (isLarge) {
+      // For large files, compare the file size alone with 5% tolerance
+      if (options.size !== undefined) {
+        const tolerance = Math.max(diskSize * 0.05, 1024);
+        const diff = Math.abs(diskSize - options.size);
+        if (diff > tolerance) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // 3. For non-large files, match both name and hash (with fallback to size with 5% tolerance if hash not yet available)
+    if (options.hash) {
+      let fileHash = cachedHash;
+      if (!fileHash) {
+        try {
+          const buf = fs.readFileSync(candidatePath);
+          fileHash = crypto.createHash('sha256').update(buf).digest('hex');
+        } catch (err) {
+          console.error('[DownloadManager] Failed to compute hash of file on disk:', err);
+        }
+      }
+      if (fileHash && fileHash.toLowerCase() !== options.hash.toLowerCase()) {
+        return false;
+      }
+      return true;
+    }
+
+    if (options.size !== undefined) {
+      // If we only have size, compare size with 5% tolerance
+      const tolerance = Math.max(diskSize * 0.05, 2048);
+      const diff = Math.abs(diskSize - options.size);
+      if (diff > tolerance) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  public findExistingDownloadedFile(filename: string, options?: FileMatchOptions): DownloadRecord | undefined {
+    if (!filename || typeof filename !== 'string') return undefined;
+
+    // 1. Check history for completed records matching criteria
+    const inHistory = this.history.find((rec) => {
+      if (rec.state !== 'completed') return false;
+      return this.doesFileMatch(rec.savePath, rec.filename, filename, rec.fileSize, rec.fileHash, options);
+    });
+
+    if (inHistory) return inHistory;
+
+    // 2. Fallback: check default download directory
+    const defaultDir = state.globalSettings?.defaultDownloadsPath || app.getPath('downloads');
+    const defaultPath = path.join(defaultDir, filename.trim());
+    if (this.doesFileMatch(defaultPath, filename, filename, undefined, undefined, options)) {
+      let statSize: number | undefined;
+      let statHash: string | undefined;
+      try {
+        statSize = fs.statSync(defaultPath).size;
+        if (statSize <= LARGE_FILE_THRESHOLD) {
+          statHash = crypto.createHash('sha256').update(fs.readFileSync(defaultPath)).digest('hex');
+        }
+      } catch {}
+      return {
+        id: Date.now(),
+        filename: filename.trim(),
+        savePath: defaultPath,
+        fileSize: statSize,
+        fileHash: statHash,
+        timestamp: Date.now(),
+        state: 'completed',
+      };
+    }
+
+    // 3. Fallback: check last manual download directory
+    const manualDir = this.lastManualDownloadPath || state.globalSettings?.lastManualDownloadPath;
+    if (manualDir && manualDir !== defaultDir && fs.existsSync(manualDir)) {
+      const manualPath = path.join(manualDir, filename.trim());
+      if (this.doesFileMatch(manualPath, filename, filename, undefined, undefined, options)) {
+        let statSize: number | undefined;
+        let statHash: string | undefined;
+        try {
+          statSize = fs.statSync(manualPath).size;
+          if (statSize <= LARGE_FILE_THRESHOLD) {
+            statHash = crypto.createHash('sha256').update(fs.readFileSync(manualPath)).digest('hex');
+          }
+        } catch {}
+        return {
+          id: Date.now(),
+          filename: filename.trim(),
+          savePath: manualPath,
+          fileSize: statSize,
+          fileHash: statHash,
+          timestamp: Date.now(),
+          state: 'completed',
+        };
+      }
+    }
+
+    return undefined;
+  }
+
+  public async handleFileCardClick(filename: string, options?: FileMatchOptions): Promise<{ handled: boolean; isExisting: boolean }> {
+    if (!filename || typeof filename !== 'string') return { handled: false, isExisting: false };
+    const trimmed = filename.trim();
+
+    const existing = this.findExistingDownloadedFile(trimmed, options);
+    if (!existing) {
+      return { handled: false, isExisting: false };
+    }
+
+    this.setIntent('second-click', trimmed, options?.size, options?.hash);
+
+    const action = state.globalSettings?.fileSecondClickAction || 'open';
+    if (action === 'open') {
+      if (this.lastOpenedPath === existing.savePath && Date.now() - this.lastOpenedTimestamp < 1500) {
+        return { handled: true, isExisting: true };
+      }
+      this.lastOpenedPath = existing.savePath;
+      this.lastOpenedTimestamp = Date.now();
+      console.log(`[DownloadManager] Opening file directly on card click: ${existing.savePath}`);
+      await this.openDownloadedFile(existing.savePath);
+      showAppToast(`Opening ${trimmed}...`);
+      return { handled: true, isExisting: true };
+    } else if (action === 'showInFolder') {
+      if (this.lastOpenedPath === existing.savePath && Date.now() - this.lastOpenedTimestamp < 1500) {
+        return { handled: true, isExisting: true };
+      }
+      this.lastOpenedPath = existing.savePath;
+      this.lastOpenedTimestamp = Date.now();
+      console.log(`[DownloadManager] Revealing file in folder on card click: ${existing.savePath}`);
+      this.showItemInFolder(existing.savePath);
+      showAppToast(`Revealed ${trimmed} in folder.`);
+      return { handled: true, isExisting: true };
+    }
+
+    return { handled: false, isExisting: true };
   }
 
   public async openDownloadedFile(filePath: string): Promise<boolean> {
@@ -155,34 +356,49 @@ export class DownloadManager {
   ): void {
     const fileName = item.getFilename();
     const startTime = item.getStartTime();
-    const { intent } = this.consumeIntent();
+    const totalBytes = item.getTotalBytes();
+    const { intent, filename: intentFilename, size: intentSize, hash: intentHash } = this.consumeIntent();
 
     const isContextMenu = intent === 'context-menu-download';
     const isSecondClick = intent === 'second-click';
     const askEveryTime = !!state.globalSettings?.askWhereToSaveEveryTime;
     const secondClickAction = state.globalSettings?.fileSecondClickAction || 'open';
 
-    // Handle second click on an already downloaded file (bypass if user explicitly uses context menu download)
-    if (isSecondClick && !isContextMenu) {
-      const existing = this.findExistingDownloadedFile(fileName);
-      if (existing) {
-        if (secondClickAction === 'open') {
-          console.log(`[DownloadManager] Second click detected for ${fileName}. Opening existing file.`);
-          item.cancel();
-          this.openDownloadedFile(existing.savePath);
-          showAppToast(`Opening ${fileName}...`);
-          return;
-        } else if (secondClickAction === 'showInFolder') {
-          console.log(`[DownloadManager] Second click detected for ${fileName}. Revealing in folder.`);
-          item.cancel();
-          this.showItemInFolder(existing.savePath);
-          showAppToast(`Revealed ${fileName} in folder.`);
-          return;
-        }
-        // If secondClickAction === 'download', fall through to download again
-      } else {
-        console.log(`[DownloadManager] Second click detected for ${fileName}, but file was moved/deleted. Re-downloading.`);
+    const matchOpts: FileMatchOptions = {
+      size: intentSize !== undefined ? intentSize : (totalBytes > 0 ? totalBytes : undefined),
+      hash: intentHash,
+    };
+
+    // Check if file exists matching name and hash/size
+    const existing = this.findExistingDownloadedFile(fileName, matchOpts) || 
+      (intentFilename ? this.findExistingDownloadedFile(intentFilename, matchOpts) : undefined);
+
+    // If file already exists and matches on disk, handle as second click (open / showInFolder)
+    // unless user explicitly selected "Download" from context menu or action is 'download'
+    if (!isContextMenu && existing) {
+      if (this.lastOpenedPath === existing.savePath && Date.now() - this.lastOpenedTimestamp < 5000) {
+        console.log(`[DownloadManager] Download cancelled as file was already opened on click: ${fileName}`);
+        item.cancel();
+        return;
       }
+      if (secondClickAction === 'open') {
+        console.log(`[DownloadManager] Matching downloaded file detected for ${fileName}. Opening existing file.`);
+        item.cancel();
+        this.lastOpenedPath = existing.savePath;
+        this.lastOpenedTimestamp = Date.now();
+        this.openDownloadedFile(existing.savePath);
+        showAppToast(`Opening ${fileName}...`);
+        return;
+      } else if (secondClickAction === 'showInFolder') {
+        console.log(`[DownloadManager] Matching downloaded file detected for ${fileName}. Revealing in folder.`);
+        item.cancel();
+        this.lastOpenedPath = existing.savePath;
+        this.lastOpenedTimestamp = Date.now();
+        this.showItemInFolder(existing.savePath);
+        showAppToast(`Revealed ${fileName} in folder.`);
+        return;
+      }
+      // If secondClickAction === 'download', fall through to download again
     }
 
     const shouldPrompt = isContextMenu || askEveryTime || (isSecondClick && secondClickAction === 'saveAs');
@@ -196,12 +412,15 @@ export class DownloadManager {
       }
     }
 
+    const manualDir = this.lastManualDownloadPath || state.globalSettings?.lastManualDownloadPath;
+    const promptDir = (manualDir && fs.existsSync(manualDir)) ? manualDir : defaultDir;
+
     if (shouldPrompt) {
       const ext = path.extname(fileName).replace(/^\./, '');
       const filters = ext ? [{ name: `${ext.toUpperCase()} File`, extensions: [ext] }, { name: 'All Files', extensions: ['*'] }] : [{ name: 'All Files', extensions: ['*'] }];
       item.setSaveDialogOptions({
         title: 'Save As',
-        defaultPath: path.join(defaultDir, fileName),
+        defaultPath: path.join(promptDir, fileName),
         filters,
       });
     } else {
@@ -217,7 +436,20 @@ export class DownloadManager {
       item.setSavePath(uniqueSavePath);
     }
 
-    const initialSavePath = item.getSavePath() || path.join(defaultDir, fileName);
+    const recordManualPath = (filePath?: string) => {
+      if (shouldPrompt && filePath) {
+        const dir = path.dirname(filePath);
+        if (dir && fs.existsSync(dir) && dir !== this.lastManualDownloadPath) {
+          this.lastManualDownloadPath = dir;
+          if (state.globalSettings) {
+            state.globalSettings.lastManualDownloadPath = dir;
+            saveSettings(state.globalSettings);
+          }
+        }
+      }
+    };
+
+    const initialSavePath = item.getSavePath() || path.join(promptDir, fileName);
 
     state.mainWindow?.webContents.send('download:progress', {
       id: startTime,
@@ -230,7 +462,8 @@ export class DownloadManager {
     });
 
     item.on('updated', (_event, stateName) => {
-      const currentSavePath = item.getSavePath() || path.join(defaultDir, fileName);
+      recordManualPath(item.getSavePath());
+      const currentSavePath = item.getSavePath() || path.join(promptDir, fileName);
       if (stateName === 'interrupted') {
         state.mainWindow?.webContents.send('download:progress', {
           id: startTime,
@@ -258,13 +491,26 @@ export class DownloadManager {
     });
 
     item.once('done', async (_event, stateName) => {
-      const finalPath = item.getSavePath() || path.join(defaultDir, fileName);
+      const finalPath = item.getSavePath() || path.join(promptDir, fileName);
+      recordManualPath(finalPath);
       if (stateName === 'completed') {
+        let fileHash: string | undefined;
+        const totalBytes = item.getTotalBytes();
+        if (totalBytes <= LARGE_FILE_THRESHOLD && fs.existsSync(finalPath)) {
+          try {
+            const buf = await fs.promises.readFile(finalPath);
+            fileHash = crypto.createHash('sha256').update(buf).digest('hex');
+          } catch (err) {
+            console.error('[DownloadManager] Failed to hash downloaded file:', err);
+          }
+        }
+
         await this.addRecord({
           id: startTime,
           filename: fileName,
           savePath: finalPath,
-          fileSize: item.getTotalBytes(),
+          fileSize: totalBytes,
+          fileHash,
           mimeType: item.getMimeType(),
           timestamp: Date.now(),
           accountId,

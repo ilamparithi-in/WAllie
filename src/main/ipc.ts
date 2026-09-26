@@ -766,8 +766,14 @@ export function registerIpcHandlers() {
     return downloadManager.clearHistory();
   });
 
-  ipcMain.on('download:set-intent', (_event, data: { intent: any; filename?: string }) => {
-    downloadManager.setIntent(data.intent, data.filename);
+  ipcMain.on('download:set-intent', (_event, data: { intent: any; filename?: string; size?: number; hash?: string }) => {
+    downloadManager.setIntent(data.intent, data.filename, data.size, data.hash);
+  });
+
+  ipcMain.handle('downloads:file-card-clicked', async (_event, payload: string | { filename: string; size?: number; hash?: string }) => {
+    const filename = typeof payload === 'string' ? payload : payload.filename;
+    const opts = typeof payload === 'object' ? { size: payload.size, hash: payload.hash } : undefined;
+    return downloadManager.handleFileCardClick(filename, opts);
   });
 
   // App Version Info Handler

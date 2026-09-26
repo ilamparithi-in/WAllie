@@ -567,6 +567,73 @@ function setupWhatsAppIntegration() {
     ipcRenderer.send('webview:clicked');
   });
 
+  function extractFilenameFromMessage(container: Element): string {
+    // 1. Search all elements with title attribute for a filename pattern
+    // In WhatsApp Web, document cards often have title='Download "filename.docx"'
+    const titleElements = container.querySelectorAll('[title]');
+    for (const el of Array.from(titleElements)) {
+      const rawTitle = (el.getAttribute('title') || '').trim();
+      // Match either Download "filename.ext" or "filename.ext" or filename.ext
+      const match = rawTitle.match(/(?:Download\s+["“']?)?([^"”'\n\r]+\.[a-z0-9]{2,6})["”']?/i);
+      if (match && match[1]) {
+        const cleaned = match[1].trim();
+        // Ignore generic labels like "2 pages", "DOCX", etc.
+        if (cleaned && !cleaned.toLowerCase().startsWith('download')) {
+          return cleaned;
+        }
+      }
+    }
+
+    // 2. Search leaf text nodes for a filename pattern
+    const leafElements = container.querySelectorAll('span, div, p');
+    for (const el of Array.from(leafElements)) {
+      if (el.children.length === 0) {
+        const text = (el.textContent || '').trim();
+        if (/\.[a-z0-9]{2,6}$/i.test(text)) {
+          return text;
+        }
+      }
+    }
+
+    // 3. Fallback to any span[title] or div[title] if present
+    const fallbackEl = container.querySelector('span[title], div[title]');
+    const rawFallback = (fallbackEl?.getAttribute('title') || fallbackEl?.textContent || '').trim();
+    return rawFallback.replace(/^Download\s+["“']?/i, '').replace(/["”']?$/i, '').trim();
+  }
+
+  function parseSizeToBytes(sizeStr: string): number | undefined {
+    const match = sizeStr.trim().match(/^([\d.]+)\s*(B|kB|KB|MB|GB|TB)$/i);
+    if (!match) return undefined;
+    const num = parseFloat(match[1]);
+    const unit = match[2].toUpperCase();
+    if (isNaN(num)) return undefined;
+    switch (unit) {
+      case 'B': return Math.round(num);
+      case 'KB': return Math.round(num * 1024);
+      case 'MB': return Math.round(num * 1024 * 1024);
+      case 'GB': return Math.round(num * 1024 * 1024 * 1024);
+      case 'TB': return Math.round(num * 1024 * 1024 * 1024 * 1024);
+      default: return undefined;
+    }
+  }
+
+  function extractFileSizeFromMessage(container: Element): number | undefined {
+    // Check elements with title attributes or text content matching size pattern (e.g., "15 kB", "80 kB", "1.5 MB")
+    const elements = container.querySelectorAll('[title], span, div');
+    for (const el of Array.from(elements)) {
+      const title = (el.getAttribute('title') || '').trim();
+      const fromTitle = parseSizeToBytes(title);
+      if (fromTitle !== undefined) return fromTitle;
+
+      if (el.children.length === 0) {
+        const text = (el.textContent || '').trim();
+        const fromText = parseSizeToBytes(text);
+        if (fromText !== undefined) return fromText;
+      }
+    }
+    return undefined;
+  }
+
   // Capture clicks on document to detect Context Menu Download or Second-click on file
   document.addEventListener('click', (e) => {
     const target = e.target as HTMLElement | null;
@@ -591,28 +658,31 @@ function setupWhatsAppIntegration() {
     // 2. Message / Document card detection
     const msgContainer = target.closest('[data-id], div[class*="message-in"], div[class*="message-out"], [data-testid="msg-container"]');
     if (msgContainer) {
-      // Check if download button is present in this message
-      const downloadBtn = msgContainer.querySelector(
-        '[data-icon="download"], [data-testid="download"], [data-testid="audio-download"], [data-icon="audio-download"], button[aria-label*="download" i]'
-      );
-      const clickedDownloadBtn = target.closest(
-        '[data-icon="download"], [data-testid="download"], [data-testid="audio-download"], [data-icon="audio-download"], button[aria-label*="download" i]'
-      );
+      const filename = extractFilenameFromMessage(msgContainer);
+      const isDocCard = !!msgContainer.querySelector('[data-icon*="document"], [data-icon="default-doc"], [data-testid="document-thumb"]');
+      const hasExtension = /\.[a-z0-9]{2,6}$/i.test(filename.trim());
 
-      if (clickedDownloadBtn || downloadBtn) {
-        console.log('[walinux] Download button present -> intent: first-download');
-        ipcRenderer.send('download:set-intent', { intent: 'first-download' });
-      } else {
-        // Download button is not present, check if this is a file card
-        const titleEl = msgContainer.querySelector('span[title], div[title]');
-        const filename = titleEl ? titleEl.getAttribute('title') || titleEl.textContent || '' : '';
-        const hasExtension = /\.[a-z0-9]{2,5}$/i.test(filename.trim());
-        const isDocCard = !!msgContainer.querySelector('[data-icon="document"], [data-icon="default-doc"], [data-testid="document-thumb"]');
+      if (filename && (hasExtension || isDocCard)) {
+        const cleanName = filename.trim();
+        const extractedSize = extractFileSizeFromMessage(msgContainer);
 
-        if (hasExtension || isDocCard) {
-          console.log('[walinux] File card clicked without download button -> intent: second-click for:', filename.trim());
-          ipcRenderer.send('download:set-intent', { intent: 'second-click', filename: filename.trim() });
-        }
+        console.log(`[walinux] Document card clicked: "${cleanName}", approx size: ${extractedSize}`);
+
+        ipcRenderer.invoke('downloads:file-card-clicked', {
+          filename: cleanName,
+          size: extractedSize,
+        }).then((result: { handled: boolean; isExisting: boolean }) => {
+          if (result && result.isExisting) {
+            console.log('[walinux] Matched existing downloaded file on disk -> handled:', result.handled);
+            ipcRenderer.send('download:set-intent', { intent: 'second-click', filename: cleanName, size: extractedSize });
+          } else {
+            console.log('[walinux] No existing matching file found -> intent: first-download');
+            ipcRenderer.send('download:set-intent', { intent: 'first-download', filename: cleanName, size: extractedSize });
+          }
+        }).catch((err: any) => {
+          console.error('[walinux] Failed to handle file card click:', err);
+          ipcRenderer.send('download:set-intent', { intent: 'first-download', filename: cleanName, size: extractedSize });
+        });
       }
     }
   }, true);
@@ -695,8 +765,8 @@ function setupWhatsAppIntegration() {
     onSendInlineReply: (callback: (data: { contactName: string; text: string; tag: string }) => void) => {
       onInlineReplyCallback = callback;
     },
-    onAnchorDownload: (filename: string) => {
-      ipcRenderer.send('download:set-intent', { intent: 'anchor-detected', filename });
+    onAnchorDownload: (filename: string, size?: number, hash?: string) => {
+      ipcRenderer.send('download:set-intent', { intent: 'anchor-detected', filename, size, hash });
     },
   });
 
