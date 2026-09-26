@@ -886,12 +886,15 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
       defaultId: 1,
       cancelId: 1,
       title: 'Discard Changes?',
-      message: 'Do you want to reload this page?',
+      message: `Do you want to reload "${account.name}"?`,
       detail: 'Changes that you made may not be saved.',
       noLink: true,
     });
     if (choice === 0) {
       event.preventDefault();
+      (view.webContents as any)._lastUnloadCancelled = false;
+    } else {
+      (view.webContents as any)._lastUnloadCancelled = true;
     }
   });
 

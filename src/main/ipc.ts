@@ -722,26 +722,73 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.on('protocol:handle-url', async (_event, accountId: string, urlStr: string) => {
+  ipcMain.handle('protocol:handle-url', async (_event, accountId: string, urlStr: string) => {
     console.log(`Handling custom protocol URL for account ${accountId}: ${urlStr}`);
     try {
       const url = new URL(urlStr);
       let waPath = '/';
-      if (url.hostname === 'send') {
+
+      // Direct message / send URL
+      if (url.hostname === 'send' || url.pathname.startsWith('/send')) {
         waPath = '/send' + url.search;
-      } else if (url.pathname.startsWith('/send')) {
-        waPath = url.pathname + url.search;
       }
+      // Group chat invite via custom scheme: whatsapp://chat/?code=XYZ or whatsapp://accept/?code=XYZ
+      else if (
+        (url.hostname === 'chat' || url.hostname === 'accept' || url.pathname.startsWith('/chat') || url.pathname.startsWith('/accept')) &&
+        url.searchParams.has('code')
+      ) {
+        waPath = `/accept?code=${encodeURIComponent(url.searchParams.get('code')!)}`;
+      }
+      // Group chat invite via chat.whatsapp.com/XYZ
+      else if (url.hostname === 'chat.whatsapp.com') {
+        const code = url.pathname.replace(/^\/(invite\/)?/, '').split('/')[0];
+        if (code) {
+          waPath = `/accept?code=${encodeURIComponent(code)}`;
+        }
+      }
+      // wa.me/PHONE?text=...
+      else if (url.hostname === 'wa.me') {
+        const phone = url.pathname.replace(/^\//, '');
+        const search = url.search ? (url.search.startsWith('?') ? url.search : `?${url.search}`) : '';
+        waPath = `/send${search ? `${search}&phone=${phone}` : `?phone=${phone}`}`;
+      }
+      // General path/query fallback
+      else if (url.search) {
+        waPath = `/${url.pathname.replace(/^\//, '')}${url.search}`;
+      } else if (url.pathname && url.pathname !== '/') {
+        waPath = url.pathname;
+      }
+
       const targetUrl = `https://web.whatsapp.com${waPath}`;
-      
-      await switchActiveAccount(accountId);
+      console.log(`Resolved target URL for WhatsApp Web: ${targetUrl}`);
       
       const targetView = state.accountViews.get(accountId);
-      if (targetView) {
-        targetView.webContents.loadURL(targetUrl);
+      if (!targetView) {
+        return { success: false, error: 'Target account view not found' };
       }
-    } catch (error) {
+
+      (targetView.webContents as any)._lastUnloadCancelled = false;
+      try {
+        await targetView.webContents.loadURL(targetUrl);
+      } catch (err: any) {
+        if (
+          (targetView.webContents as any)._lastUnloadCancelled ||
+          err?.message?.includes('ERR_ABORTED') ||
+          err?.code === 'ERR_ABORTED'
+        ) {
+          console.log(`Navigation cancelled by user for account ${accountId}`);
+          return { success: false, cancelled: true };
+        }
+        console.error('Failed to load target URL:', err);
+        return { success: false, error: err?.message || String(err) };
+      }
+
+      // Switch active account only if navigation actually succeeded (user confirmed leaving)
+      await switchActiveAccount(accountId);
+      return { success: true };
+    } catch (error: any) {
       console.error('Failed to handle custom protocol redirection:', error);
+      return { success: false, error: error?.message || String(error) };
     }
   });
 
