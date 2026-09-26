@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Palette, Type, Image as ImageIcon, Trash2, Upload, Monitor, Code, Sparkles, ChevronDown, Check, Loader2, AlertCircle, X } from 'lucide-react';
-import type { AccountInfo } from '../../../preload';
+import { Palette, Type, Image as ImageIcon, Trash2, Upload, Monitor, Code, ChevronDown, Check, Loader2, AlertCircle, X, Info } from 'lucide-react';
+import type { AccountInfo, SystemFontInfo } from '../../../preload';
+import { resolveGoogleFont, resolveGoogleFontUrl } from '../../../shared/fonts';
 
 interface ThemeSettingsPageProps {
   accounts: AccountInfo[];
@@ -13,10 +14,16 @@ interface ThemeSettingsPageProps {
   fontFamily: string;
   monoFontFamily: string;
   followSystemFont: boolean;
+  preferGoogleFont: boolean;
+  onTogglePreferGoogleFont: (enabled: boolean) => void;
+  preferGoogleMonoFont: boolean;
+  onTogglePreferGoogleMonoFont: (enabled: boolean) => void;
   customWallpaper: string;
   systemFonts: string[];
-  onUpdateFont: (font: string) => void;
-  onUpdateMonoFont: (monoFont: string) => void;
+  systemFontsMeta: SystemFontInfo[];
+  desktopFont: { name: string; isVariable: boolean };
+  onUpdateFont: (font: string, fontUrl?: string) => void;
+  onUpdateMonoFont: (monoFont: string, monoFontUrl?: string) => void;
   onToggleFollowSystemFont: (enabled: boolean) => void;
   onSelectWallpaper: () => Promise<void>;
   onClearWallpaper: () => void;
@@ -30,11 +37,14 @@ interface FontComboboxProps {
   label: string;
   sublabel: string;
   value: string;
-  onChange: (newFont: string) => void;
+  onChange: (newFont: string, fontUrl?: string) => void;
   systemFonts: string[];
+  systemFontsMeta: SystemFontInfo[];
   placeholder?: string;
   icon: React.ElementType;
   defaultLabel: string;
+  preferGoogleFont?: boolean;
+  onTogglePreferGoogleFont?: (enabled: boolean) => void;
 }
 
 const FontCombobox: React.FC<FontComboboxProps> = ({
@@ -43,20 +53,41 @@ const FontCombobox: React.FC<FontComboboxProps> = ({
   value,
   onChange,
   systemFonts,
+  systemFontsMeta,
   placeholder,
   icon: Icon,
   defaultLabel,
+  preferGoogleFont,
+  onTogglePreferGoogleFont,
 }) => {
   const [input, setInput] = useState(value);
   const [isOpen, setIsOpen] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const [isResolvingGFont, setIsResolvingGFont] = useState(false);
+  const [gFontStatus, setGFontStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Find system font metadata for currently selected font
+  const activeClean = cleanFamily(value);
+  const matchedSystemFont = activeClean
+    ? systemFontsMeta.find((f) => f.name.toLowerCase() === activeClean.toLowerCase())
+    : undefined;
+  const isSystemFont = Boolean(matchedSystemFont);
+  const isSystemFontVariable = Boolean(matchedSystemFont?.isVariable);
 
   useEffect(() => {
     setInput(value);
     setError(null);
-  }, [value]);
+    if (preferGoogleFont && isSystemFont && !isSystemFontVariable) {
+      setGFontStatus({
+        success: true,
+        message: 'Google Fonts version active.',
+      });
+    } else {
+      setGFontStatus(null);
+    }
+  }, [value, preferGoogleFont, isSystemFont, isSystemFontVariable]);
 
   // Click outside to close dropdown
   useEffect(() => {
@@ -77,6 +108,7 @@ const FontCombobox: React.FC<FontComboboxProps> = ({
   const handleApply = async (rawFont: string) => {
     const target = cleanFamily(rawFont);
     setError(null);
+    setGFontStatus(null);
 
     // If empty or default
     if (!target) {
@@ -87,12 +119,26 @@ const FontCombobox: React.FC<FontComboboxProps> = ({
     }
 
     // 1. Check if it's already an installed system font
-    const systemMatch = systemFonts.find(
-      (f) => f.toLowerCase() === target.toLowerCase()
+    const systemMatch = systemFontsMeta.find(
+      (f) => f.name.toLowerCase() === target.toLowerCase()
     );
     if (systemMatch) {
-      setInput(systemMatch);
-      onChange(systemMatch);
+      setInput(systemMatch.name);
+      if (preferGoogleFont) {
+        setIsChecking(true);
+        try {
+          const res = await resolveGoogleFont(systemMatch.name);
+          if (res) {
+            onChange(systemMatch.name, res.url);
+          } else {
+            onChange(systemMatch.name, '');
+          }
+        } finally {
+          setIsChecking(false);
+        }
+      } else {
+        onChange(systemMatch.name, '');
+      }
       setIsOpen(false);
       return;
     }
@@ -105,25 +151,22 @@ const FontCombobox: React.FC<FontComboboxProps> = ({
       return;
     }
 
-    // 3. Assume Google Font and verify online
+    // 3. Assume Google Font and verify online with variable font range
     setIsChecking(true);
     try {
-      const gParam = target.replace(/\s+/g, '+');
-      const url = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(gParam)}&display=swap`;
-      const res = await fetch(url, { method: 'HEAD' });
-
-      if (res.ok) {
-        // Success: Inject link immediately for preview
+      const res = await resolveGoogleFont(target);
+      if (res) {
         const id = `gfont-${target.replace(/\s+/g, '-').toLowerCase()}`;
-        if (!document.getElementById(id)) {
-          const link = document.createElement('link');
+        let link = document.getElementById(id) as HTMLLinkElement | null;
+        if (!link) {
+          link = document.createElement('link');
           link.id = id;
           link.rel = 'stylesheet';
-          link.href = url;
           document.head.appendChild(link);
         }
+        link.href = res.url;
         setInput(target);
-        onChange(target);
+        onChange(target, res.url);
         setIsOpen(false);
       } else {
         setError(`Font "${target}" does not exist on your system or Google Fonts.`);
@@ -203,6 +246,84 @@ const FontCombobox: React.FC<FontComboboxProps> = ({
         </button>
       </div>
 
+      {/* Non-variable system font notice & Google Fonts replacement checkbox */}
+      {isSystemFont && !isSystemFontVariable && (
+        <div className="p-2.5 rounded bg-[#182229] border border-[#222d34] space-y-2 mt-1">
+          {!preferGoogleFont && (
+            <div className="text-[10.5px] text-[#e5a50a] flex items-start gap-1.5">
+              <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>
+                <strong>Note:</strong> "{value}" is not a variable-width system font. Custom weights (like WhatsApp's 545 button weight) may not render properly.
+              </span>
+            </div>
+          )}
+
+          <label className="flex items-center gap-2 text-xs text-[#e9edef] cursor-pointer">
+            <input
+              type="checkbox"
+              checked={preferGoogleFont || false}
+              disabled={isResolvingGFont}
+              onChange={async (e) => {
+                const checked = e.target.checked;
+                onTogglePreferGoogleFont?.(checked);
+                setGFontStatus(null);
+                if (checked) {
+                  setIsResolvingGFont(true);
+                  try {
+                    const res = await resolveGoogleFont(value);
+                    if (res) {
+                      onChange(value, res.url);
+                      const id = `gfont-${value.replace(/\s+/g, '-').toLowerCase()}`;
+                      let link = document.getElementById(id) as HTMLLinkElement | null;
+                      if (!link) {
+                        link = document.createElement('link');
+                        link.id = id;
+                        link.rel = 'stylesheet';
+                        document.head.appendChild(link);
+                      }
+                      link.href = res.url;
+                      setGFontStatus({
+                        success: true,
+                        message: res.isVariable
+                          ? `Using variable-weight version from Google Fonts (continuous range active)!`
+                          : `Loaded from Google Fonts (standard discrete weights).`,
+                      });
+                    } else {
+                      setGFontStatus({ success: false, message: `"${value}" is not available on Google Fonts.` });
+                    }
+                  } catch {
+                    setGFontStatus({ success: false, message: `Failed to connect to Google Fonts.` });
+                  } finally {
+                    setIsResolvingGFont(false);
+                  }
+                } else {
+                  onChange(value, '');
+                  setGFontStatus(null);
+                }
+              }}
+              className="w-3.5 h-3.5 accent-[#00a884] cursor-pointer rounded"
+            />
+            <span className="text-[11px] text-[#c2c5d1]">
+              Fetch "{value}" from Google Fonts instead {isResolvingGFont ? '(checking...)' : '(to get variable weight file if available)'}
+            </span>
+          </label>
+
+          {gFontStatus && (
+            <div className={`text-[10px] pl-5.5 flex items-center gap-1 ${gFontStatus.success ? 'text-[#00a884]' : 'text-[#f87171]'}`}>
+              {gFontStatus.success ? <Check className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+              <span>{gFontStatus.message}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {isSystemFont && isSystemFontVariable && (
+        <div className="text-[10.5px] text-[#00a884] flex items-center gap-1.5 pt-0.5">
+          <Check className="w-3 h-3 shrink-0" />
+          <span>Variable-width system font detected. Custom 545 weight supported.</span>
+        </div>
+      )}
+
       {/* Error Notice */}
       {error && (
         <div className="p-2 rounded bg-[#ef4444]/10 border border-[#ef4444]/30 text-[#f87171] text-[11px] flex items-center justify-between gap-2 animate-fadeIn">
@@ -234,27 +355,31 @@ const FontCombobox: React.FC<FontComboboxProps> = ({
 
           {/* Filtered System Fonts */}
           {filteredFonts.length > 0 ? (
-            filteredFonts.map((font) => (
-              <button
-                type="button"
-                key={font}
-                onClick={() => handleApply(font)}
-                className="w-full text-left px-3 py-2 text-xs hover:bg-[#202c33] flex items-center justify-between transition-colors group"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className="text-[#e9edef] group-hover:text-white truncate"
-                    style={{ fontFamily: `"${font}", sans-serif` }}
-                  >
-                    {font}
-                  </span>
-                  <span className="text-[9px] text-[#8696a0] bg-[#111b21] px-1.5 py-0.5 rounded border border-[#222d34] shrink-0 font-sans">
-                    System
-                  </span>
-                </div>
-                {value === font && <Check className="w-3.5 h-3.5 text-[#00a884] shrink-0" />}
-              </button>
-            ))
+            filteredFonts.map((font) => {
+              const meta = systemFontsMeta.find((f) => f.name.toLowerCase() === font.toLowerCase());
+              const isVar = meta?.isVariable;
+              return (
+                <button
+                  type="button"
+                  key={font}
+                  onClick={() => handleApply(font)}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-[#202c33] flex items-center justify-between transition-colors group"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="text-[#e9edef] group-hover:text-white truncate"
+                      style={{ fontFamily: `"${font}", sans-serif` }}
+                    >
+                      {font}
+                    </span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border shrink-0 font-sans ${isVar ? 'text-[#00a884] border-[#00a884]/30 bg-[#00a884]/10' : 'text-[#8696a0] border-[#222d34] bg-[#111b21]'}`}>
+                      {isVar ? 'Variable' : 'System'}
+                    </span>
+                  </div>
+                  {value === font && <Check className="w-3.5 h-3.5 text-[#00a884] shrink-0" />}
+                </button>
+              );
+            })
           ) : (
             <div className="px-3 py-2.5 text-[11px] text-[#8696a0] bg-[#111b21]">
               <span>No local system font matches "{trimmedInput}".</span>
@@ -280,8 +405,14 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
   fontFamily,
   monoFontFamily,
   followSystemFont,
+  preferGoogleFont,
+  onTogglePreferGoogleFont,
+  preferGoogleMonoFont,
+  onTogglePreferGoogleMonoFont,
   customWallpaper,
   systemFonts,
+  systemFontsMeta,
+  desktopFont,
   onUpdateFont,
   onUpdateMonoFont,
   onToggleFollowSystemFont,
@@ -290,24 +421,36 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
   onImportCustomCss,
   onClearCustomCss,
 }) => {
+  const [previewWeight, setPreviewWeight] = useState<number>(545);
+
   // Dynamically load Google Fonts stylesheet in the settings window for preview
   useEffect(() => {
-    const fonts = [cleanFamily(fontFamily), cleanFamily(monoFontFamily)].filter(Boolean);
-    fonts.forEach((font) => {
-      const isGeneric = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|Segoe UI|Arial|Helvetica|Times New Roman|Courier New)$/i.test(font);
-      if (isGeneric || font.includes(',')) return;
+    const fonts = [
+      { name: cleanFamily(fontFamily), preferGoogle: preferGoogleFont },
+      { name: cleanFamily(monoFontFamily), preferGoogle: preferGoogleMonoFont },
+    ].filter((f) => Boolean(f.name));
 
-      const id = `gfont-${font.replace(/\s+/g, '-').toLowerCase()}`;
-      if (!document.getElementById(id)) {
-        const link = document.createElement('link');
+    fonts.forEach(async ({ name, preferGoogle }) => {
+      const isGeneric = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|Segoe UI|Arial|Helvetica|Times New Roman|Courier New)$/i.test(name);
+      if (isGeneric || name.includes(',')) return;
+
+      const isSystem = systemFontsMeta.some((f) => f.name.toLowerCase() === name.toLowerCase());
+      if (isSystem && !preferGoogle) return;
+
+      const url = await resolveGoogleFontUrl(name);
+      if (!url) return;
+
+      const id = `gfont-${name.replace(/\s+/g, '-').toLowerCase()}`;
+      let link = document.getElementById(id) as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement('link');
         link.id = id;
         link.rel = 'stylesheet';
-        const gParam = font.replace(/\s+/g, '+');
-        link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(gParam)}&display=swap`;
         document.head.appendChild(link);
       }
+      link.href = url;
     });
-  }, [fontFamily, monoFontFamily]);
+  }, [fontFamily, monoFontFamily, preferGoogleFont, preferGoogleMonoFont, systemFontsMeta]);
 
   const activeBodyFont = cleanFamily(fontFamily);
   const activeMonoFont = cleanFamily(monoFontFamily);
@@ -351,10 +494,6 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
             <Type className="w-3.5 h-3.5 text-[#00a884]" />
             <span>Chat Typography</span>
           </div>
-          <span className="text-[10px] text-[#8696a0] flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-[#00a884]" />
-            Unified System & Google Fonts
-          </span>
         </div>
 
         {/* Follow Desktop System Font toggle */}
@@ -363,7 +502,10 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
             <Monitor className="w-4 h-4 text-[#8696a0]" />
             <div>
               <div className="text-xs font-medium text-[#e9edef]">Follow System Desktop Font</div>
-              <div className="text-[10px] text-[#8696a0]">Apply native desktop UI font stack to WhatsApp Web</div>
+              <div className="text-[10px] text-[#8696a0]">
+                Apply native desktop UI font stack to WhatsApp Web
+                {desktopFont?.name ? ` (${desktopFont.name}${desktopFont.isVariable ? ' - Variable' : ' - Static'})` : ''}
+              </div>
             </div>
           </div>
           <input
@@ -374,6 +516,22 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
           />
         </label>
 
+        {followSystemFont && desktopFont?.name && !desktopFont.isVariable && (
+          <div className="p-2.5 rounded bg-[#182229] border border-[#222d34] text-[10.5px] text-[#e5a50a] flex items-start gap-2">
+            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>
+              <strong>Note:</strong> Your desktop font "{desktopFont.name}" is not a variable-width font. WhatsApp Web uses custom font weights (like 545 for buttons and tabs), which may not render at their intended intermediate weight.
+            </span>
+          </div>
+        )}
+
+        {followSystemFont && desktopFont?.name && desktopFont.isVariable && (
+          <div className="text-[10.5px] text-[#00a884] flex items-center gap-1.5 px-1">
+            <Check className="w-3.5 h-3.5 shrink-0" />
+            <span>Your desktop font "{desktopFont.name}" is a variable-width font. Custom 545 weight supported.</span>
+          </div>
+        )}
+
         {!followSystemFont && (
           <div className="space-y-4 pt-1">
             {/* Unified Primary Font Picker */}
@@ -383,6 +541,9 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
               value={fontFamily}
               onChange={onUpdateFont}
               systemFonts={systemFonts}
+              systemFontsMeta={systemFontsMeta}
+              preferGoogleFont={preferGoogleFont}
+              onTogglePreferGoogleFont={onTogglePreferGoogleFont}
               placeholder="Search system fonts or type Google Font (e.g. Poppins, Outfit, Inter)..."
               icon={Type}
               defaultLabel="WhatsApp Default Font"
@@ -396,6 +557,9 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
                 value={monoFontFamily}
                 onChange={onUpdateMonoFont}
                 systemFonts={systemFonts}
+                systemFontsMeta={systemFontsMeta}
+                preferGoogleFont={preferGoogleMonoFont}
+                onTogglePreferGoogleFont={onTogglePreferGoogleMonoFont}
                 placeholder="Search system fonts or type Google Font (e.g. JetBrains Mono, Fira Code)..."
                 icon={Code}
                 defaultLabel="Default Monospace Font"
@@ -403,7 +567,7 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
             </div>
 
             {/* Authentic WhatsApp Chat Conversation Preview */}
-            <div className="rounded-lg border border-[#222d34] bg-[#0b141a] p-3 space-y-2 overflow-hidden shadow-sm">
+            <div className="rounded-lg border border-[#222d34] bg-[#0b141a] p-3 space-y-2.5 overflow-hidden shadow-sm">
               <div className="flex items-center justify-between text-[11px] text-[#8696a0] pb-1 border-b border-[#182229]">
                 <span className="font-medium text-[#c2c5d1]">Conversation Preview</span>
                 <span className="text-[10px] text-[#8696a0] font-mono truncate max-w-[240px]">
@@ -462,6 +626,72 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
                     <div className="flex items-center justify-end text-[10px] text-[#8696a0]">
                       <span>10:43 AM</span>
                     </div>
+                  </div>
+                </div>
+
+                {/* Weight Verification & Slider Bar */}
+                <div className="pt-2.5 border-t border-[#182229] space-y-2 px-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#8696a0] font-medium">Weight Slider:</span>
+                      <span className="font-mono text-[#00a884] font-bold bg-[#00a884]/10 px-1.5 py-0.5 rounded border border-[#00a884]/20 text-[10px]">
+                        {previewWeight}
+                      </span>
+                    </div>
+                    {/* Quick presets */}
+                    <div className="flex items-center gap-1">
+                      {[300, 400, 500, 545, 600, 700].map((w) => (
+                        <button
+                          key={w}
+                          type="button"
+                          onClick={() => setPreviewWeight(w)}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${
+                            previewWeight === w
+                              ? 'bg-[#00a884] text-[#111b21] font-bold'
+                              : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#233138]'
+                          }`}
+                        >
+                          {w}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-[10px] text-[#8696a0] font-mono">100</span>
+                    <input
+                      type="range"
+                      min={100}
+                      max={900}
+                      step={1}
+                      value={previewWeight}
+                      onChange={(e) => setPreviewWeight(Number(e.target.value))}
+                      className="flex-1 accent-[#00a884] h-1.5 bg-[#202c33] rounded-lg appearance-none cursor-pointer"
+                    />
+                    <span className="text-[10px] text-[#8696a0] font-mono">900</span>
+                  </div>
+
+                  {/* Sample WhatsApp UI Button & Text rendered at current preview weight */}
+                  <div className="flex items-center justify-between pt-1">
+                    <div
+                      className="text-[12px] text-[#e9edef] truncate mr-2"
+                      style={{
+                        fontFamily: activeBodyFont ? `"${activeBodyFont}", system-ui, sans-serif` : 'inherit',
+                        fontWeight: previewWeight,
+                      }}
+                    >
+                      Sample text at weight {previewWeight}: The quick brown fox jumps over the lazy dog.
+                    </div>
+                    <button
+                      type="button"
+                      className="px-3 py-1 rounded-full bg-[#00a884] text-[#111b21] text-[12px] shrink-0 font-medium shadow-sm transition-all"
+                      style={{
+                        fontFamily: activeBodyFont ? `"${activeBodyFont}", system-ui, sans-serif` : 'inherit',
+                        fontWeight: previewWeight,
+                      }}
+                    >
+                      Join community ({previewWeight})
+                    </button>
                   </div>
                 </div>
               </div>

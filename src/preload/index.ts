@@ -1,10 +1,11 @@
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
-import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings } from '../shared/types';
+import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo } from '../shared/types';
+import type { GoogleFontResolution } from '../shared/fonts';
 
 // Inlined at build time by scripts/build-preload.cjs from src/preload/inject/whatsappMainWorld.ts
 const MAIN_WORLD_SCRIPT = '__MAIN_WORLD_SCRIPT__';
 
-export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings };
+export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GoogleFontResolution };
 
 export interface ElectronAPI {
   // Window controls
@@ -70,6 +71,8 @@ export interface ElectronAPI {
   selectWallpaperFile: () => Promise<string | null>;
   selectCustomCssFile: () => Promise<string | null>;
   getSystemFonts: () => Promise<string[]>;
+  getSystemFontsMeta: () => Promise<{ fonts: SystemFontInfo[]; desktopFont: { name: string; isVariable: boolean } }>;
+  resolveGoogleFont: (family: string, cachedUrl?: string) => Promise<GoogleFontResolution | null>;
 
   // Custom protocol controls
   onProtocolReceived: (callback: (url: string) => void) => () => void;
@@ -171,6 +174,8 @@ const api: ElectronAPI = {
   selectWallpaperFile: () => ipcRenderer.invoke('wallpaper:select-file'),
   selectCustomCssFile: () => ipcRenderer.invoke('customcss:select-file'),
   getSystemFonts: () => ipcRenderer.invoke('system:get-fonts'),
+  getSystemFontsMeta: () => ipcRenderer.invoke('system:get-fonts-meta'),
+  resolveGoogleFont: (family, cachedUrl) => ipcRenderer.invoke('system:resolve-google-font', family, cachedUrl),
   relaunchApp: () => ipcRenderer.send('app:relaunch'),
 
   onProtocolReceived: (callback) => {

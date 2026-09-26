@@ -10,6 +10,7 @@ import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectC
 import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize, unloadAccountLogic, loadAccountLogic, notifyAccountListChanged } from './window';
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry, closeDbusNotificationByTag, closeNotificationByContact } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS, AccountSettings } from '../shared/types';
+import { resolveGoogleFont, resolveGoogleFontUrl } from '../shared/fonts';
 import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus, getAccountForWebContents, showAppToast } from './utils';
 import { downloadManager } from './downloads';
 
@@ -535,8 +536,20 @@ export function registerIpcHandlers() {
     if (typeof appearance.fontFamily === 'string') {
       account.settings.fontFamily = appearance.fontFamily.substring(0, 200);
     }
+    if (typeof appearance.fontUrl === 'string') {
+      account.settings.fontUrl = appearance.fontUrl.substring(0, 1000);
+    }
     if (typeof appearance.monoFontFamily === 'string') {
       account.settings.monoFontFamily = appearance.monoFontFamily.substring(0, 200);
+    }
+    if (typeof appearance.monoFontUrl === 'string') {
+      account.settings.monoFontUrl = appearance.monoFontUrl.substring(0, 1000);
+    }
+    if (typeof appearance.preferGoogleFont === 'boolean') {
+      account.settings.preferGoogleFont = appearance.preferGoogleFont;
+    }
+    if (typeof appearance.preferGoogleMonoFont === 'boolean') {
+      account.settings.preferGoogleMonoFont = appearance.preferGoogleMonoFont;
     }
     if (typeof appearance.followSystemFont === 'boolean') {
       account.settings.followSystemFont = appearance.followSystemFont;
@@ -649,6 +662,66 @@ export function registerIpcHandlers() {
         'sans-serif',
       ];
     }
+  });
+
+  ipcMain.handle('system:get-fonts-meta', async () => {
+    try {
+      const { stdout } = await execAsync('fc-list : family variable');
+      const fontMap = new Map<string, boolean>();
+      stdout.split('\n').forEach((line) => {
+        if (!line.trim()) return;
+        const [familiesPart, varPart] = line.split(':variable=');
+        const isVar = varPart ? varPart.trim().toLowerCase() === 'true' : false;
+        familiesPart.split(',').forEach((f) => {
+          const trimmed = f.trim();
+          if (trimmed && !trimmed.startsWith('.')) {
+            const current = fontMap.get(trimmed) || false;
+            fontMap.set(trimmed, current || isVar);
+          }
+        });
+      });
+
+      // Detect system desktop font
+      let desktopFontName = '';
+      try {
+        const { stdout: gOut } = await execAsync('gsettings get org.gnome.desktop.interface font-name');
+        const cleaned = gOut.trim().replace(/^['"]+|['"]+$/g, '');
+        const parts = cleaned.split(/\s+/);
+        if (parts.length > 1 && !isNaN(Number(parts[parts.length - 1]))) {
+          desktopFontName = parts.slice(0, -1).join(' ');
+        } else {
+          desktopFontName = cleaned;
+        }
+      } catch {
+        // Fallback
+      }
+
+      let desktopFontIsVariable = false;
+      if (desktopFontName) {
+        desktopFontIsVariable = fontMap.get(desktopFontName) || false;
+      }
+
+      const fonts = Array.from(fontMap.entries())
+        .map(([name, isVariable]) => ({ name, isVariable }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      return {
+        fonts,
+        desktopFont: {
+          name: desktopFontName,
+          isVariable: desktopFontIsVariable,
+        },
+      };
+    } catch (err) {
+      return {
+        fonts: [],
+        desktopFont: { name: '', isVariable: false },
+      };
+    }
+  });
+
+  ipcMain.handle('system:resolve-google-font', async (_event, family: string, cachedUrl?: string) => {
+    return await resolveGoogleFont(family, cachedUrl);
   });
 
   ipcMain.on('devtools:toggle', () => {

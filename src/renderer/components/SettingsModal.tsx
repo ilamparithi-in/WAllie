@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw, FolderOpen, User, Trash2, Download, Copy, Check } from 'lucide-react';
-import type { AccountInfo, GlobalSettings, AppVersionInfo, AccountSettings } from '../../preload';
+import type { AccountInfo, GlobalSettings, AppVersionInfo, AccountSettings, SystemFontInfo } from '../../preload';
 import { GeneralSettingsPage } from './settings/GeneralSettingsPage';
 import { PreloadSettingsPage } from './settings/PreloadSettingsPage';
 import { AccountsSettingsPage } from './settings/AccountsSettingsPage';
@@ -84,8 +84,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   const [fontFamily, setFontFamily] = useState<string>('');
   const [monoFontFamily, setMonoFontFamily] = useState<string>('');
   const [followSystemFont, setFollowSystemFont] = useState<boolean>(false);
+  const [preferGoogleFont, setPreferGoogleFont] = useState<boolean>(false);
+  const [preferGoogleMonoFont, setPreferGoogleMonoFont] = useState<boolean>(false);
   const [customWallpaper, setCustomWallpaper] = useState<string>('');
   const [systemFonts, setSystemFonts] = useState<string[]>([]);
+  const [systemFontsMeta, setSystemFontsMeta] = useState<SystemFontInfo[]>([]);
+  const [desktopFont, setDesktopFont] = useState<{ name: string; isVariable: boolean }>({ name: '', isVariable: false });
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Notification History state
@@ -239,11 +243,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
   useEffect(() => {
     if (isOpen && activePage === 'css') {
-      window.electronAPI.getSystemFonts?.().then((fonts) => {
-        if (fonts && fonts.length > 0) {
-          setSystemFonts(fonts);
+      window.electronAPI.getSystemFontsMeta?.().then((res) => {
+        if (res && res.fonts && res.fonts.length > 0) {
+          setSystemFontsMeta(res.fonts);
+          setSystemFonts(res.fonts.map((f) => f.name));
+          if (res.desktopFont) {
+            setDesktopFont(res.desktopFont);
+          }
         }
-      }).catch(() => {});
+      }).catch(() => {
+        window.electronAPI.getSystemFonts?.().then((fonts) => {
+          if (fonts && fonts.length > 0) {
+            setSystemFonts(fonts);
+          }
+        }).catch(() => {});
+      });
     }
   }, [isOpen, activePage]);
 
@@ -253,6 +267,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
       setFontFamily(selectedAccount.settings?.fontFamily || '');
       setMonoFontFamily(selectedAccount.settings?.monoFontFamily || '');
       setFollowSystemFont(!!selectedAccount.settings?.followSystemFont);
+      setPreferGoogleFont(!!selectedAccount.settings?.preferGoogleFont);
+      setPreferGoogleMonoFont(!!selectedAccount.settings?.preferGoogleMonoFont);
       setCustomWallpaper(selectedAccount.settings?.customWallpaper || '');
     }
   }, [selectedAccountId, accounts]);
@@ -287,19 +303,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     await handleSaveAppearance({ selectedTheme: themeName });
   };
 
-  const handleUpdateFont = (newFont: string) => {
+  const handleUpdateFont = (newFont: string, fontUrl?: string) => {
     setFontFamily(newFont);
-    handleSaveAppearance({ fontFamily: newFont });
+    handleSaveAppearance({ fontFamily: newFont, fontUrl: fontUrl || '' });
   };
 
-  const handleUpdateMonoFont = (newMono: string) => {
+  const handleUpdateMonoFont = (newMono: string, monoFontUrl?: string) => {
     setMonoFontFamily(newMono);
-    handleSaveAppearance({ monoFontFamily: newMono });
+    handleSaveAppearance({ monoFontFamily: newMono, monoFontUrl: monoFontUrl || '' });
   };
 
   const handleToggleFollowSystemFont = (enabled: boolean) => {
     setFollowSystemFont(enabled);
     handleSaveAppearance({ followSystemFont: enabled });
+  };
+
+  const handleTogglePreferGoogleFont = (enabled: boolean) => {
+    setPreferGoogleFont(enabled);
+    handleSaveAppearance({ preferGoogleFont: enabled });
+  };
+
+  const handleTogglePreferGoogleMonoFont = (enabled: boolean) => {
+    setPreferGoogleMonoFont(enabled);
+    handleSaveAppearance({ preferGoogleMonoFont: enabled });
   };
 
   const handleSelectWallpaper = async () => {
@@ -731,6 +757,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                       followSystemFont={followSystemFont}
                       customWallpaper={customWallpaper}
                       systemFonts={systemFonts}
+                      systemFontsMeta={systemFontsMeta}
+                      desktopFont={desktopFont}
+                      preferGoogleFont={preferGoogleFont}
+                      onTogglePreferGoogleFont={handleTogglePreferGoogleFont}
+                      preferGoogleMonoFont={preferGoogleMonoFont}
+                      onTogglePreferGoogleMonoFont={handleTogglePreferGoogleMonoFont}
                       onUpdateFont={handleUpdateFont}
                       onUpdateMonoFont={handleUpdateMonoFont}
                       onToggleFollowSystemFont={handleToggleFollowSystemFont}
