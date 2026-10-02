@@ -969,6 +969,19 @@ function setupWhatsAppIntegration() {
     window.addEventListener('DOMContentLoaded', applyVisualZoomSettings);
   }
 
+  // Prevent unhandled file drops from navigating the view in Chromium
+  window.addEventListener('dragover', (e: DragEvent) => {
+    if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
+      e.preventDefault();
+    }
+  }, false);
+
+  window.addEventListener('drop', (e: DragEvent) => {
+    if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
+      e.preventDefault();
+    }
+  }, false);
+
   contextBridge.exposeInMainWorld('__walinux_ipc', {
     createNotification: (data: { title: string; body: string; icon: string; tag: string; canReply?: boolean }) => {
       resolveIconToBase64(data.icon).then((base64Icon) => {

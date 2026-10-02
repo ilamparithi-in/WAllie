@@ -564,7 +564,13 @@ export function openInSandbox(urlStr: string): BrowserWindow {
 
 export function handleExternalLinkClick(urlStr: string): void {
   const targetUrl = getTargetUrlIfLinkShim(urlStr) || urlStr;
+  if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+    return;
+  }
   const domain = getDomainFromUrl(targetUrl);
+  if (!domain) {
+    return;
+  }
 
   const settings = state.globalSettings;
   const warningEnabled = settings?.externalLinkWarningEnabled !== false;
@@ -837,7 +843,9 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   view.webContents.on('will-navigate', (event, url) => {
     if (!isWhatsAppUrl(url)) {
       event.preventDefault();
-      handleExternalLinkClick(url);
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        handleExternalLinkClick(url);
+      }
     }
   });
 
@@ -845,7 +853,9 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   view.webContents.setWindowOpenHandler((details) => {
     const url = details.url;
     if (!isWhatsAppUrl(url)) {
-      handleExternalLinkClick(url);
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        handleExternalLinkClick(url);
+      }
       return { action: 'deny' };
     }
 

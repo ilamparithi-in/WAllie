@@ -250,19 +250,22 @@ export function createMainWindow() {
       const isLocalHost = parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1';
       const isAppUrl = process.env.VITE_DEV_SERVER_URL
         ? url.startsWith(process.env.VITE_DEV_SERVER_URL)
-        : url.startsWith('file://');
+        : url.startsWith('file://') && (url.includes('renderer/index.html') || url.endsWith('index.html'));
       if (!isAppUrl && !isLocalHost) {
         event.preventDefault();
-        handleExternalLinkClick(url);
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          handleExternalLinkClick(url);
+        }
       }
     } catch (err: any) {
       event.preventDefault();
-      handleExternalLinkClick(url);
     }
   });
 
   state.mainWindow.webContents.setWindowOpenHandler((details) => {
-    handleExternalLinkClick(details.url);
+    if (details.url.startsWith('http://') || details.url.startsWith('https://')) {
+      handleExternalLinkClick(details.url);
+    }
     return { action: 'deny' };
   });
 
