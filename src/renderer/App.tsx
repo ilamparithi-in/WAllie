@@ -287,6 +287,27 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pendingUrl, avatarModalData, isHandlingProtocol, isProtocolClosing]);
 
+  // Prevent Chromium default behavior (navigating to file://) when files are dropped on mainWindow UI
+  useEffect(() => {
+    const handleDragOver = (e: DragEvent) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
+        e.preventDefault();
+      }
+    };
+    const handleDrop = (e: DragEvent) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('dragover', handleDragOver, false);
+    window.addEventListener('drop', handleDrop, false);
+    return () => {
+      window.removeEventListener('dragover', handleDragOver, false);
+      window.removeEventListener('drop', handleDrop, false);
+    };
+  }, []);
+
   // Focus trapping hooks for overlays
   const isDisclaimerActive = Boolean((!globalSettings?.disclaimerAccepted || showDisclaimerForce) && disclaimerRef.current);
   const isProtocolPromptActive = Boolean(pendingUrl && protocolPromptRef.current && !avatarModalData);
