@@ -784,16 +784,17 @@ function setupWhatsAppIntegration() {
 
   function extractFilenameFromMessage(container: Element): string {
     // 1. Search all elements with title attribute for a filename pattern
-    // In WhatsApp Web, document cards often have title='Download "filename.docx"'
+    // In WhatsApp Web, document cards often have title='Download "filename.docx"' or title='View "filename.pdf"'
     const titleElements = container.querySelectorAll('[title]');
     for (const el of Array.from(titleElements)) {
       const rawTitle = (el.getAttribute('title') || '').trim();
-      // Match either Download "filename.ext" or "filename.ext" or filename.ext
-      const match = rawTitle.match(/(?:Download\s+["“']?)?([^"”'\n\r]+\.[a-z0-9]{2,6})["”']?/i);
+      // Match either Download "filename.ext", View "filename.ext", "filename.ext", or filename.ext
+      const match = rawTitle.match(/(?:(?:Download|View)\s+["“']?)?([^"”'\n\r]+\.[a-z0-9]{2,6})["”']?/i);
       if (match && match[1]) {
         const cleaned = match[1].trim();
         // Ignore generic labels like "2 pages", "DOCX", etc.
-        if (cleaned && !cleaned.toLowerCase().startsWith('download')) {
+        const lower = cleaned.toLowerCase();
+        if (cleaned && !lower.startsWith('download') && !lower.startsWith('view')) {
           return cleaned;
         }
       }
@@ -813,7 +814,7 @@ function setupWhatsAppIntegration() {
     // 3. Fallback to any span[title] or div[title] if present
     const fallbackEl = container.querySelector('span[title], div[title]');
     const rawFallback = (fallbackEl?.getAttribute('title') || fallbackEl?.textContent || '').trim();
-    return rawFallback.replace(/^Download\s+["“']?/i, '').replace(/["”']?$/i, '').trim();
+    return rawFallback.replace(/^(?:Download|View)\s+["“']?/i, '').replace(/["”']?$/i, '').trim();
   }
 
   function parseSizeToBytes(sizeStr: string): number | undefined {
@@ -854,17 +855,21 @@ function setupWhatsAppIntegration() {
     const target = e.target as HTMLElement | null;
     if (!target) return;
 
-    // 1. Context Menu "Download" detection (trigger Save As prompt for custom directory)
-    const menuItem = target.closest('[role="button"], li, div[class*="menu-item"], div[tabindex="-1"]');
+    // 1. Context Menu "Download" detection AND Media Viewer / Preview Page "Download" button detection
+    // Generalize Save As prompt for ANY explicit download button (context menu or media viewer top-bar)
+    const menuItem = target.closest('[role="button"], button, li, div[class*="menu-item"], div[tabindex="-1"]');
     if (menuItem) {
       const text = (menuItem.textContent || '').trim().toLowerCase();
       const ariaLabel = (menuItem.getAttribute('aria-label') || '').trim().toLowerCase();
-      const isDownloadText = text === 'download' || text.startsWith('download') || text.includes('download') || ariaLabel.includes('download');
+      const title = (menuItem.getAttribute('title') || '').trim().toLowerCase();
+      const svgTitle = menuItem.querySelector('svg title')?.textContent?.trim().toLowerCase();
+      const isDownloadText = text === 'download' || text.startsWith('download') || ariaLabel === 'download' || title === 'download' || svgTitle === 'ic-download';
       const hasDownloadIcon = !!menuItem.querySelector('[data-icon*="download"], [data-testid*="download"]');
       const isInsideMenu = !!target.closest('[role="application"], [data-testid="context-menu"], [class*="popup"], [class*="menu"], [class*="dropdown"], [role="menu"]');
+      const isInsideMediaViewer = !!target.closest('[data-testid="media-viewer-modal"], [data-animate-media-viewer="true"], [data-testid="drawer-fullscreen"]');
 
-      if ((isDownloadText || hasDownloadIcon) && isInsideMenu) {
-        console.log('[walinux] Context menu Download clicked -> intent: context-menu-download');
+      if ((isDownloadText || hasDownloadIcon) && (isInsideMenu || isInsideMediaViewer)) {
+        console.log(`[walinux] Explicit download button clicked (${isInsideMediaViewer ? 'media viewer' : 'context menu'}) -> intent: context-menu-download`);
         ipcRenderer.send('download:set-intent', { intent: 'context-menu-download' });
         return;
       }
@@ -884,14 +889,16 @@ function setupWhatsAppIntegration() {
         return;
       }
 
-      // Ensure the click was actually on or inside the document card itself, never on surrounding message controls
-      const docCard = target.closest('[data-testid="document-thumb"], [data-testid="audio-play"], [data-testid="audio-download"]');
+      // Check if the click is on/inside a document/media/audio card
+      const docCard = target.closest(
+        '[data-testid="document-thumb"], [data-testid*="document"], [data-testid="audio-play"], [data-testid="audio-download"], [role="button"][title*="."], [role="button"][title^="View "], [role="button"][title^="Download "]'
+      ) || (target.closest('[data-testid="msg-container"]') && msgContainer.querySelector('[data-testid*="document"], [data-icon*="document"], [data-icon="default-doc"], [title^="View "], [title^="Download "]') ? target : null);
       if (!docCard) {
         return;
       }
 
       const filename = extractFilenameFromMessage(msgContainer);
-      const isDocCard = !!msgContainer.querySelector('[data-icon*="document"], [data-icon="default-doc"], [data-testid="document-thumb"]');
+      const isDocCard = !!msgContainer.querySelector('[data-icon*="document"], [data-icon="default-doc"], [data-testid*="document"], [title^="View "], [title^="Download "]');
       const hasExtension = /\.[a-z0-9]{2,6}$/i.test(filename.trim());
 
       if (filename && (hasExtension || isDocCard)) {
@@ -908,16 +915,48 @@ function setupWhatsAppIntegration() {
             console.log('[walinux] Matched existing downloaded file on disk -> handled:', result.handled);
             ipcRenderer.send('download:set-intent', { intent: 'second-click', filename: cleanName, size: extractedSize });
           } else {
-            console.log('[walinux] No existing matching file found -> intent: first-download');
-            ipcRenderer.send('download:set-intent', { intent: 'first-download', filename: cleanName, size: extractedSize });
+            console.log('[walinux] No existing matching file found -> intent: first-download (autoOpen: true)');
+            ipcRenderer.send('download:set-intent', { intent: 'first-download', filename: cleanName, size: extractedSize, autoOpen: true });
           }
         }).catch((err: any) => {
           console.error('[walinux] Failed to handle file card click:', err);
-          ipcRenderer.send('download:set-intent', { intent: 'first-download', filename: cleanName, size: extractedSize });
+          ipcRenderer.send('download:set-intent', { intent: 'first-download', filename: cleanName, size: extractedSize, autoOpen: true });
         });
       }
     }
   }, true);
+
+  // Monitor WhatsApp modals for "file no longer exists on your phone" or download failures
+  const errorModalObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of Array.from(mutation.addedNodes)) {
+        if (!(node instanceof HTMLElement)) continue;
+        const modal = node.matches('[data-animate-modal-popup="true"], [role="dialog"], [data-testid="confirm-popup"]')
+          ? node
+          : node.querySelector('[data-animate-modal-popup="true"], [role="dialog"], [data-testid="confirm-popup"]');
+        if (modal) {
+          const text = (modal.textContent || '').toLowerCase();
+          const isPhoneError = text.includes('no longer exists on your phone') ||
+            text.includes("can't download") ||
+            text.includes('cannot download') ||
+            (text.includes('resend') && text.includes('ask'));
+          if (isPhoneError) {
+            console.log('[walinux] Detected WhatsApp download failure modal:', text.slice(0, 80));
+            ipcRenderer.send('download:failure-detected', { text });
+          }
+        }
+      }
+    }
+  });
+  if (document.body) {
+    errorModalObserver.observe(document.body, { childList: true, subtree: true });
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (document.body) {
+        errorModalObserver.observe(document.body, { childList: true, subtree: true });
+      }
+    });
+  }
 
   // Ctrl + Mouse Wheel to Page Zoom (Physical Ctrl only, leaving native touchpad pinch-to-zoom untouched)
   let isPhysicalCtrlDown = false;

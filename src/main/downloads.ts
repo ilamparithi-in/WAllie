@@ -29,6 +29,7 @@ export class DownloadManager {
     filename?: string;
     size?: number;
     hash?: string;
+    autoOpen?: boolean;
     timestamp: number;
   } = { intent: 'none', timestamp: 0 };
 
@@ -81,7 +82,13 @@ export class DownloadManager {
     await this.saveHistory();
   }
 
-  public setIntent(intent: DownloadIntent | 'anchor-detected', filename?: string, size?: number, hash?: string): void {
+  public setIntent(
+    intent: DownloadIntent | 'anchor-detected',
+    filename?: string,
+    size?: number,
+    hash?: string,
+    autoOpen?: boolean
+  ): void {
     if (intent === 'anchor-detected') {
       if (this.pendingIntent.intent !== 'none' && Date.now() - this.pendingIntent.timestamp <= 5000) {
         if (filename && !this.pendingIntent.filename) {
@@ -93,6 +100,9 @@ export class DownloadManager {
         if (hash && !this.pendingIntent.hash) {
           this.pendingIntent.hash = hash;
         }
+        if (autoOpen !== undefined && this.pendingIntent.autoOpen === undefined) {
+          this.pendingIntent.autoOpen = autoOpen;
+        }
         return;
       }
       this.pendingIntent = {
@@ -100,6 +110,7 @@ export class DownloadManager {
         filename,
         size,
         hash,
+        autoOpen,
         timestamp: Date.now(),
       };
       return;
@@ -109,11 +120,12 @@ export class DownloadManager {
       filename,
       size,
       hash,
+      autoOpen,
       timestamp: Date.now(),
     };
   }
 
-  public consumeIntent(): { intent: DownloadIntent; filename?: string; size?: number; hash?: string } {
+  public consumeIntent(): { intent: DownloadIntent; filename?: string; size?: number; hash?: string; autoOpen?: boolean } {
     const now = Date.now();
     // Allow up to 5 seconds between DOM click and will-download event
     if (now - this.pendingIntent.timestamp <= 5000) {
@@ -122,6 +134,22 @@ export class DownloadManager {
       return result;
     }
     return { intent: 'none' };
+  }
+
+  public handleDownloadFailure(errorText: string, filename?: string): void {
+    console.warn('[DownloadManager] WhatsApp download failure detected:', errorText, filename);
+    const targetName = filename || this.pendingIntent.filename;
+    this.pendingIntent = { intent: 'none', timestamp: 0 };
+
+    if (targetName) {
+      const existing = this.findExistingDownloadedFile(targetName);
+      if (existing && fs.existsSync(existing.savePath)) {
+        showAppToast(`File missing on phone, but found your local copy! Opening ${targetName}...`);
+        this.openDownloadedFile(existing.savePath);
+        return;
+      }
+    }
+    showAppToast(`Download failed: File is no longer available on your phone.`);
   }
 
   public doesFileMatch(
@@ -192,8 +220,9 @@ export class DownloadManager {
     }
 
     if (options.size !== undefined) {
-      // If we only have size, compare size with 5% tolerance
-      const tolerance = Math.max(diskSize * 0.05, 2048);
+      // When size comes from UI text (e.g. "3 MB", "719 kB", "5 MB"), WhatsApp rounds aggressively.
+      // Allow generous tolerance (e.g. 35% or 2MB) so rounded UI sizes don't falsely reject valid files!
+      const tolerance = Math.max(diskSize * 0.35, 2 * 1024 * 1024);
       const diff = Math.abs(diskSize - options.size);
       if (diff > tolerance) {
         return false;
@@ -359,7 +388,7 @@ export class DownloadManager {
     const fileName = item.getFilename();
     const startTime = item.getStartTime();
     const totalBytes = item.getTotalBytes();
-    const { intent, filename: intentFilename, size: intentSize, hash: intentHash } = this.consumeIntent();
+    const { intent, filename: intentFilename, size: intentSize, hash: intentHash, autoOpen: intentAutoOpen } = this.consumeIntent();
 
     const isContextMenu = intent === 'context-menu-download';
     const isSecondClick = intent === 'second-click';
@@ -533,6 +562,18 @@ export class DownloadManager {
           percent: 100,
           state: 'completed',
         });
+
+        // Auto-open if user initiated download by clicking file card to open it
+        const shouldAutoOpen = intentAutoOpen || (intent === 'first-download' && secondClickAction === 'open');
+        if (shouldAutoOpen) {
+          console.log(`[DownloadManager] Auto-opening freshly downloaded file: ${finalPath}`);
+          await this.openDownloadedFile(finalPath);
+          showAppToast(`Opened ${fileName}`);
+        } else if (secondClickAction === 'showInFolder' && intentAutoOpen) {
+          console.log(`[DownloadManager] Auto-revealing freshly downloaded file: ${finalPath}`);
+          this.showItemInFolder(finalPath);
+          showAppToast(`Revealed ${fileName} in folder.`);
+        }
 
         if (state.globalSettings?.downloadNotificationsEnabled !== false) {
           const dismissalTimeSec = typeof state.globalSettings?.notificationDismissalTime === 'number'
