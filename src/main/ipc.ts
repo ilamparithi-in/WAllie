@@ -1021,8 +1021,12 @@ export function registerIpcHandlers() {
     return downloadManager.clearHistory();
   });
 
-  ipcMain.on('download:set-intent', (_event, data: { intent: any; filename?: string; size?: number; hash?: string }) => {
-    downloadManager.setIntent(data.intent, data.filename, data.size, data.hash);
+  ipcMain.on('download:set-intent', (_event, data: { intent: any; filename?: string; size?: number; hash?: string; autoOpen?: boolean }) => {
+    downloadManager.setIntent(data.intent, data.filename, data.size, data.hash, data.autoOpen);
+  });
+
+  ipcMain.on('download:failure-detected', (_event, data: { text: string; filename?: string }) => {
+    downloadManager.handleDownloadFailure(data.text, data.filename);
   });
 
   ipcMain.handle('downloads:file-card-clicked', async (_event, payload: string | { filename: string; size?: number; hash?: string }) => {
