@@ -105,6 +105,17 @@ export interface GlobalSettings {
   inlineReplyEnabled?: boolean;
   notificationDismissalTime?: number;
   defaultProtocolAccountId?: string;
+  standaloneLinkPreviewEnabled?: boolean;
+}
+
+export interface LinkPreviewData {
+  url: string;
+  title: string;
+  description: string;
+  thumbnailBase64?: string;
+  thumbnailWidth?: number;
+  thumbnailHeight?: number;
+  previewType?: 'video' | 'image' | 'none';
 }
 
 export interface HistoricalNotification {
@@ -131,5 +142,6 @@ export interface AppVersionInfo {
 
 declare global {
   const __APP_VERSION_INFO__: AppVersionInfo | undefined;
+  const __ENABLE_DEV_BRIDGE__: boolean | undefined;
 }
 

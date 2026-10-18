@@ -144,7 +144,7 @@ export const App: React.FC = () => {
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
   const [promptAccounts, setPromptAccounts] = useState<AccountInfo[]>([]);
   const [isHandlingProtocol, setIsHandlingProtocol] = useState(false);
-  const [settingsInitialPage, setSettingsInitialPage] = useState<'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads' | undefined>(undefined);
+  const [settingsInitialPage, setSettingsInitialPage] = useState<'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads' | 'advanced' | undefined>(undefined);
   const [settingsInitialAccountId, setSettingsInitialAccountId] = useState<string | undefined>(undefined);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const isNavConfirmActiveRef = useRef(false);

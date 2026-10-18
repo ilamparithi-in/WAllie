@@ -113,6 +113,8 @@ export interface ElectronAPI {
   getAppVersion: () => Promise<AppVersionInfo>;
   sendSandboxAction: (action: string, data?: any) => void;
   onSandboxUpdate: (callback: (data: any) => void) => () => void;
+  clearLinkPreviewCache: () => Promise<{ clearedCount: number }>;
+  getLinkPreviewCacheSize: () => Promise<number>;
 }
 
 const api: ElectronAPI = {
@@ -293,6 +295,8 @@ const api: ElectronAPI = {
     ipcRenderer.on('sandbox:update', subscription);
     return () => ipcRenderer.removeListener('sandbox:update', subscription);
   },
+  clearLinkPreviewCache: () => ipcRenderer.invoke('link-preview:clear-cache'),
+  getLinkPreviewCacheSize: () => ipcRenderer.invoke('link-preview:get-cache-size'),
 };
 
 // Defined inline here because build:preload cleans dist/preload/shared.
@@ -1008,6 +1012,9 @@ function setupWhatsAppIntegration() {
     },
     onAnchorDownload: (filename: string, size?: number, hash?: string) => {
       ipcRenderer.send('download:set-intent', { intent: 'anchor-detected', filename, size, hash });
+    },
+    fetchLinkPreview: (url: string) => {
+      return ipcRenderer.invoke('link-preview:fetch', url);
     },
   });
 

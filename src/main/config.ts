@@ -76,6 +76,7 @@ export function loadSettings(): GlobalSettings {
         inlineReplyEnabled: parsed.inlineReplyEnabled !== false,
         notificationDismissalTime: typeof parsed.notificationDismissalTime === 'number' ? parsed.notificationDismissalTime : 10,
         defaultProtocolAccountId: typeof parsed.defaultProtocolAccountId === 'string' ? parsed.defaultProtocolAccountId : 'ask',
+        standaloneLinkPreviewEnabled: parsed.standaloneLinkPreviewEnabled !== false,
       };
     }
   } catch (error) {
@@ -104,6 +105,7 @@ export function loadSettings(): GlobalSettings {
     inlineReplyEnabled: true,
     notificationDismissalTime: 10,
     defaultProtocolAccountId: 'ask',
+    standaloneLinkPreviewEnabled: true,
   };
 }
 

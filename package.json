@@ -18,10 +18,12 @@
     "clean:build": "npm run clean && npm run build",
     "build:preload": "node scripts/build-preload.cjs",
     "dev": "npm run build:preload && vite",
+    "dev:bridge": "ENABLE_DEV_BRIDGE=true npm run build:preload && ENABLE_DEV_BRIDGE=true vite",
     "build": "npm run build:preload && tsc && vite build",
     "version:info": "node scripts/version-helper.cjs",
     "electron:dev": "npm run build:preload && vite",
     "electron:build": "npm run build && node scripts/build-package.cjs",
+    "electron:build:bridge": "ENABLE_DEV_BRIDGE=true npm run build && node scripts/build-package.cjs",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

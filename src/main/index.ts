@@ -91,13 +91,16 @@ if (gotTheLock) {
     // Content Security Policy for the main renderer window (React UI) and sandbox toolbar
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       const isSandbox = details.url.includes('sandbox');
+      const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
+      const scriptSrc = isDev ? "'self' 'unsafe-inline'" : "'self'";
+
       callback({
         responseHeaders: {
           ...details.responseHeaders,
           'Content-Security-Policy': [
             isSandbox
               ? "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;"
-              : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.whatsapp.net https://*.whatsapp.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws://localhost:* http://localhost:* https://fonts.googleapis.com"
+              : `default-src 'self'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.whatsapp.net https://*.whatsapp.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws://localhost:* http://localhost:* ws://127.0.0.1:* http://127.0.0.1:* https://fonts.googleapis.com;${isDev ? " worker-src 'self' blob:;" : ""}`
           ]
         }
       });
@@ -105,6 +108,12 @@ if (gotTheLock) {
 
     createMainWindow();
     createTray();
+
+    if (typeof __ENABLE_DEV_BRIDGE__ !== 'undefined' && __ENABLE_DEV_BRIDGE__) {
+      import('./devBridge').then(({ startDevBridge }) => {
+        startDevBridge();
+      });
+    }
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

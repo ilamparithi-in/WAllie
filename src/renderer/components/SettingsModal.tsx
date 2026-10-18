@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw, FolderOpen, User, Trash2, Download, Copy, Check } from 'lucide-react';
+import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw, FolderOpen, User, Trash2, Download, Copy, Check, Sliders } from 'lucide-react';
 import type { AccountInfo, GlobalSettings, AppVersionInfo, AccountSettings, SystemFontInfo } from '../../preload';
 import { GeneralSettingsPage } from './settings/GeneralSettingsPage';
 import { PreloadSettingsPage } from './settings/PreloadSettingsPage';
@@ -10,6 +10,7 @@ import { ThemeSettingsPage } from './settings/ThemeSettingsPage';
 import { StorageSettingsPage } from './settings/StorageSettingsPage';
 import { NotificationSettingsPage } from './settings/NotificationSettingsPage';
 import { DownloadsSettingsPage } from './settings/DownloadsSettingsPage';
+import { AdvancedSettingsPage } from './settings/AdvancedSettingsPage';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -19,7 +20,7 @@ interface SettingsModalProps {
   onShowDisclaimer: () => void;
 }
 
-type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads';
+type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads' | 'advanced';
 
 const SETTINGS_MENU_ITEMS: {
   page: PageType;
@@ -36,6 +37,7 @@ const SETTINGS_MENU_ITEMS: {
   { page: 'css', icon: Palette, title: 'Appearance, Fonts & Themes', description: 'Customize fonts, wallpaper, preset themes, and CSS' },
   { page: 'storage', icon: Database, title: 'Storage & Cache', description: 'Inspect sizes, clear browser media or cache' },
   { page: 'notifications', icon: Bell, title: 'Notification History', description: 'View and search desktop alert logs' },
+  { page: 'advanced', icon: Sliders, title: 'Advanced Settings', description: 'Standalone link previews & desktop enhancements' },
 ];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialPage, initialAccountId, onShowDisclaimer }) => {
@@ -798,6 +800,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                       handleClearHistory={handleClearHistory}
                       notificationHistory={notificationHistory}
                       filteredNotifications={filteredNotifications}
+                    />
+                  )}
+
+                  {subPage === 'advanced' && (
+                    <AdvancedSettingsPage
+                      globalSettings={globalSettings}
+                      handleToggleGlobalSetting={handleToggleGlobalSetting}
                     />
                   )}
                 </>
