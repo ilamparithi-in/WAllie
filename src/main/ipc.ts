@@ -13,6 +13,7 @@ import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS, AccountSettings, Gro
 import { resolveGoogleFont, resolveGoogleFontUrl } from '../shared/fonts';
 import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus, getAccountForWebContents, showAppToast } from './utils';
 import { downloadManager } from './downloads';
+import { fetchLinkPreview, clearLinkPreviewCache, getLinkPreviewCacheSize } from './linkPreview';
 
 const execAsync = promisify(exec);
 
@@ -898,6 +899,18 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('protocol:get-group-invite-info', async (_event, code: string) => {
     return await fetchGroupInviteDetails(code);
+  });
+
+  ipcMain.handle('link-preview:fetch', async (_event, url: string) => {
+    return await fetchLinkPreview(url);
+  });
+
+  ipcMain.handle('link-preview:clear-cache', () => {
+    return clearLinkPreviewCache();
+  });
+
+  ipcMain.handle('link-preview:get-cache-size', () => {
+    return getLinkPreviewCacheSize();
   });
 
   // Custom Protocol URL Handlers
