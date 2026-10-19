@@ -17,6 +17,7 @@ interface NotificationSettingsPageProps {
   accounts: AccountInfo[];
   globalSettings: GlobalSettings | null;
   setActivePage: (page: any) => void;
+  handleToggleGlobalSetting?: (key: keyof GlobalSettings, value: any) => Promise<boolean | void> | boolean | void;
   notifSearch: string;
   setNotifSearch: (search: string) => void;
   notifAccountFilter: string;
@@ -79,6 +80,7 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
   accounts,
   globalSettings,
   setActivePage,
+  handleToggleGlobalSetting,
   notifSearch,
   setNotifSearch,
   notifAccountFilter,
@@ -238,7 +240,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
       {/* Subpage Intro Header */}
       <div className="flex-shrink-0 flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] text-[#8696a0] leading-relaxed">
-          Browse, filter, search, export, or prune logs of desktop notifications, message edits, and deletions.
+          Browse, filter, search, export, or prune logs of desktop notifications, message edits, and deletions.{' '}
+          <strong className="text-[#ea4335] font-semibold">Stored unencrypted!</strong>
         </p>
         <div className="flex items-center gap-1.5 text-[10px] text-[#8696a0] bg-[#182229] px-2.5 py-1 rounded-md border border-[#222d34]">
           <Bell className="w-3 h-3 text-[#00a884]" />
@@ -260,18 +263,28 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
 
       {/* Warning banner when notification logging is disabled */}
       {globalSettings?.notificationLoggingEnabled === false && (
-        <div className="flex-shrink-0 bg-[#ea4335]/15 border border-[#ea4335]/30 text-[#ea4335] px-3 py-2 rounded-lg text-[11px] leading-normal font-medium flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          <div>
-            Notification logging is currently disabled. Go to the{' '}
-            <button
-              onClick={() => setActivePage('general')}
-              className="underline font-semibold hover:text-[#ff5c4c] transition-colors cursor-pointer"
-            >
-              General settings page
-            </button>{' '}
-            to enable it.
+        <div className="flex-shrink-0 bg-[#ea4335]/15 border border-[#ea4335]/30 text-[#ea4335] px-3 py-2 rounded-lg text-[11px] leading-normal font-medium flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div>
+              Notification logging is currently disabled. Go to the{' '}
+              <button
+                onClick={() => setActivePage('general')}
+                className="underline font-semibold hover:text-[#ff5c4c] transition-colors cursor-pointer"
+              >
+                General settings page
+              </button>{' '}
+              to enable it.
+            </div>
           </div>
+          {handleToggleGlobalSetting && (
+            <button
+              onClick={() => handleToggleGlobalSetting('notificationLoggingEnabled', true)}
+              className="px-2.5 py-1 bg-[#ea4335]/20 hover:bg-[#ea4335]/30 border border-[#ea4335]/40 text-[#ea4335] hover:text-[#ff5c4c] font-semibold text-[10px] rounded transition-colors cursor-pointer flex-shrink-0"
+            >
+              Enable Logging
+            </button>
+          )}
         </div>
       )}
 

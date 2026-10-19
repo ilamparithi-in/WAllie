@@ -105,17 +105,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
 
-  const handleToggleGlobalSetting = async (key: keyof GlobalSettings, value: any) => {
-    if (!globalSettings) return;
+  const handleToggleGlobalSetting = async (key: keyof GlobalSettings, value: any): Promise<boolean> => {
+    if (!globalSettings) return false;
     if (key === 'extensionDevMode' && value === true) {
       const confirmEnable = window.confirm(
         "Warning: Developer Mode allows loading unpacked extensions from your computer.\n\n" +
         "Only load extensions if you fully trust their source, as they can access your WhatsApp messages and session data.\n\n" +
         "Do you want to enable Developer Mode?"
       );
-      if (!confirmEnable) return;
+      if (!confirmEnable) return false;
     }
-    const updated = { ...globalSettings, [key]: value };
+    if (key === 'notificationLoggingEnabled' && value === true) {
+      if (!globalSettings.notificationLoggingWarningAcknowledged) {
+        const confirmEnable = window.confirm(
+          "Warning: Notification History Privacy Notice\n\n" +
+          "Notification history is stored unencrypted on your local disk.\n\n" +
+          "For privacy reasons, enabling notification history is not recommended.\n\n" +
+          "Do you want to enable notification history?"
+        );
+        if (!confirmEnable) return false;
+      }
+    }
+    const updated: GlobalSettings = {
+      ...globalSettings,
+      [key]: value,
+      ...(key === 'notificationLoggingEnabled' && value === true
+        ? { notificationLoggingWarningAcknowledged: true }
+        : {}),
+    };
     setStorageSizes(null); // Force recalculation if anything changes
     setGlobalSettings(updated);
     try {
@@ -128,8 +145,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
           window.electronAPI.relaunchApp();
         }
       }
+      return true;
     } catch (err) {
       console.error('Failed to save global settings:', err);
+      return false;
     }
   };
 
@@ -793,6 +812,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                       accounts={accounts}
                       globalSettings={globalSettings}
                       setActivePage={setActivePage}
+                      handleToggleGlobalSetting={handleToggleGlobalSetting}
                       notifSearch={notifSearch}
                       setNotifSearch={setNotifSearch}
                       notifAccountFilter={notifAccountFilter}

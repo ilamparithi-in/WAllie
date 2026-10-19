@@ -4,7 +4,7 @@ import type { GlobalSettings } from '../../../preload';
 
 interface AdvancedSettingsPageProps {
   globalSettings: GlobalSettings | null;
-  handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<void> | void;
+  handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<boolean | void> | boolean | void;
 }
 
 export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
