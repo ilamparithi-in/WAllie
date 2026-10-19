@@ -6,7 +6,7 @@ interface AccountsSettingsPageProps {
   accounts: AccountInfo[];
   setAccounts: React.Dispatch<React.SetStateAction<AccountInfo[]>>;
   globalSettings: GlobalSettings | null;
-  handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<void> | void;
+  handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<boolean | void> | boolean | void;
   handleDeleteAccount: (id: string) => Promise<void> | void;
   setSelectedAccountId: (id: string) => void;
   setNotifAccountFilter: (filter: string) => void;

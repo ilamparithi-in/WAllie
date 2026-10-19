@@ -4,7 +4,7 @@ import type { GlobalSettings, AccountInfo } from '../../../preload';
 
 interface GeneralSettingsPageProps {
   globalSettings: GlobalSettings | null;
-  handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<void> | void;
+  handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<boolean | void> | boolean | void;
   accounts?: AccountInfo[];
 }
 
@@ -282,13 +282,20 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-[#e9edef] text-[11px]">Enable Notification Logging</div>
                 <div className="text-[10px] text-[#8696a0]">
-                  Log desktop notifications, message edits, and deletions to history (disabled by default)
+                  Log desktop notifications, message edits, and deletions to history (stored unencrypted, disabled by default)
                 </div>
               </div>
               <input
                 type="checkbox"
                 checked={globalSettings?.notificationLoggingEnabled ?? false}
-                onChange={(e) => handleToggleGlobalSetting('notificationLoggingEnabled', e.target.checked)}
+                onChange={async (e) => {
+                  const target = e.target;
+                  const willEnable = target.checked;
+                  const success = await handleToggleGlobalSetting('notificationLoggingEnabled', willEnable);
+                  if (success === false) {
+                    target.checked = globalSettings?.notificationLoggingEnabled ?? false;
+                  }
+                }}
                 className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
               />
             </label>

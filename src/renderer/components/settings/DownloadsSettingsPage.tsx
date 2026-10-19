@@ -13,7 +13,7 @@ import type { GlobalSettings, FileSecondClickAction } from '../../../preload';
 
 interface DownloadsSettingsPageProps {
   globalSettings: GlobalSettings | null;
-  handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<void> | void;
+  handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<boolean | void> | boolean | void;
 }
 
 export const DownloadsSettingsPage: React.FC<DownloadsSettingsPageProps> = ({

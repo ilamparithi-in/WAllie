@@ -5,7 +5,7 @@ import type { AccountInfo, GlobalSettings } from '../../../preload';
 interface PreloadSettingsPageProps {
   accounts: AccountInfo[];
   globalSettings: GlobalSettings | null;
-  handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<void> | void;
+  handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<boolean | void> | boolean | void;
 }
 
 export const PreloadSettingsPage: React.FC<PreloadSettingsPageProps> = ({

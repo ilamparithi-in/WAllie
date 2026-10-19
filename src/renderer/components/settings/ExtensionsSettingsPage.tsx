@@ -7,7 +7,7 @@ interface ExtensionsSettingsPageProps {
   selectedAccountId: string;
   setSelectedAccountId: (id: string) => void;
   globalSettings: GlobalSettings | null;
-  handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<void> | void;
+  handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<boolean | void> | boolean | void;
   showImportDropdown: boolean;
   setShowImportDropdown: (show: boolean) => void;
   isImporting: boolean;

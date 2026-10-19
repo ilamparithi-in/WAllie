@@ -91,6 +91,7 @@ export interface GlobalSettings {
   showRefreshButton?: boolean;
   showNotificationHistoryButton?: boolean;
   notificationLoggingEnabled?: boolean;
+  notificationLoggingWarningAcknowledged?: boolean;
   extensionDevMode?: boolean;
   autoUpdateExtensions?: boolean;
   startMinimized?: boolean;
