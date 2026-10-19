@@ -19,11 +19,7 @@ The **WAllie Dev Bridge** is a private, internal HTTP loopback service embedded 
 The bridge is **build-time gated** and **disabled by default in production builds**. To launch WAllie with the bridge compiled in and running:
 
 ```bash
-# Option A: Run in development server
 npm run dev:bridge
-
-# Option B: Build a test AppImage with the bridge compiled in
-npm run electron:build:bridge
 ```
 
 ### Checking if the Bridge is Running
