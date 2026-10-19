@@ -23,7 +23,6 @@
     "version:info": "node scripts/version-helper.cjs",
     "electron:dev": "npm run build:preload && vite",
     "electron:build": "npm run build && node scripts/build-package.cjs",
-    "electron:build:bridge": "ENABLE_DEV_BRIDGE=true npm run build && node scripts/build-package.cjs",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
