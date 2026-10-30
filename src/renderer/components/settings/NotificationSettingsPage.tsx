@@ -404,8 +404,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
               setSelectedDate('');
             }}
             className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all cursor-pointer ${dateQuickFilter === 'all'
-                ? 'bg-[#00a884] text-[#111b21] font-semibold shadow-xs'
-                : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#26343d]'
+              ? 'bg-[#00a884] text-[#111b21] font-semibold shadow-xs'
+              : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#26343d]'
               }`}
           >
             All
@@ -416,8 +416,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
               setSelectedDate(todayStr);
             }}
             className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all cursor-pointer ${dateQuickFilter === 'today'
-                ? 'bg-[#00a884] text-[#111b21] font-semibold shadow-xs'
-                : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#26343d]'
+              ? 'bg-[#00a884] text-[#111b21] font-semibold shadow-xs'
+              : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#26343d]'
               }`}
           >
             Today
@@ -428,8 +428,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
               setSelectedDate(yesterdayStr);
             }}
             className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all cursor-pointer ${dateQuickFilter === 'yesterday'
-                ? 'bg-[#00a884] text-[#111b21] font-semibold shadow-xs'
-                : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#26343d]'
+              ? 'bg-[#00a884] text-[#111b21] font-semibold shadow-xs'
+              : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#26343d]'
               }`}
           >
             Yesterday
@@ -439,8 +439,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
               setDateQuickFilter('7days');
             }}
             className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all cursor-pointer ${dateQuickFilter === '7days'
-                ? 'bg-[#00a884] text-[#111b21] font-semibold shadow-xs'
-                : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#26343d]'
+              ? 'bg-[#00a884] text-[#111b21] font-semibold shadow-xs'
+              : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#26343d]'
               }`}
           >
             Past 7 Days
@@ -497,8 +497,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
             onClick={() => setShowClearPanel(!showClearPanel)}
             disabled={notificationHistory.length === 0}
             className={`px-2.5 py-1 border font-bold rounded-md transition-colors text-[10px] flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed ${showClearPanel
-                ? 'bg-[#ea4335] text-white border-[#ea4335]'
-                : 'bg-[#ea4335]/10 border-[#ea4335]/30 text-[#ea4335] hover:bg-[#ea4335]/25 disabled:opacity-40'
+              ? 'bg-[#ea4335] text-white border-[#ea4335]'
+              : 'bg-[#ea4335]/10 border-[#ea4335]/30 text-[#ea4335] hover:bg-[#ea4335]/25 disabled:opacity-40'
               }`}
           >
             <Trash2 className="w-3 h-3" />
@@ -528,8 +528,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
             <button
               onClick={() => setClearMode('24h')}
               className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === '24h'
-                  ? 'bg-[#ea4335] text-white font-semibold'
-                  : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
+                ? 'bg-[#ea4335] text-white font-semibold'
+                : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
                 }`}
             >
               Last 24 Hours
@@ -537,8 +537,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
             <button
               onClick={() => setClearMode('7d')}
               className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === '7d'
-                  ? 'bg-[#ea4335] text-white font-semibold'
-                  : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
+                ? 'bg-[#ea4335] text-white font-semibold'
+                : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
                 }`}
             >
               Last 7 Days
@@ -546,8 +546,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
             <button
               onClick={() => setClearMode('30d')}
               className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === '30d'
-                  ? 'bg-[#ea4335] text-white font-semibold'
-                  : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
+                ? 'bg-[#ea4335] text-white font-semibold'
+                : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
                 }`}
             >
               Last Month
@@ -555,8 +555,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
             <button
               onClick={() => setClearMode('older7d')}
               className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === 'older7d'
-                  ? 'bg-[#ea4335] text-white font-semibold'
-                  : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
+                ? 'bg-[#ea4335] text-white font-semibold'
+                : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
                 }`}
             >
               Older than 7 Days
@@ -564,8 +564,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
             <button
               onClick={() => setClearMode('older30d')}
               className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === 'older30d'
-                  ? 'bg-[#ea4335] text-white font-semibold'
-                  : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
+                ? 'bg-[#ea4335] text-white font-semibold'
+                : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
                 }`}
             >
               Older than 30 Days
@@ -573,8 +573,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
             <button
               onClick={() => setClearMode('all')}
               className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === 'all'
-                  ? 'bg-[#ea4335] text-white font-semibold'
-                  : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
+                ? 'bg-[#ea4335] text-white font-semibold'
+                : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
                 }`}
             >
               All Time
@@ -582,8 +582,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
             <button
               onClick={() => setClearMode('range')}
               className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === 'range' || clearMode === 'single'
-                  ? 'bg-[#ea4335] text-white font-semibold'
-                  : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
+                ? 'bg-[#ea4335] text-white font-semibold'
+                : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
                 }`}
             >
               Custom Range

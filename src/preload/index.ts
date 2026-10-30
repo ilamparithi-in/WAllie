@@ -1,11 +1,11 @@
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
-import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GroupInviteDetails, WhatsAppChatExport, ChatMetadata, TimelineEntry, MessageEntry, SystemNotificationEntry, DateDividerEntry } from '../shared/types';
+import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GroupInviteDetails, WhatsAppChatExport, ChatMetadata, TimelineEntry, MessageEntry, SystemNotificationEntry, DateDividerEntry, NativePromptOptions, NativePromptResult, NativeConfirmOptions } from '../shared/types';
 import type { GoogleFontResolution } from '../shared/fonts';
 
 // Inlined at build time by scripts/build-preload.cjs from src/preload/inject/whatsappMainWorld.ts
 const MAIN_WORLD_SCRIPT = '__MAIN_WORLD_SCRIPT__';
 
-export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GoogleFontResolution, GroupInviteDetails, WhatsAppChatExport, ChatMetadata, TimelineEntry, MessageEntry, SystemNotificationEntry, DateDividerEntry };
+export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GoogleFontResolution, GroupInviteDetails, WhatsAppChatExport, ChatMetadata, TimelineEntry, MessageEntry, SystemNotificationEntry, DateDividerEntry, NativePromptOptions, NativePromptResult, NativeConfirmOptions };
 
 export interface ElectronAPI {
   // Window controls
@@ -86,6 +86,10 @@ export interface ElectronAPI {
   onToastShow: (callback: (data: { message: string; url?: string }) => void) => () => void;
   toggleWallieDevTools: () => void;
   onNavConfirmationActive: (callback: (isActive: boolean) => void) => () => void;
+
+  // Native Dialog Controls
+  showPrompt: (options: NativePromptOptions) => Promise<NativePromptResult>;
+  confirm: (options: NativeConfirmOptions) => Promise<boolean>;
 
   // Event listeners
   onAccountListChanged: (callback: (accounts: AccountInfo[], activeId: string) => void) => () => void;
@@ -210,6 +214,8 @@ const api: ElectronAPI = {
     ipcRenderer.on('nav-confirmation:active', subscription);
     return () => ipcRenderer.removeListener('nav-confirmation:active', subscription);
   },
+  showPrompt: (options) => ipcRenderer.invoke('dialog:show-prompt', options),
+  confirm: (options) => ipcRenderer.invoke('dialog:show-confirm', options),
 
   onAccountListChanged: (callback) => {
     const subscription = (_event: unknown, accounts: AccountInfo[], activeId: string) => callback(accounts, activeId);

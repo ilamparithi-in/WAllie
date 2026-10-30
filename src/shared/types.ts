@@ -355,6 +355,33 @@ export interface UnsupportedContent {
   fallbackText: string;
 }
 
+export interface NativePromptOptions {
+  title: string;
+  message: string;
+  detail?: string;
+  type?: 'none' | 'info' | 'error' | 'question' | 'warning';
+  buttons?: string[];
+  defaultId?: number;
+  cancelId?: number;
+  checkboxLabel?: string;
+  checkboxChecked?: boolean;
+}
+
+export interface NativePromptResult {
+  response: number;
+  checkboxChecked?: boolean;
+}
+
+export interface NativeConfirmOptions {
+  title: string;
+  message: string;
+  detail?: string;
+  type?: 'none' | 'info' | 'error' | 'question' | 'warning';
+  confirmLabel?: string;
+  cancelLabel?: string;
+  defaultConfirm?: boolean;
+}
+
 // Canonical alias for notification history entries conforming to the chat export spec
 export type HistoricalNotification = TimelineEntry;
 
