@@ -392,9 +392,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   };
 
   const filteredNotifications = (Array.isArray(notificationHistory) ? notificationHistory : []).filter((notif) => {
+    const sender = notif?.type === 'message' ? (notif.sender?.displayName || '') : '';
+    const textContent = notif?.type === 'message' 
+      ? (notif.content?.type === 'text' ? notif.content.body : '')
+      : (notif?.type === 'system_event' ? notif.text : '');
     const matchesSearch =
-      (notif?.title || '').toLowerCase().includes(notifSearch.toLowerCase()) ||
-      (notif?.body || '').toLowerCase().includes(notifSearch.toLowerCase());
+      sender.toLowerCase().includes(notifSearch.toLowerCase()) ||
+      textContent.toLowerCase().includes(notifSearch.toLowerCase());
     const matchesAccount = notifAccountFilter === 'all' || notif?.accountId === notifAccountFilter;
     return matchesSearch && matchesAccount;
   });

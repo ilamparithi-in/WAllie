@@ -1,11 +1,11 @@
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
-import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GroupInviteDetails } from '../shared/types';
+import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GroupInviteDetails, WhatsAppChatExport, ChatMetadata, TimelineEntry, MessageEntry, SystemNotificationEntry, DateDividerEntry } from '../shared/types';
 import type { GoogleFontResolution } from '../shared/fonts';
 
 // Inlined at build time by scripts/build-preload.cjs from src/preload/inject/whatsappMainWorld.ts
 const MAIN_WORLD_SCRIPT = '__MAIN_WORLD_SCRIPT__';
 
-export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GoogleFontResolution, GroupInviteDetails };
+export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GoogleFontResolution, GroupInviteDetails, WhatsAppChatExport, ChatMetadata, TimelineEntry, MessageEntry, SystemNotificationEntry, DateDividerEntry };
 
 export interface ElectronAPI {
   // Window controls
