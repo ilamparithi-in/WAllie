@@ -108,39 +108,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   const handleToggleGlobalSetting = async (key: keyof GlobalSettings, value: any): Promise<boolean> => {
     if (!globalSettings) return false;
     if (key === 'extensionDevMode' && value === true) {
-      const confirmEnable = window.confirm(
-        "Warning: Developer Mode allows loading unpacked extensions from your computer.\n\n" +
-        "Only load extensions if you fully trust their source, as they can access your WhatsApp messages and session data.\n\n" +
-        "Do you want to enable Developer Mode?"
-      );
+      const confirmEnable = await window.electronAPI?.confirm({
+        type: 'warning',
+        title: 'Developer Mode Notice',
+        message: 'Enable Extension Developer Mode?',
+        detail: 'Developer Mode allows loading unpacked extensions from your computer.\n\nOnly load extensions if you fully trust their source, as they can access your WhatsApp messages and session data.',
+        confirmLabel: 'Enable',
+        cancelLabel: 'Cancel',
+      });
       if (!confirmEnable) return false;
     }
     if (key === 'notificationLoggingEnabled' && value === true) {
-      if (!globalSettings.notificationLoggingWarningAcknowledged) {
-        const confirmEnable = window.confirm(
-          "Warning: Notification History Privacy Notice\n\n" +
-          "Notification history is stored unencrypted on your local disk.\n\n" +
-          "For privacy reasons, enabling notification history is not recommended.\n\n" +
-          "Do you want to enable notification history?"
-        );
-        if (!confirmEnable) return false;
-      }
+      const confirmEnable = await window.electronAPI?.confirm({
+        type: 'warning',
+        title: 'Notification History Privacy Notice',
+        message: 'Enable Notification History Logging?',
+        detail: 'Notification history is stored unencrypted on your local disk.\n\nFor privacy reasons, enabling notification history is not recommended.',
+        confirmLabel: 'Enable',
+        cancelLabel: 'Cancel',
+      });
+      if (!confirmEnable) return false;
     }
     const updated: GlobalSettings = {
       ...globalSettings,
       [key]: value,
-      ...(key === 'notificationLoggingEnabled' && value === true
-        ? { notificationLoggingWarningAcknowledged: true }
-        : {}),
     };
     setStorageSizes(null); // Force recalculation if anything changes
     setGlobalSettings(updated);
     try {
       await window.electronAPI.saveGlobalSettings(updated);
       if (key === 'hardwareAcceleration' && value === false) {
-        const confirmRestart = window.confirm(
-          "Hardware acceleration has been disabled. A restart is required to apply this change.\n\nDo you want to restart the application now?"
-        );
+        const confirmRestart = await window.electronAPI?.confirm({
+          type: 'question',
+          title: 'Restart Required',
+          message: 'Restart WAllie Now?',
+          detail: 'Hardware acceleration has been disabled. A restart is required to apply this change.',
+          confirmLabel: 'Restart Now',
+          cancelLabel: 'Later',
+        });
         if (confirmRestart) {
           window.electronAPI.relaunchApp();
         }

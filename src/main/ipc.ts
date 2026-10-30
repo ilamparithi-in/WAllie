@@ -9,7 +9,7 @@ import { importExtension, installWebStoreExtension, toggleExtension, removeExten
 import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectCustomCssForView, injectAccountStyling, clearPausedMediaState } from './views';
 import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize, unloadAccountLogic, loadAccountLogic, notifyAccountListChanged } from './window';
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry, closeDbusNotificationByTag, closeNotificationByContact, applyRetentionPruning } from './notifications';
-import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS, AccountSettings, GroupInviteDetails } from '../shared/types';
+import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS, AccountSettings, GroupInviteDetails, NativePromptOptions, NativePromptResult, NativeConfirmOptions } from '../shared/types';
 import { resolveGoogleFont, resolveGoogleFontUrl } from '../shared/fonts';
 import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus, getAccountForWebContents, showAppToast } from './utils';
 import { downloadManager } from './downloads';
@@ -797,6 +797,46 @@ export function registerIpcHandlers() {
     if (payload?.message) {
       showAppToast(payload.message, payload.url, true);
     }
+  });
+
+  ipcMain.handle('dialog:show-prompt', async (event, options: NativePromptOptions): Promise<NativePromptResult> => {
+    const parentWindow = BrowserWindow.fromWebContents(event.sender) || state.mainWindow || undefined;
+    const buttons = options.buttons && options.buttons.length > 0 ? options.buttons : ['OK'];
+    const result = await dialog.showMessageBox(parentWindow!, {
+      type: options.type || 'info',
+      title: options.title,
+      message: options.message,
+      detail: options.detail,
+      buttons,
+      defaultId: options.defaultId ?? 0,
+      cancelId: options.cancelId ?? (buttons.length > 1 ? buttons.length - 1 : 0),
+      checkboxLabel: options.checkboxLabel,
+      checkboxChecked: options.checkboxChecked,
+      noLink: true,
+    });
+    return {
+      response: result.response,
+      checkboxChecked: result.checkboxChecked,
+    };
+  });
+
+  ipcMain.handle('dialog:show-confirm', async (event, options: NativeConfirmOptions): Promise<boolean> => {
+    const parentWindow = BrowserWindow.fromWebContents(event.sender) || state.mainWindow || undefined;
+    const confirmLabel = options.confirmLabel || 'OK';
+    const cancelLabel = options.cancelLabel || 'Cancel';
+    const buttons = [confirmLabel, cancelLabel];
+
+    const result = await dialog.showMessageBox(parentWindow!, {
+      type: options.type || 'question',
+      title: options.title,
+      message: options.message,
+      detail: options.detail,
+      buttons,
+      defaultId: options.defaultConfirm !== false ? 0 : 1,
+      cancelId: 1,
+      noLink: true,
+    });
+    return result.response === 0;
   });
 
   const groupInviteCache = new Map<string, GroupInviteDetails>();
