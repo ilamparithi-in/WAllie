@@ -4,21 +4,54 @@ import fs from 'node:fs';
 import { state } from './state';
 import { switchActiveAccount } from './window';
 import { getAccountForWebContents } from './utils';
-import { HistoricalNotification } from '../shared/types';
+import { HistoricalNotification, TimelineEntry, MessageEntry } from '../shared/types';
 import { getAccountDisplayName } from '../shared/constants';
 import { notificationManager } from './notifications/index';
 
 export const NOTIFICATION_HISTORY_FILE = path.join(app.getPath('userData'), 'notification_history.json');
-const MAX_NOTIFICATIONS = 100;
 const HISTORY_FLUSH_DELAY = 5000;
 
-export function getNotificationHistory(): HistoricalNotification[] {
+export function getEntryTimestampMs(item: TimelineEntry): number {
+  if (item.type === 'date_divider') return 0;
+  if (!item.timestamp) return 0;
+  const parsed = Date.parse(item.timestamp);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+export function pruneHistoryByRetention(history: TimelineEntry[]): TimelineEntry[] {
+  const retentionDays = typeof state.globalSettings?.notificationRetentionDays === 'number'
+    ? state.globalSettings.notificationRetentionDays
+    : 30;
+  if (retentionDays <= 0) {
+    return history;
+  }
+  const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  return history.filter((item) => {
+    const t = getEntryTimestampMs(item);
+    return t >= cutoffMs;
+  });
+}
+
+export function applyRetentionPruning() {
+  const history = getNotificationHistory();
+  const updated = pruneHistoryByRetention(history);
+  state.notificationHistoryCache = updated;
+  scheduleHistoryFlush();
+  state.mainWindow?.webContents.send('notification:history-changed', updated);
+}
+
+export function getNotificationHistory(): TimelineEntry[] {
   if (state.notificationHistoryCache === null) {
     try {
       if (fs.existsSync(NOTIFICATION_HISTORY_FILE)) {
         const data = fs.readFileSync(NOTIFICATION_HISTORY_FILE, 'utf8');
         const parsed = JSON.parse(data);
-        state.notificationHistoryCache = Array.isArray(parsed) ? parsed : [];
+        // If file contains legacy entries without a spec 'type', discard and start fresh (no migration)
+        if (Array.isArray(parsed) && parsed.every((entry: any) => entry && entry.type)) {
+          state.notificationHistoryCache = pruneHistoryByRetention(parsed);
+        } else {
+          state.notificationHistoryCache = [];
+        }
       }
     } catch (error) {
       console.error('Failed to load notification history:', error);
@@ -51,15 +84,14 @@ export function scheduleHistoryFlush() {
   }, HISTORY_FLUSH_DELAY);
 }
 
-export function logNotificationToHistory(notif: HistoricalNotification) {
+export function logNotificationToHistory(notif: TimelineEntry) {
   const history = getNotificationHistory();
   if (Array.isArray(history)) {
     history.unshift(notif);
-    if (history.length > MAX_NOTIFICATIONS) {
-      history.splice(MAX_NOTIFICATIONS);
-    }
+    const updated = pruneHistoryByRetention(history);
+    state.notificationHistoryCache = updated;
     scheduleHistoryFlush();
-    state.mainWindow?.webContents.send('notification:history-changed', history);
+    state.mainWindow?.webContents.send('notification:history-changed', updated);
   }
 }
 
@@ -84,35 +116,41 @@ export function clearNotificationHistoryCache(optionsOrPeriod: string | ClearHis
     options = optionsOrPeriod || { mode: 'all' };
   }
 
-  let updatedHistory: HistoricalNotification[];
+  let updatedHistory: TimelineEntry[];
 
   switch (options.mode) {
     case 'range': {
       const startMs = options.startDate ? new Date(`${options.startDate}T00:00:00`).getTime() : 0;
       const endMs = options.endDate ? new Date(`${options.endDate}T23:59:59.999`).getTime() : Date.now();
-      updatedHistory = history.filter((item) => item.timestamp < startMs || item.timestamp > endMs);
+      updatedHistory = history.filter((item) => {
+        const t = getEntryTimestampMs(item);
+        return t < startMs || t > endMs;
+      });
       break;
     }
     case 'single': {
       const startMs = options.startDate ? new Date(`${options.startDate}T00:00:00`).getTime() : 0;
       const endMs = options.endDate ? new Date(`${options.endDate}T23:59:59.999`).getTime() : Date.now();
-      updatedHistory = history.filter((item) => item.timestamp < startMs || item.timestamp > endMs);
+      updatedHistory = history.filter((item) => {
+        const t = getEntryTimestampMs(item);
+        return t < startMs || t > endMs;
+      });
       break;
     }
     case '24h':
-      updatedHistory = history.filter((item) => now - item.timestamp > 24 * 3600 * 1000);
+      updatedHistory = history.filter((item) => now - getEntryTimestampMs(item) > 24 * 3600 * 1000);
       break;
     case '7d':
-      updatedHistory = history.filter((item) => now - item.timestamp > 7 * 24 * 3600 * 1000);
+      updatedHistory = history.filter((item) => now - getEntryTimestampMs(item) > 7 * 24 * 3600 * 1000);
       break;
     case '30d':
-      updatedHistory = history.filter((item) => now - item.timestamp > 30 * 24 * 3600 * 1000);
+      updatedHistory = history.filter((item) => now - getEntryTimestampMs(item) > 30 * 24 * 3600 * 1000);
       break;
     case 'older7d':
-      updatedHistory = history.filter((item) => now - item.timestamp <= 7 * 24 * 3600 * 1000);
+      updatedHistory = history.filter((item) => now - getEntryTimestampMs(item) <= 7 * 24 * 3600 * 1000);
       break;
     case 'older30d':
-      updatedHistory = history.filter((item) => now - item.timestamp <= 30 * 24 * 3600 * 1000);
+      updatedHistory = history.filter((item) => now - getEntryTimestampMs(item) <= 30 * 24 * 3600 * 1000);
       break;
     case 'all':
     default:
@@ -143,14 +181,23 @@ export async function createNotification(
   const brandedTitle = senderAccount.emoji ? `${senderAccount.emoji} | ${data.title}` : `| ${data.title}`;
 
   if (state.globalSettings?.notificationLoggingEnabled) {
+    const now = new Date();
     logNotificationToHistory({
-      id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      type: 'message',
+      id: data.tag || `notif_${now.getTime()}_${Math.random().toString(36).substring(2, 9)}`,
+      timestamp: now.toISOString(),
+      displayTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      direction: 'incoming',
+      sender: {
+        displayName: data.title,
+        avatarUrl: data.icon || undefined,
+      },
       accountId: senderAccount.id,
       accountName: getAccountDisplayName(senderAccount),
-      title: data.title,
-      body: data.body,
-      icon: '',
-      timestamp: Date.now(),
+      content: {
+        type: 'text',
+        body: data.body,
+      },
     });
   }
 
@@ -212,14 +259,22 @@ export async function createLogEntry(data: { title: string; body: string }, send
   if (!senderAccount) return;
 
   if (state.globalSettings?.notificationLoggingEnabled) {
+    const now = new Date();
     logNotificationToHistory({
-      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      type: 'message',
+      id: `log_${now.getTime()}_${Math.random().toString(36).substring(2, 9)}`,
+      timestamp: now.toISOString(),
+      displayTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      direction: 'incoming',
+      sender: {
+        displayName: data.title,
+      },
       accountId: senderAccount.id,
       accountName: getAccountDisplayName(senderAccount),
-      title: data.title,
-      body: data.body,
-      icon: '',
-      timestamp: Date.now(),
+      content: {
+        type: 'text',
+        body: data.body,
+      },
     });
   }
 }

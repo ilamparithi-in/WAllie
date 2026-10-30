@@ -10,8 +10,9 @@ import {
   Search,
   X,
   AlertTriangle,
+  History,
 } from 'lucide-react';
-import type { AccountInfo, GlobalSettings, HistoricalNotification } from '../../../preload';
+import type { AccountInfo, GlobalSettings, HistoricalNotification, TimelineEntry, WhatsAppChatExport } from '../../../preload';
 
 interface NotificationSettingsPageProps {
   accounts: AccountInfo[];
@@ -29,8 +30,19 @@ interface NotificationSettingsPageProps {
 
 type DateQuickFilter = 'all' | 'today' | 'yesterday' | '7days' | 'custom';
 
-const getLocalDateKey = (timestamp: number): string => {
-  const d = new Date(timestamp);
+const getEntryTimestampMs = (item: TimelineEntry | any): number => {
+  if (!item) return 0;
+  if (typeof item.timestamp === 'number') return item.timestamp;
+  if (typeof item.timestamp === 'string') {
+    const parsed = Date.parse(item.timestamp);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+};
+
+const getLocalDateKey = (timestamp: number | string): string => {
+  const ms = typeof timestamp === 'number' ? timestamp : (Date.parse(timestamp) || Date.now());
+  const d = new Date(ms);
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -76,6 +88,16 @@ const formatDismissalDisplay = (sec?: number): string => {
   return `${sec}s`;
 };
 
+const formatRetentionDisplay = (days?: number): string => {
+  if (days === undefined || days === 30) return '30d (Default)';
+  if (days === 0) return 'Forever';
+  if (days === 7) return '7d';
+  if (days === 90) return '90d';
+  if (days === 180) return '180d';
+  if (days === 365) return '1 year';
+  return `${days}d`;
+};
+
 export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> = ({
   accounts,
   globalSettings,
@@ -116,17 +138,17 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
   // Filter by date
   const dateFilteredNotifications = useMemo(() => {
     if (dateQuickFilter === 'today') {
-      return filteredNotifications.filter((n) => getLocalDateKey(n.timestamp) === todayStr);
+      return filteredNotifications.filter((n) => getLocalDateKey((n as any).timestamp) === todayStr);
     }
     if (dateQuickFilter === 'yesterday') {
-      return filteredNotifications.filter((n) => getLocalDateKey(n.timestamp) === yesterdayStr);
+      return filteredNotifications.filter((n) => getLocalDateKey((n as any).timestamp) === yesterdayStr);
     }
     if (dateQuickFilter === '7days') {
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      return filteredNotifications.filter((n) => n.timestamp >= sevenDaysAgo);
+      return filteredNotifications.filter((n) => getEntryTimestampMs(n) >= sevenDaysAgo);
     }
     if (dateQuickFilter === 'custom' && selectedDate) {
-      return filteredNotifications.filter((n) => getLocalDateKey(n.timestamp) === selectedDate);
+      return filteredNotifications.filter((n) => getLocalDateKey((n as any).timestamp) === selectedDate);
     }
     return filteredNotifications;
   }, [filteredNotifications, dateQuickFilter, selectedDate, todayStr, yesterdayStr]);
@@ -135,7 +157,7 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
   const dateGroups = useMemo(() => {
     const groupsMap = new Map<string, HistoricalNotification[]>();
     for (const notif of dateFilteredNotifications) {
-      const key = getLocalDateKey(notif.timestamp);
+      const key = getLocalDateKey((notif as any).timestamp);
       if (!groupsMap.has(key)) {
         groupsMap.set(key, []);
       }
@@ -175,36 +197,75 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
     if (clearMode === 'range') {
       const startMs = clearStartDate ? new Date(`${clearStartDate}T00:00:00`).getTime() : 0;
       const endMs = clearEndDate ? new Date(`${clearEndDate}T23:59:59.999`).getTime() : Date.now();
-      return notificationHistory.filter((item) => item.timestamp >= startMs && item.timestamp <= endMs).length;
+      return notificationHistory.filter((item) => {
+        const ms = getEntryTimestampMs(item);
+        return ms >= startMs && ms <= endMs;
+      }).length;
     }
 
     if (clearMode === 'single') {
       const startMs = clearStartDate ? new Date(`${clearStartDate}T00:00:00`).getTime() : 0;
       const endMs = clearStartDate ? new Date(`${clearStartDate}T23:59:59.999`).getTime() : Date.now();
-      return notificationHistory.filter((item) => item.timestamp >= startMs && item.timestamp <= endMs).length;
+      return notificationHistory.filter((item) => {
+        const ms = getEntryTimestampMs(item);
+        return ms >= startMs && ms <= endMs;
+      }).length;
     }
 
     switch (clearMode) {
       case '24h':
-        return notificationHistory.filter((item) => now - item.timestamp <= 24 * 3600 * 1000).length;
+        return notificationHistory.filter((item) => now - getEntryTimestampMs(item) <= 24 * 3600 * 1000).length;
       case '7d':
-        return notificationHistory.filter((item) => now - item.timestamp <= 7 * 24 * 3600 * 1000).length;
+        return notificationHistory.filter((item) => now - getEntryTimestampMs(item) <= 7 * 24 * 3600 * 1000).length;
       case '30d':
-        return notificationHistory.filter((item) => now - item.timestamp <= 30 * 24 * 3600 * 1000).length;
+        return notificationHistory.filter((item) => now - getEntryTimestampMs(item) <= 30 * 24 * 3600 * 1000).length;
       case 'older7d':
-        return notificationHistory.filter((item) => now - item.timestamp > 7 * 24 * 3600 * 1000).length;
+        return notificationHistory.filter((item) => now - getEntryTimestampMs(item) > 7 * 24 * 3600 * 1000).length;
       case 'older30d':
-        return notificationHistory.filter((item) => now - item.timestamp > 30 * 24 * 3600 * 1000).length;
+        return notificationHistory.filter((item) => now - getEntryTimestampMs(item) > 30 * 24 * 3600 * 1000).length;
       case 'all':
       default:
         return notificationHistory.length;
     }
   }, [notificationHistory, clearMode, clearStartDate, clearEndDate]);
 
-  // Export handler
+  // Export handler conforming to WhatsAppChatExport schema
   const handleExportHistory = () => {
     if (!notificationHistory || notificationHistory.length === 0) return;
-    const jsonString = JSON.stringify(notificationHistory, null, 2);
+
+    const oldestItem = notificationHistory[notificationHistory.length - 1];
+    const newestItem = notificationHistory[0];
+    const oldestTimestamp = (oldestItem && 'timestamp' in oldestItem && oldestItem.timestamp)
+      ? String(oldestItem.timestamp)
+      : new Date().toISOString();
+    const newestTimestamp = (newestItem && 'timestamp' in newestItem && newestItem.timestamp)
+      ? String(newestItem.timestamp)
+      : new Date().toISOString();
+
+    const exportData: WhatsAppChatExport = {
+      schemaVersion: '1.0.0',
+      exportedAt: new Date().toISOString(),
+      exporter: {
+        app: 'WAllie',
+        version: '1.1.0',
+        accountName: notifAccountFilter === 'all' ? 'All Accounts' : notifAccountFilter,
+      },
+      chat: {
+        jid: 'notifications@wallie.local',
+        name: notifAccountFilter === 'all' ? 'Notification History' : `Notification History (${notifAccountFilter})`,
+        type: 'broadcast',
+      },
+      exportRange: {
+        requestedLimitTimestamp: null,
+        oldestMessageTimestamp: oldestTimestamp,
+        newestMessageTimestamp: newestTimestamp,
+        totalMessagesCount: notificationHistory.length,
+        completed: true,
+      },
+      timeline: notificationHistory,
+    };
+
+    const jsonString = JSON.stringify(exportData, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -244,13 +305,20 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
           <strong className="text-[#ea4335] font-semibold">Stored unencrypted!</strong>
         </p>
         <div className="flex items-center gap-1.5 text-[10px] text-[#8696a0] bg-[#182229] px-2.5 py-1 rounded-md border border-[#222d34]">
-          <Bell className="w-3 h-3 text-[#00a884]" />
-          <span>
-            Dismissal timeout:{' '}
-            <strong className="text-[#e9edef] font-medium">
-              {formatDismissalDisplay(globalSettings?.notificationDismissalTime)}
-            </strong>
-          </span>
+          <History className="w-3 h-3 text-[#00a884]" />
+          {globalSettings?.notificationLoggingEnabled !== false ? (
+            <span>
+              Retention:{' '}
+              <strong className="text-[#e9edef] font-medium">
+                {formatRetentionDisplay(globalSettings?.notificationRetentionDays)}
+              </strong>
+            </span>
+          ) : (
+            <span>
+              Logging:{' '}
+              <strong className="text-[#ea4335] font-medium">Disabled</strong>
+            </span>
+          )}
           <span>•</span>
           <button
             onClick={() => setActivePage('general')}
@@ -335,11 +403,10 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
               setDateQuickFilter('all');
               setSelectedDate('');
             }}
-            className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all cursor-pointer ${
-              dateQuickFilter === 'all'
+            className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all cursor-pointer ${dateQuickFilter === 'all'
                 ? 'bg-[#00a884] text-[#111b21] font-semibold shadow-xs'
                 : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#26343d]'
-            }`}
+              }`}
           >
             All
           </button>
@@ -348,11 +415,10 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
               setDateQuickFilter('today');
               setSelectedDate(todayStr);
             }}
-            className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all cursor-pointer ${
-              dateQuickFilter === 'today'
+            className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all cursor-pointer ${dateQuickFilter === 'today'
                 ? 'bg-[#00a884] text-[#111b21] font-semibold shadow-xs'
                 : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#26343d]'
-            }`}
+              }`}
           >
             Today
           </button>
@@ -361,11 +427,10 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
               setDateQuickFilter('yesterday');
               setSelectedDate(yesterdayStr);
             }}
-            className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all cursor-pointer ${
-              dateQuickFilter === 'yesterday'
+            className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all cursor-pointer ${dateQuickFilter === 'yesterday'
                 ? 'bg-[#00a884] text-[#111b21] font-semibold shadow-xs'
                 : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#26343d]'
-            }`}
+              }`}
           >
             Yesterday
           </button>
@@ -373,11 +438,10 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
             onClick={() => {
               setDateQuickFilter('7days');
             }}
-            className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all cursor-pointer ${
-              dateQuickFilter === '7days'
+            className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all cursor-pointer ${dateQuickFilter === '7days'
                 ? 'bg-[#00a884] text-[#111b21] font-semibold shadow-xs'
                 : 'bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#26343d]'
-            }`}
+              }`}
           >
             Past 7 Days
           </button>
@@ -432,11 +496,10 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
           <button
             onClick={() => setShowClearPanel(!showClearPanel)}
             disabled={notificationHistory.length === 0}
-            className={`px-2.5 py-1 border font-bold rounded-md transition-colors text-[10px] flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed ${
-              showClearPanel
+            className={`px-2.5 py-1 border font-bold rounded-md transition-colors text-[10px] flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed ${showClearPanel
                 ? 'bg-[#ea4335] text-white border-[#ea4335]'
                 : 'bg-[#ea4335]/10 border-[#ea4335]/30 text-[#ea4335] hover:bg-[#ea4335]/25 disabled:opacity-40'
-            }`}
+              }`}
           >
             <Trash2 className="w-3 h-3" />
             <span>Clear...</span>
@@ -464,71 +527,64 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => setClearMode('24h')}
-              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                clearMode === '24h'
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === '24h'
                   ? 'bg-[#ea4335] text-white font-semibold'
                   : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
-              }`}
+                }`}
             >
               Last 24 Hours
             </button>
             <button
               onClick={() => setClearMode('7d')}
-              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                clearMode === '7d'
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === '7d'
                   ? 'bg-[#ea4335] text-white font-semibold'
                   : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
-              }`}
+                }`}
             >
               Last 7 Days
             </button>
             <button
               onClick={() => setClearMode('30d')}
-              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                clearMode === '30d'
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === '30d'
                   ? 'bg-[#ea4335] text-white font-semibold'
                   : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
-              }`}
+                }`}
             >
               Last Month
             </button>
             <button
               onClick={() => setClearMode('older7d')}
-              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                clearMode === 'older7d'
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === 'older7d'
                   ? 'bg-[#ea4335] text-white font-semibold'
                   : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
-              }`}
+                }`}
             >
               Older than 7 Days
             </button>
             <button
               onClick={() => setClearMode('older30d')}
-              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                clearMode === 'older30d'
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === 'older30d'
                   ? 'bg-[#ea4335] text-white font-semibold'
                   : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
-              }`}
+                }`}
             >
               Older than 30 Days
             </button>
             <button
               onClick={() => setClearMode('all')}
-              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                clearMode === 'all'
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === 'all'
                   ? 'bg-[#ea4335] text-white font-semibold'
                   : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
-              }`}
+                }`}
             >
               All Time
             </button>
             <button
               onClick={() => setClearMode('range')}
-              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                clearMode === 'range' || clearMode === 'single'
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${clearMode === 'range' || clearMode === 'single'
                   ? 'bg-[#ea4335] text-white font-semibold'
                   : 'bg-[#202c33] text-[#e9edef] hover:bg-[#2a3942]'
-              }`}
+                }`}
             >
               Custom Range
             </button>
@@ -701,9 +757,18 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
                 {/* Date Section Items */}
                 {!isCollapsed && (
                   <div className="space-y-1.5 pl-1">
-                    {displayedItems.map((notif) => {
-                      const date = new Date(notif.timestamp);
-                      const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    {displayedItems.map((notif: any) => {
+                      const ms = getEntryTimestampMs(notif);
+                      const date = new Date(ms || Date.now());
+                      const timeStr = notif.displayTime || date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      const displayName = notif.type === 'message'
+                        ? (notif.sender?.displayName || 'Unknown')
+                        : (notif.type === 'system_event' ? 'System Notification' : 'Notification');
+                      const avatar = notif.type === 'message' ? notif.sender?.avatarUrl : undefined;
+                      const bodyText = notif.type === 'message'
+                        ? (notif.content?.type === 'text' ? notif.content.body : '')
+                        : (notif.type === 'system_event' ? notif.text : '');
+                      const accountLabel = notif.accountName || '';
 
                       return (
                         <div
@@ -711,9 +776,9 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
                           style={{ contentVisibility: 'auto', containIntrinsicSize: '0 64px' }}
                           className="flex items-start gap-2.5 p-2.5 bg-[#182229] border border-[#222d34] rounded-xl hover:border-[#374248] transition-all text-[11px] shadow-xs"
                         >
-                          {notif.icon ? (
+                          {avatar ? (
                             <img
-                              src={notif.icon}
+                              src={avatar}
                               alt=""
                               className="w-7 h-7 rounded-full flex-shrink-0 object-cover bg-[#202c33]"
                               onError={(e) => {
@@ -728,25 +793,27 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
                           ) : null}
                           <div
                             className="avatar-fallback w-7 h-7 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0"
-                            style={{ display: notif.icon ? 'none' : 'flex' }}
+                            style={{ display: avatar ? 'none' : 'flex' }}
                           >
                             <Bell className="w-3.5 h-3.5" />
                           </div>
 
                           <div className="min-w-0 flex-grow">
                             <div className="flex items-center justify-between gap-1.5">
-                              <span className="font-semibold text-xs text-[#e9edef] truncate">{notif.title}</span>
+                              <span className="font-semibold text-xs text-[#e9edef] truncate">{displayName}</span>
                               <div className="flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap">
-                                <span className="bg-[#202c33] text-[#00a884] font-medium text-[8px] px-1.5 py-0.5 rounded-md border border-[#222d34]">
-                                  {notif.accountName}
-                                </span>
+                                {accountLabel && (
+                                  <span className="bg-[#202c33] text-[#00a884] font-medium text-[8px] px-1.5 py-0.5 rounded-md border border-[#222d34]">
+                                    {accountLabel}
+                                  </span>
+                                )}
                                 <span className="text-[9px] text-[#8696a0]">
                                   {timeStr}
                                 </span>
                               </div>
                             </div>
                             <div className="text-[10px] text-[#8696a0] mt-0.5 break-words max-h-16 overflow-y-auto no-scrollbar">
-                              {notif.body}
+                              {bodyText}
                             </div>
                           </div>
                         </div>

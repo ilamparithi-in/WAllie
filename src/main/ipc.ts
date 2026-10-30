@@ -8,7 +8,7 @@ import { saveAccounts, saveSettings, getAccountStorageSizes, invalidateStorageCa
 import { importExtension, installWebStoreExtension, toggleExtension, removeExtension, checkForWebStoreUpdates } from './extensions';
 import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectCustomCssForView, injectAccountStyling, clearPausedMediaState } from './views';
 import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize, unloadAccountLogic, loadAccountLogic, notifyAccountListChanged } from './window';
-import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry, closeDbusNotificationByTag, closeNotificationByContact } from './notifications';
+import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry, closeDbusNotificationByTag, closeNotificationByContact, applyRetentionPruning } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS, AccountSettings, GroupInviteDetails } from '../shared/types';
 import { resolveGoogleFont, resolveGoogleFontUrl } from '../shared/fonts';
 import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus, getAccountForWebContents, showAppToast } from './utils';
@@ -417,11 +417,17 @@ export function registerIpcHandlers() {
   ipcMain.handle('settings:save-global', async (_event, newSettings: GlobalSettings) => {
     if (!state.globalSettings) return false;
     const oldScale = state.globalSettings.appScale || 100;
+    const oldRetention = state.globalSettings.notificationRetentionDays;
     const disclaimerJustAccepted = newSettings.disclaimerAccepted && !state.globalSettings.disclaimerAccepted;
     const scaleChanged = newSettings.appScale !== undefined && newSettings.appScale !== oldScale;
+    const retentionChanged = newSettings.notificationRetentionDays !== undefined && newSettings.notificationRetentionDays !== oldRetention;
 
     state.globalSettings = newSettings;
     await saveSettings(state.globalSettings);
+
+    if (retentionChanged) {
+      applyRetentionPruning();
+    }
 
     const newBaseScale = (newSettings.appScale || 100) / 100;
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {

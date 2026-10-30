@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell, History } from 'lucide-react';
 import type { GlobalSettings, AccountInfo } from '../../../preload';
 
 interface GeneralSettingsPageProps {
@@ -16,6 +16,15 @@ const PRESET_DISMISSAL_TIMES = [
   { value: 10, label: '10 seconds (Default)' },
   { value: 20, label: '20 seconds' },
   { value: 0, label: 'Never auto-dismiss (Persistent)' },
+];
+
+const PRESET_RETENTION_DAYS = [
+  { value: 7, label: '7 days' },
+  { value: 30, label: '30 days (Default)' },
+  { value: 90, label: '90 days (3 months)' },
+  { value: 180, label: '180 days (6 months)' },
+  { value: 365, label: '365 days (1 year)' },
+  { value: 0, label: 'Keep forever (Unlimited)' },
 ];
 
 export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
@@ -77,6 +86,33 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
     if (isNaN(num)) num = 10;
     num = Math.max(0, Math.min(300, num));
     handleToggleGlobalSetting('notificationDismissalTime', num);
+  };
+
+  const currentRetentionDays = globalSettings?.notificationRetentionDays ?? 30;
+  const isCustomRetention = !PRESET_RETENTION_DAYS.some((p) => p.value === currentRetentionDays);
+  const [retentionSelectValue, setRetentionSelectValue] = useState<string>(
+    isCustomRetention ? 'custom' : currentRetentionDays.toString()
+  );
+  const [customRetentionInput, setCustomRetentionInput] = useState<string>(currentRetentionDays.toString());
+
+  useEffect(() => {
+    setRetentionSelectValue(isCustomRetention ? 'custom' : currentRetentionDays.toString());
+    setCustomRetentionInput(currentRetentionDays.toString());
+  }, [currentRetentionDays, isCustomRetention]);
+
+  const handleSelectRetentionChange = (val: string) => {
+    setRetentionSelectValue(val);
+    if (val !== 'custom') {
+      const num = parseInt(val, 10);
+      handleToggleGlobalSetting('notificationRetentionDays', num);
+    }
+  };
+
+  const handleApplyCustomRetention = () => {
+    let num = parseInt(customRetentionInput, 10);
+    if (isNaN(num)) num = 30;
+    num = Math.max(0, num);
+    handleToggleGlobalSetting('notificationRetentionDays', num);
   };
 
   const trustedDomains = useMemo(() => {
@@ -280,28 +316,6 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
           <div className="space-y-2">
             <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-[#e9edef] text-[11px]">Enable Notification Logging</div>
-                <div className="text-[10px] text-[#8696a0]">
-                  Log desktop notifications, message edits, and deletions to history (stored unencrypted, disabled by default)
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={globalSettings?.notificationLoggingEnabled ?? false}
-                onChange={async (e) => {
-                  const target = e.target;
-                  const willEnable = target.checked;
-                  const success = await handleToggleGlobalSetting('notificationLoggingEnabled', willEnable);
-                  if (success === false) {
-                    target.checked = globalSettings?.notificationLoggingEnabled ?? false;
-                  }
-                }}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
-              />
-            </label>
-
-            <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-              <div className="flex-1 min-w-0">
                 <div className="font-medium text-[#e9edef] text-[11px]">Inline Reply Notifications (KDE / Freedesktop)</div>
                 <div className="text-[10px] text-[#8696a0]">
                   Allow replying directly from notification popups when supported by your desktop environment
@@ -377,6 +391,107 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Notification History & Logging Section */}
+        <div className="mt-6 pt-4 border-t border-[#222d34]">
+          <h4 className="text-xs font-semibold text-[#e9edef] mb-1 flex items-center gap-1.5">
+            <History className="w-3.5 h-3.5 text-[#00a884]" />
+            <span>Notification History</span>
+          </h4>
+          <p className="text-[10px] text-[#8696a0] mb-3 leading-relaxed">
+            Record desktop notifications, message edits, and deletions locally with automated retention.
+          </p>
+
+          <div className="space-y-2">
+            <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-[#e9edef] text-[11px]">Enable Notification Logging</div>
+                <div className="text-[10px] text-[#8696a0]">
+                  Log desktop notifications, message edits, and deletions to history (stored unencrypted, disabled by default)
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={globalSettings?.notificationLoggingEnabled ?? false}
+                onChange={async (e) => {
+                  const target = e.target;
+                  const willEnable = target.checked;
+                  const success = await handleToggleGlobalSetting('notificationLoggingEnabled', willEnable);
+                  if (success === false) {
+                    target.checked = globalSettings?.notificationLoggingEnabled ?? false;
+                  }
+                }}
+                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+              />
+            </label>
+
+            {/* Display the retention setting ONLY when notification logging is enabled */}
+            {globalSettings?.notificationLoggingEnabled && (
+              <div className="p-2 rounded hover:bg-[#182229] transition-colors space-y-2 pl-3 border-l-2 border-[#00a884]/40 mt-1">
+                <div>
+                  <div className="font-medium text-[#e9edef] text-[11px]">Notification History Retention</div>
+                  <div className="text-[10px] text-[#8696a0] mt-0.5">
+                    Automatically prunes notification history older than the selected retention period
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-0.5">
+                  <select
+                    value={retentionSelectValue}
+                    onChange={(e) => handleSelectRetentionChange(e.target.value)}
+                    className="bg-[#202c33] text-[#e9edef] text-xs px-2.5 py-1.5 rounded border border-[#2c3943] focus:border-[#00a884] focus:outline-none cursor-pointer flex-1 min-w-[150px]"
+                  >
+                    {PRESET_RETENTION_DAYS.map((preset) => (
+                      <option key={preset.value} value={preset.value.toString()}>
+                        {preset.label}
+                      </option>
+                    ))}
+                    <option value="custom">Custom...</option>
+                  </select>
+
+                  {(retentionSelectValue === 'custom' || currentRetentionDays !== 30) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleToggleGlobalSetting('notificationRetentionDays', 30);
+                        setRetentionSelectValue('30');
+                        setCustomRetentionInput('30');
+                      }}
+                      title="Reset notification retention to 30 days"
+                      className="px-2.5 py-1.5 bg-[#202c33] text-[#ea4335] border border-[#ea4335]/40 hover:bg-[#ea4335] hover:text-white transition-colors rounded text-[10px] font-semibold cursor-pointer shrink-0"
+                    >
+                      Reset (30d)
+                    </button>
+                  )}
+                </div>
+
+                {retentionSelectValue === 'custom' && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-[10px] text-[#8696a0] shrink-0">Custom Retention (days, 0 for forever):</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={3650}
+                      value={customRetentionInput}
+                      onChange={(e) => setCustomRetentionInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleApplyCustomRetention();
+                      }}
+                      className="w-20 bg-[#202c33] text-[#e9edef] text-xs px-2 py-1 rounded border border-[#2c3943] focus:border-[#00a884] focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyCustomRetention}
+                      className="px-3 py-1 bg-[#00a884] hover:bg-[#00c298] text-[#111b21] font-bold rounded text-xs transition-colors cursor-pointer"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

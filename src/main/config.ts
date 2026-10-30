@@ -76,6 +76,7 @@ export function loadSettings(): GlobalSettings {
         downloadNotificationsEnabled: parsed.downloadNotificationsEnabled !== false,
         inlineReplyEnabled: parsed.inlineReplyEnabled !== false,
         notificationDismissalTime: typeof parsed.notificationDismissalTime === 'number' ? parsed.notificationDismissalTime : 10,
+        notificationRetentionDays: typeof parsed.notificationRetentionDays === 'number' ? parsed.notificationRetentionDays : 30,
         defaultProtocolAccountId: typeof parsed.defaultProtocolAccountId === 'string' ? parsed.defaultProtocolAccountId : 'ask',
         standaloneLinkPreviewEnabled: parsed.standaloneLinkPreviewEnabled !== false,
       };
@@ -106,6 +107,7 @@ export function loadSettings(): GlobalSettings {
     downloadNotificationsEnabled: true,
     inlineReplyEnabled: true,
     notificationDismissalTime: 10,
+    notificationRetentionDays: 30,
     defaultProtocolAccountId: 'ask',
     standaloneLinkPreviewEnabled: true,
   };
