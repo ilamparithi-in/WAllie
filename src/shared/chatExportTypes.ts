@@ -38,6 +38,13 @@ export interface ChatMetadata {
     ownerJid?: string;
     createdAt?: string;
     participantsCount?: number;
+    participants?: Array<{
+      jid: string;
+      displayName: string;
+      isAdmin?: boolean;
+      isSuperAdmin?: boolean;
+      avatarUrl?: string;
+    }>;
     memberLabels?: Record<string, string>; // member LID/JID -> custom tag string
   };
   avatarUrl?: string; // Relative path in companion _files/ or data URI
@@ -66,6 +73,7 @@ export interface SystemNotificationEntry {
     | "participant_left"
     | "disappearing_timer_change"
     | "call_log"
+    | "group_description_change"
     | "generic";
   text: string;
   accountId?: string;
@@ -75,6 +83,7 @@ export interface SystemNotificationEntry {
 export interface MessageEntry {
   type: "message";
   id: string;
+  serializedId?: string; // Full WhatsApp compound key for model retrieval
   timestamp?: string; // ISO 8601 string
   displayTime?: string; // e.g. "8:10 pm"
   direction?: "incoming" | "outgoing";
@@ -312,6 +321,9 @@ export interface ChatExportProgress {
     | 'completed'
     | 'aborted'
     | 'failed';
+  outputDirectory?: string;
+  jsonPath?: string;
+  htmlPath?: string;
   error?: string;
 }
 

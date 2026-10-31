@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw, FolderOpen, User, Trash2, Download, Copy, Check, Sliders } from 'lucide-react';
+import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw, FolderOpen, User, Trash2, Download, Copy, Check, Sliders, FileArchive } from 'lucide-react';
 import type { AccountInfo, GlobalSettings, AppVersionInfo, AccountSettings, SystemFontInfo } from '../../preload';
 import { GeneralSettingsPage } from './settings/GeneralSettingsPage';
 import { PreloadSettingsPage } from './settings/PreloadSettingsPage';
@@ -11,6 +11,7 @@ import { StorageSettingsPage } from './settings/StorageSettingsPage';
 import { NotificationSettingsPage } from './settings/NotificationSettingsPage';
 import { DownloadsSettingsPage } from './settings/DownloadsSettingsPage';
 import { AdvancedSettingsPage } from './settings/AdvancedSettingsPage';
+import { ChatExporterSettingsPage } from './settings/ChatExporterSettingsPage';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -20,7 +21,7 @@ interface SettingsModalProps {
   onShowDisclaimer: () => void;
 }
 
-type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads' | 'advanced';
+type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads' | 'advanced' | 'exporter';
 
 const SETTINGS_MENU_ITEMS: {
   page: PageType;
@@ -28,17 +29,18 @@ const SETTINGS_MENU_ITEMS: {
   title: string;
   description: string;
 }[] = [
-  { page: 'accounts', icon: User, title: 'Manage Accounts', description: 'Customize account names and emojis' },
-  { page: 'general', icon: SettingsIcon, title: 'General Settings', description: 'Tray, desktop alerts & dismissal timeout, GPU acceleration' },
-  { page: 'downloads', icon: Download, title: 'Downloads', description: 'Default folder, Save As dialog, and file click behavior' },
-  { page: 'preload', icon: Users, title: 'Accounts to load on launch', description: 'Select which accounts get preloaded in the background' },
-  { page: 'permissions', icon: Shield, title: 'Browser permissions', description: 'Manage camera, mic, notifications, geolocation, and clipboard access' },
-  { page: 'extensions', icon: Puzzle, title: 'Chrome Extensions', description: 'Manage helper extensions and plugins' },
-  { page: 'css', icon: Palette, title: 'Appearance, Fonts & Themes', description: 'Customize fonts, wallpaper, preset themes, and CSS' },
-  { page: 'storage', icon: Database, title: 'Storage & Cache', description: 'Inspect sizes, clear browser media or cache' },
-  { page: 'notifications', icon: Bell, title: 'Notification History', description: 'View and search desktop alert logs' },
-  { page: 'advanced', icon: Sliders, title: 'Advanced Settings', description: 'Standalone link previews & desktop enhancements' },
-];
+    { page: 'accounts', icon: User, title: 'Manage Accounts', description: 'Customize account names and emojis' },
+    { page: 'general', icon: SettingsIcon, title: 'General Settings', description: 'Tray, desktop alerts & dismissal timeout, GPU acceleration' },
+    { page: 'downloads', icon: Download, title: 'Downloads', description: 'Default folder, Save As dialog, and file click behavior' },
+    { page: 'preload', icon: Users, title: 'Accounts to load on launch', description: 'Select which accounts get preloaded in the background' },
+    { page: 'permissions', icon: Shield, title: 'Browser permissions', description: 'Manage camera, mic, notifications, geolocation, and clipboard access' },
+    { page: 'extensions', icon: Puzzle, title: 'Chrome Extensions', description: 'Manage helper extensions and plugins' },
+    { page: 'css', icon: Palette, title: 'Appearance, Fonts & Themes', description: 'Customize fonts, wallpaper, preset themes, and CSS' },
+    { page: 'storage', icon: Database, title: 'Storage & Cache', description: 'Inspect sizes, clear browser media or cache' },
+    { page: 'notifications', icon: Bell, title: 'Notification History', description: 'View and search desktop alert logs' },
+    { page: 'exporter', icon: FileArchive, title: 'Chat Exporter', description: 'Export chats to JSON, HTML, and launch the built-in offline viewer' },
+    { page: 'advanced', icon: Sliders, title: 'Advanced Settings', description: 'Standalone link previews & desktop enhancements' },
+  ];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialPage, initialAccountId, onShowDisclaimer }) => {
   const modalRef = useRef<HTMLDivElement>(null);
@@ -282,7 +284,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
           if (fonts && fonts.length > 0) {
             setSystemFonts(fonts);
           }
-        }).catch(() => {});
+        }).catch(() => { });
       });
     }
   }, [isOpen, activePage]);
@@ -398,7 +400,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
   const filteredNotifications = (Array.isArray(notificationHistory) ? notificationHistory : []).filter((notif) => {
     const sender = notif?.type === 'message' ? (notif.sender?.displayName || '') : '';
-    const textContent = notif?.type === 'message' 
+    const textContent = notif?.type === 'message'
       ? (notif.content?.type === 'text' ? notif.content.body : '')
       : (notif?.type === 'system_event' ? notif.text : '');
     const matchesSearch =
@@ -530,345 +532,352 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     <div
       ref={modalRef}
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      className={`fixed top-[28px] right-0 bottom-0 z-50 w-[450px] bg-[#111b21] border-l border-[#222d34] shadow-2xl flex flex-col transform transition-transform duration-300 ease-[cubic-bezier(0.1,0.9,0.2,1)] select-text ${
-        isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
-      }`}
+      className={`fixed top-[28px] right-0 bottom-0 z-50 w-[450px] bg-[#111b21] border-l border-[#222d34] shadow-2xl flex flex-col transform transition-transform duration-300 ease-[cubic-bezier(0.1,0.9,0.2,1)] select-text ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+        }`}
     >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#222d34] bg-[#202c33] flex-shrink-0">
-          {activePage === 'main' ? (
-            <div className="flex items-center gap-2 text-[#e9edef] font-medium text-sm">
-              <SettingsIcon className="w-4 h-4 text-[#00a884]" />
-              <span>Application Settings</span>
-            </div>
-          ) : (
-            <button
-              onClick={(e) => {
-                setActivePage('main');
-                e.currentTarget.blur();
-              }}
-              onMouseDown={(e) => e.preventDefault()}
-              className="flex items-center gap-2 text-[#00a884] font-medium text-sm hover:text-[#00c298] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="text-[#e9edef] font-semibold text-xs">
-                {activePage === 'general' && 'General Settings'}
-                {activePage === 'downloads' && 'Downloads'}
-                {activePage === 'preload' && 'Accounts to load on launch'}
-                {activePage === 'permissions' && 'Browser permissions'}
-                {activePage === 'extensions' && 'Chrome Extensions'}
-                {activePage === 'css' && 'Appearance, Fonts & Themes'}
-                {activePage === 'storage' && 'Storage & Cache'}
-                {activePage === 'notifications' && 'Notification History'}
-                {activePage === 'accounts' && 'Manage Accounts'}
-              </span>
-            </button>
-          )}
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#222d34] bg-[#202c33] flex-shrink-0">
+        {activePage === 'main' ? (
+          <div className="flex items-center gap-2 text-[#e9edef] font-medium text-sm">
+            <SettingsIcon className="w-4 h-4 text-[#00a884]" />
+            <span>Application Settings</span>
+          </div>
+        ) : (
           <button
             onClick={(e) => {
               setActivePage('main');
-              onClose();
               e.currentTarget.blur();
             }}
             onMouseDown={(e) => e.preventDefault()}
-            tabIndex={-1}
-            className="p-1 rounded hover:bg-[#111b21] text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
+            className="flex items-center gap-2 text-[#00a884] font-medium text-sm hover:text-[#00c298] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
           >
-            <X className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-[#e9edef] font-semibold text-xs">
+              {activePage === 'general' && 'General Settings'}
+              {activePage === 'downloads' && 'Downloads'}
+              {activePage === 'preload' && 'Accounts to load on launch'}
+              {activePage === 'permissions' && 'Browser permissions'}
+              {activePage === 'extensions' && 'Chrome Extensions'}
+              {activePage === 'css' && 'Appearance, Fonts & Themes'}
+              {activePage === 'storage' && 'Storage & Cache'}
+              {activePage === 'notifications' && 'Notification History'}
+              {activePage === 'accounts' && 'Manage Accounts'}
+              {activePage === 'exporter' && 'Chat Exporter'}
+            </span>
+          </button>
+        )}
+        <button
+          onClick={(e) => {
+            setActivePage('main');
+            onClose();
+            e.currentTarget.blur();
+          }}
+          onMouseDown={(e) => e.preventDefault()}
+          tabIndex={-1}
+          className="p-1 rounded hover:bg-[#111b21] text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Modal Body / Drawer Content */}
+      <div className="flex-grow relative overflow-hidden bg-[#111b21]">
+        {/* Main Menu Page */}
+        <div className={`absolute inset-0 p-4 overflow-y-auto transition-transform duration-300 ease-in-out flex flex-col ${activePage === 'main' ? 'translate-x-0' : '-translate-x-full pointer-events-none invisible'
+          }`}>
+          <div className="flex flex-col space-y-2 select-text pb-4">
+            {SETTINGS_MENU_ITEMS.map((item) => {
+              const IconComponent = item.icon;
+              return (
+                <button
+                  key={item.page}
+                  onClick={() => setActivePage(item.page)}
+                  onMouseDown={(e) => e.preventDefault()}
+                  className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
+                >
+                  <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
+                    <IconComponent className="w-4 h-4" />
+                  </div>
+                  <div className="flex-grow min-w-0">
+                    <div className="font-semibold text-[#e9edef] text-[12px]">{item.title}</div>
+                    <div className="text-[10px] text-[#8696a0] mt-0.5">{item.description}</div>
+                  </div>
+                </button>
+              );
+            })}
+
+            {/* About Section */}
+            <div className="mt-6 pt-4 border-t border-[#222d34]/60 text-center select-text">
+              <div className="flex justify-center mb-2.5">
+                <img src="./icon.png" alt="WAllie Logo" className="w-14 h-14 object-contain" />
+              </div>
+              <div className="text-sm font-bold text-[#e9edef] tracking-wide">WAllie</div>
+              <div className="text-[10px] text-[#8696a0] mt-1 leading-normal max-w-[320px] mx-auto">
+                Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
+              </div>
+              {/* Dynamic Version & Build Info */}
+              <div className="flex items-center justify-center mt-2">
+                <span className="text-[11px] font-mono font-medium text-[#d1d7db]">
+                  {versionInfo ? versionInfo.displayVersion : 'v1.0.0'}
+                </span>
+              </div>
+
+              <div className="text-[10px] text-[#8696a0] mt-1 flex items-center justify-center gap-1.5">
+                <span>MIT License • By Ilamparithi M</span>
+                {versionInfo && (
+                  <>
+                    <span>•</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const details = `WAllie ${versionInfo.version} (Commit: ${versionInfo.commitHash}, Built: ${versionInfo.buildDate})`;
+                        navigator.clipboard.writeText(details);
+                        setCopiedVersion(true);
+                        setTimeout(() => setCopiedVersion(false), 2000);
+                      }}
+                      title="Copy build diagnostics to clipboard"
+                      className="text-[#8696a0] hover:text-[#00a884] transition-colors inline-flex items-center gap-1 cursor-pointer bg-transparent border-none p-0 text-[10px]"
+                    >
+                      {copiedVersion ? (
+                        <>
+                          <Check className="w-3 h-3 text-[#00a884]" />
+                          <span className="text-[#00a884] font-medium">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span className="underline hover:text-[#00a884]">Copy details</span>
+                        </>
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
+              <div className="mt-1.5 flex flex-col gap-1 items-center">
+                <button
+                  onClick={(e) => {
+                    onShowDisclaimer();
+                    e.currentTarget.blur();
+                  }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  className="text-[#00a884] hover:text-[#00c298] transition-colors underline font-medium text-[10px] cursor-pointer bg-transparent border-none p-0 focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
+                >
+                  View Legal Disclaimer
+                </button>
+                <button
+                  onClick={(e) => {
+                    window.electronAPI?.toggleWallieDevTools();
+                    e.currentTarget.blur();
+                  }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  className="text-[#8696a0] hover:text-[#e9edef] transition-colors underline font-medium text-[10px] cursor-pointer bg-transparent border-none p-0 focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
+                >
+                  Open Wallie DevTools
+                </button>
+              </div>
+              <div className="flex items-center justify-center gap-3 mt-3">
+                <a
+                  href="https://github.com/ilamparithi-in/WAllie"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#00a884] hover:text-[#00c298] transition-colors underline font-medium text-[11px]"
+                >
+                  Leave a star! ⭐
+                </a>
+                <span className="text-[#374248]">•</span>
+                <a
+                  href="https://pseudosmp.github.io/donate"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#00a884] hover:text-[#00c298] transition-colors underline font-medium text-[11px]"
+                >
+                  Donate 💖
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Details Sub-pages Container */}
+        <div className={`absolute inset-0 p-4 overflow-y-auto transition-transform duration-300 ease-in-out bg-[#111b21] ${activePage !== 'main' ? 'translate-x-0' : 'translate-x-full pointer-events-none invisible'
+          }`}>
+          {(() => {
+            const subPage = activePage !== 'main' ? activePage : lastSubPage;
+            return (
+              <>
+                {subPage === 'general' && (
+                  <GeneralSettingsPage
+                    globalSettings={globalSettings}
+                    handleToggleGlobalSetting={handleToggleGlobalSetting}
+                    accounts={accounts}
+                  />
+                )}
+
+                {subPage === 'downloads' && (
+                  <DownloadsSettingsPage
+                    globalSettings={globalSettings}
+                    handleToggleGlobalSetting={handleToggleGlobalSetting}
+                  />
+                )}
+
+                {subPage === 'preload' && (
+                  <PreloadSettingsPage
+                    accounts={accounts}
+                    globalSettings={globalSettings}
+                    handleToggleGlobalSetting={handleToggleGlobalSetting}
+                  />
+                )}
+
+                {subPage === 'accounts' && (
+                  <AccountsSettingsPage
+                    accounts={accounts}
+                    setAccounts={setAccounts}
+                    globalSettings={globalSettings}
+                    handleToggleGlobalSetting={handleToggleGlobalSetting}
+                    handleDeleteAccount={handleDeleteAccount}
+                    setSelectedAccountId={setSelectedAccountId}
+                    setNotifAccountFilter={setNotifAccountFilter}
+                    setActivePage={setActivePage}
+                  />
+                )}
+
+                {subPage === 'permissions' && (
+                  <PermissionsSettingsPage
+                    accounts={accounts}
+                    selectedAccountId={selectedAccountId}
+                    setSelectedAccountId={setSelectedAccountId}
+                    selectedAccount={selectedAccount}
+                    handleToggleAccountPermission={handleToggleAccountPermission}
+                  />
+                )}
+
+                {subPage === 'extensions' && (
+                  <ExtensionsSettingsPage
+                    accounts={accounts}
+                    selectedAccountId={selectedAccountId}
+                    setSelectedAccountId={setSelectedAccountId}
+                    globalSettings={globalSettings}
+                    handleToggleGlobalSetting={handleToggleGlobalSetting}
+                    showImportDropdown={showImportDropdown}
+                    setShowImportDropdown={setShowImportDropdown}
+                    isImporting={isImporting}
+                    handleImportExtension={handleImportExtension}
+                    handleBrowseWebStore={handleBrowseWebStore}
+                    webstoreUrlOrId={webstoreUrlOrId}
+                    setWebstoreUrlOrId={setWebstoreUrlOrId}
+                    isInstallingWebStore={isInstallingWebStore}
+                    handleInstallWebStoreExtension={handleInstallWebStoreExtension}
+                    extensions={extensions}
+                    handleToggleExtension={handleToggleExtension}
+                    handleRemoveExtension={handleRemoveExtension}
+                  />
+                )}
+
+                {subPage === 'css' && (
+                  <ThemeSettingsPage
+                    accounts={accounts}
+                    selectedAccountId={selectedAccountId}
+                    setSelectedAccountId={setSelectedAccountId}
+                    selectedAccount={selectedAccount}
+                    handleSelectPresetTheme={handleSelectPresetTheme}
+                    customCss={customCss}
+                    handleCssChange={handleCssChange}
+                    fontFamily={fontFamily}
+                    monoFontFamily={monoFontFamily}
+                    followSystemFont={followSystemFont}
+                    customWallpaper={customWallpaper}
+                    systemFonts={systemFonts}
+                    systemFontsMeta={systemFontsMeta}
+                    desktopFont={desktopFont}
+                    preferGoogleFont={preferGoogleFont}
+                    onTogglePreferGoogleFont={handleTogglePreferGoogleFont}
+                    preferGoogleMonoFont={preferGoogleMonoFont}
+                    onTogglePreferGoogleMonoFont={handleTogglePreferGoogleMonoFont}
+                    onUpdateFont={handleUpdateFont}
+                    onUpdateMonoFont={handleUpdateMonoFont}
+                    onToggleFollowSystemFont={handleToggleFollowSystemFont}
+                    onSelectWallpaper={handleSelectWallpaper}
+                    onClearWallpaper={handleClearWallpaper}
+                    onImportCustomCss={handleImportCustomCss}
+                    onClearCustomCss={handleClearCustomCss}
+                  />
+                )}
+
+                {subPage === 'storage' && (
+                  <StorageSettingsPage
+                    accounts={accounts}
+                    selectedAccountId={selectedAccountId}
+                    setSelectedAccountId={setSelectedAccountId}
+                    isLoadingStorage={isLoadingStorage}
+                    storageSizes={storageSizes}
+                    formatBytes={formatBytes}
+                    isClearing={isClearing}
+                    handleClearStorage={handleClearStorage}
+                  />
+                )}
+
+                {subPage === 'notifications' && (
+                  <NotificationSettingsPage
+                    accounts={accounts}
+                    globalSettings={globalSettings}
+                    setActivePage={setActivePage}
+                    handleToggleGlobalSetting={handleToggleGlobalSetting}
+                    notifSearch={notifSearch}
+                    setNotifSearch={setNotifSearch}
+                    notifAccountFilter={notifAccountFilter}
+                    setNotifAccountFilter={setNotifAccountFilter}
+                    handleClearHistory={handleClearHistory}
+                    notificationHistory={notificationHistory}
+                    filteredNotifications={filteredNotifications}
+                  />
+                )}
+
+                {subPage === 'advanced' && (
+                  <AdvancedSettingsPage
+                    globalSettings={globalSettings}
+                    handleToggleGlobalSetting={handleToggleGlobalSetting}
+                  />
+                )}
+
+                {subPage === 'exporter' && (
+                  <ChatExporterSettingsPage
+                    onCloseSettings={() => {
+                      setActivePage('main');
+                      onClose();
+                    }}
+                  />
+                )}
+              </>
+            );
+          })()}
+        </div>
+      </div>
+
+      {/* Reload required card */}
+      {selectedAccountId && accountsNeedingReload.includes(selectedAccountId) && (
+        <div className="p-3.5 bg-[#202c33] border-t border-[#00a884] flex items-center justify-between flex-shrink-0 animate-in slide-in-from-bottom duration-250 select-none">
+          <div className="flex items-center gap-2.5">
+            <RotateCw className="w-4 h-4 text-[#00a884]" />
+            <div>
+              <div className="font-semibold text-[#e9edef] text-[11px]">Reload required</div>
+              <div className="text-[10px] text-[#8696a0] mt-0.5">Please reload the page to apply your changes.</div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              window.electronAPI.reloadAccount(selectedAccountId);
+              const acc = accounts.find((a) => a.id === selectedAccountId);
+              if (acc?.settings) {
+                initialAccountPermissionsRef.current.set(selectedAccountId, { ...acc.settings });
+              }
+              setAccountsNeedingReload((prev) => prev.filter((id) => id !== selectedAccountId));
+            }}
+            className="px-3.5 py-1.5 bg-[#00a884] hover:bg-[#00c298] text-[#111b21] font-bold rounded transition-colors text-[11px] whitespace-nowrap shadow-sm"
+          >
+            Reload Page
           </button>
         </div>
-
-        {/* Modal Body / Drawer Content */}
-        <div className="flex-grow relative overflow-hidden bg-[#111b21]">
-          {/* Main Menu Page */}
-          <div className={`absolute inset-0 p-4 overflow-y-auto transition-transform duration-300 ease-in-out flex flex-col ${
-            activePage === 'main' ? 'translate-x-0' : '-translate-x-full pointer-events-none invisible'
-          }`}>
-            <div className="flex flex-col space-y-2 select-text pb-4">
-              {SETTINGS_MENU_ITEMS.map((item) => {
-                const IconComponent = item.icon;
-                return (
-                  <button
-                    key={item.page}
-                    onClick={() => setActivePage(item.page)}
-                    onMouseDown={(e) => e.preventDefault()}
-                    className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
-                      <IconComponent className="w-4 h-4" />
-                    </div>
-                    <div className="flex-grow min-w-0">
-                      <div className="font-semibold text-[#e9edef] text-[12px]">{item.title}</div>
-                      <div className="text-[10px] text-[#8696a0] mt-0.5">{item.description}</div>
-                    </div>
-                  </button>
-                );
-              })}
-
-              {/* About Section */}
-              <div className="mt-6 pt-4 border-t border-[#222d34]/60 text-center select-text">
-                <div className="flex justify-center mb-2.5">
-                  <img src="./icon.png" alt="WAllie Logo" className="w-14 h-14 object-contain" />
-                </div>
-                <div className="text-sm font-bold text-[#e9edef] tracking-wide">WAllie</div>
-                <div className="text-[10px] text-[#8696a0] mt-1 leading-normal max-w-[320px] mx-auto">
-                  Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
-                </div>
-                {/* Dynamic Version & Build Info */}
-                <div className="flex items-center justify-center mt-2">
-                  <span className="text-[11px] font-mono font-medium text-[#d1d7db]">
-                    {versionInfo ? versionInfo.displayVersion : 'v1.0.0'}
-                  </span>
-                </div>
-
-                <div className="text-[10px] text-[#8696a0] mt-1 flex items-center justify-center gap-1.5">
-                  <span>MIT License • By Ilamparithi M</span>
-                  {versionInfo && (
-                    <>
-                      <span>•</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const details = `WAllie ${versionInfo.version} (Commit: ${versionInfo.commitHash}, Built: ${versionInfo.buildDate})`;
-                          navigator.clipboard.writeText(details);
-                          setCopiedVersion(true);
-                          setTimeout(() => setCopiedVersion(false), 2000);
-                        }}
-                        title="Copy build diagnostics to clipboard"
-                        className="text-[#8696a0] hover:text-[#00a884] transition-colors inline-flex items-center gap-1 cursor-pointer bg-transparent border-none p-0 text-[10px]"
-                      >
-                        {copiedVersion ? (
-                          <>
-                            <Check className="w-3 h-3 text-[#00a884]" />
-                            <span className="text-[#00a884] font-medium">Copied!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            <span className="underline hover:text-[#00a884]">Copy details</span>
-                          </>
-                        )}
-                      </button>
-                    </>
-                  )}
-                </div>
-                <div className="mt-1.5 flex flex-col gap-1 items-center">
-                  <button
-                    onClick={(e) => {
-                      onShowDisclaimer();
-                      e.currentTarget.blur();
-                    }}
-                    onMouseDown={(e) => e.preventDefault()}
-                    className="text-[#00a884] hover:text-[#00c298] transition-colors underline font-medium text-[10px] cursor-pointer bg-transparent border-none p-0 focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-                  >
-                    View Legal Disclaimer
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      window.electronAPI?.toggleWallieDevTools();
-                      e.currentTarget.blur();
-                    }}
-                    onMouseDown={(e) => e.preventDefault()}
-                    className="text-[#8696a0] hover:text-[#e9edef] transition-colors underline font-medium text-[10px] cursor-pointer bg-transparent border-none p-0 focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-                  >
-                    Open Wallie DevTools
-                  </button>
-                </div>
-                <div className="flex items-center justify-center gap-3 mt-3">
-                  <a
-                    href="https://github.com/ilamparithi-in/WAllie"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#00a884] hover:text-[#00c298] transition-colors underline font-medium text-[11px]"
-                  >
-                    Leave a star! ⭐
-                  </a>
-                  <span className="text-[#374248]">•</span>
-                  <a
-                    href="https://pseudosmp.github.io/donate"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#00a884] hover:text-[#00c298] transition-colors underline font-medium text-[11px]"
-                  >
-                    Donate 💖
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Details Sub-pages Container */}
-          <div className={`absolute inset-0 p-4 overflow-y-auto transition-transform duration-300 ease-in-out bg-[#111b21] ${
-            activePage !== 'main' ? 'translate-x-0' : 'translate-x-full pointer-events-none invisible'
-          }`}>
-            {(() => {
-              const subPage = activePage !== 'main' ? activePage : lastSubPage;
-              return (
-                <>
-                  {subPage === 'general' && (
-                    <GeneralSettingsPage
-                      globalSettings={globalSettings}
-                      handleToggleGlobalSetting={handleToggleGlobalSetting}
-                      accounts={accounts}
-                    />
-                  )}
-
-                  {subPage === 'downloads' && (
-                    <DownloadsSettingsPage
-                      globalSettings={globalSettings}
-                      handleToggleGlobalSetting={handleToggleGlobalSetting}
-                    />
-                  )}
-
-                  {subPage === 'preload' && (
-                    <PreloadSettingsPage
-                      accounts={accounts}
-                      globalSettings={globalSettings}
-                      handleToggleGlobalSetting={handleToggleGlobalSetting}
-                    />
-                  )}
-
-                  {subPage === 'accounts' && (
-                    <AccountsSettingsPage
-                      accounts={accounts}
-                      setAccounts={setAccounts}
-                      globalSettings={globalSettings}
-                      handleToggleGlobalSetting={handleToggleGlobalSetting}
-                      handleDeleteAccount={handleDeleteAccount}
-                      setSelectedAccountId={setSelectedAccountId}
-                      setNotifAccountFilter={setNotifAccountFilter}
-                      setActivePage={setActivePage}
-                    />
-                  )}
-
-                  {subPage === 'permissions' && (
-                    <PermissionsSettingsPage
-                      accounts={accounts}
-                      selectedAccountId={selectedAccountId}
-                      setSelectedAccountId={setSelectedAccountId}
-                      selectedAccount={selectedAccount}
-                      handleToggleAccountPermission={handleToggleAccountPermission}
-                    />
-                  )}
-
-                  {subPage === 'extensions' && (
-                    <ExtensionsSettingsPage
-                      accounts={accounts}
-                      selectedAccountId={selectedAccountId}
-                      setSelectedAccountId={setSelectedAccountId}
-                      globalSettings={globalSettings}
-                      handleToggleGlobalSetting={handleToggleGlobalSetting}
-                      showImportDropdown={showImportDropdown}
-                      setShowImportDropdown={setShowImportDropdown}
-                      isImporting={isImporting}
-                      handleImportExtension={handleImportExtension}
-                      handleBrowseWebStore={handleBrowseWebStore}
-                      webstoreUrlOrId={webstoreUrlOrId}
-                      setWebstoreUrlOrId={setWebstoreUrlOrId}
-                      isInstallingWebStore={isInstallingWebStore}
-                      handleInstallWebStoreExtension={handleInstallWebStoreExtension}
-                      extensions={extensions}
-                      handleToggleExtension={handleToggleExtension}
-                      handleRemoveExtension={handleRemoveExtension}
-                    />
-                  )}
-
-                  {subPage === 'css' && (
-                    <ThemeSettingsPage
-                      accounts={accounts}
-                      selectedAccountId={selectedAccountId}
-                      setSelectedAccountId={setSelectedAccountId}
-                      selectedAccount={selectedAccount}
-                      handleSelectPresetTheme={handleSelectPresetTheme}
-                      customCss={customCss}
-                      handleCssChange={handleCssChange}
-                      fontFamily={fontFamily}
-                      monoFontFamily={monoFontFamily}
-                      followSystemFont={followSystemFont}
-                      customWallpaper={customWallpaper}
-                      systemFonts={systemFonts}
-                      systemFontsMeta={systemFontsMeta}
-                      desktopFont={desktopFont}
-                      preferGoogleFont={preferGoogleFont}
-                      onTogglePreferGoogleFont={handleTogglePreferGoogleFont}
-                      preferGoogleMonoFont={preferGoogleMonoFont}
-                      onTogglePreferGoogleMonoFont={handleTogglePreferGoogleMonoFont}
-                      onUpdateFont={handleUpdateFont}
-                      onUpdateMonoFont={handleUpdateMonoFont}
-                      onToggleFollowSystemFont={handleToggleFollowSystemFont}
-                      onSelectWallpaper={handleSelectWallpaper}
-                      onClearWallpaper={handleClearWallpaper}
-                      onImportCustomCss={handleImportCustomCss}
-                      onClearCustomCss={handleClearCustomCss}
-                    />
-                  )}
-
-                  {subPage === 'storage' && (
-                    <StorageSettingsPage
-                      accounts={accounts}
-                      selectedAccountId={selectedAccountId}
-                      setSelectedAccountId={setSelectedAccountId}
-                      isLoadingStorage={isLoadingStorage}
-                      storageSizes={storageSizes}
-                      formatBytes={formatBytes}
-                      isClearing={isClearing}
-                      handleClearStorage={handleClearStorage}
-                    />
-                  )}
-
-                  {subPage === 'notifications' && (
-                    <NotificationSettingsPage
-                      accounts={accounts}
-                      globalSettings={globalSettings}
-                      setActivePage={setActivePage}
-                      handleToggleGlobalSetting={handleToggleGlobalSetting}
-                      notifSearch={notifSearch}
-                      setNotifSearch={setNotifSearch}
-                      notifAccountFilter={notifAccountFilter}
-                      setNotifAccountFilter={setNotifAccountFilter}
-                      handleClearHistory={handleClearHistory}
-                      notificationHistory={notificationHistory}
-                      filteredNotifications={filteredNotifications}
-                    />
-                  )}
-
-                  {subPage === 'advanced' && (
-                    <AdvancedSettingsPage
-                      globalSettings={globalSettings}
-                      handleToggleGlobalSetting={handleToggleGlobalSetting}
-                    />
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        </div>
-
-          {/* Reload required card */}
-          {selectedAccountId && accountsNeedingReload.includes(selectedAccountId) && (
-            <div className="p-3.5 bg-[#202c33] border-t border-[#00a884] flex items-center justify-between flex-shrink-0 animate-in slide-in-from-bottom duration-250 select-none">
-              <div className="flex items-center gap-2.5">
-                <RotateCw className="w-4 h-4 text-[#00a884]" />
-                <div>
-                  <div className="font-semibold text-[#e9edef] text-[11px]">Reload required</div>
-                  <div className="text-[10px] text-[#8696a0] mt-0.5">Please reload the page to apply your changes.</div>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  window.electronAPI.reloadAccount(selectedAccountId);
-                  const acc = accounts.find((a) => a.id === selectedAccountId);
-                  if (acc?.settings) {
-                    initialAccountPermissionsRef.current.set(selectedAccountId, { ...acc.settings });
-                  }
-                  setAccountsNeedingReload((prev) => prev.filter((id) => id !== selectedAccountId));
-                }}
-                className="px-3.5 py-1.5 bg-[#00a884] hover:bg-[#00c298] text-[#111b21] font-bold rounded transition-colors text-[11px] whitespace-nowrap shadow-sm"
-              >
-                Reload Page
-              </button>
-            </div>
-          )}
-        </div>
+      )}
+    </div>
   );
 };

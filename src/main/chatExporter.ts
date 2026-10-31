@@ -121,10 +121,14 @@ export class ChatExporterManager {
     }
 
     if (typeof data === 'string') {
-      // Data URI conversion
-      const matches = data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      // Data URI conversion or raw base64 string
+      const matches = data.match(/^data:([A-Za-z0-9-+\/]+);base64,(.+)$/);
       if (matches && matches[2]) {
         const buffer = Buffer.from(matches[2], 'base64');
+        await fs.promises.writeFile(fullPath, buffer);
+      } else if (/^[A-Za-z0-9+/=]+$/.test(data.trim()) && data.trim().length > 50) {
+        // Raw base64 string
+        const buffer = Buffer.from(data.trim(), 'base64');
         await fs.promises.writeFile(fullPath, buffer);
       } else {
         await fs.promises.writeFile(fullPath, data, 'utf8');
@@ -182,6 +186,7 @@ export class ChatExporterManager {
       mediaFilesSaved: 0,
       oldestMessageDate: null,
       status: 'starting',
+      outputDirectory: options.outputDirectory,
     };
 
     this.activeJobs.set(exportId, {
@@ -247,6 +252,13 @@ export class ChatExporterManager {
    * Removes an export job upon completion or termination.
    */
   public completeJob(exportId: string): void {
+    const job = this.activeJobs.get(exportId);
+    if (job) {
+      if (job.progress.status !== 'completed' && job.progress.status !== 'failed' && job.progress.status !== 'aborted') {
+        job.progress.status = 'completed';
+      }
+      this.notifyProgress(job.progress);
+    }
     this.activeJobs.delete(exportId);
     // Notify renderer that export has concluded so titlebar clears "Stop Export"
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
@@ -304,9 +316,15 @@ export class ChatExporterManager {
           const raw = fs.readFileSync(filePath, 'utf8');
           const exportData = JSON.parse(raw) as WhatsAppChatExport;
           const htmlContent = this.generateStandaloneViewerHtml(exportData, exportData.chat?.name || 'WhatsApp Chat');
-          const tempHtmlPath = path.join(app.getPath('temp'), `wallie-viewer-${Date.now()}.html`);
+          // Place temp viewer in same folder as JSON so companion _files relative paths resolve
+          const tempHtmlPath = path.join(path.dirname(filePath), `.wallie-viewer-${Date.now()}.html`);
           fs.writeFileSync(tempHtmlPath, htmlContent, 'utf8');
           await viewerWin.loadFile(tempHtmlPath);
+          viewerWin.on('closed', () => {
+            try {
+              if (fs.existsSync(tempHtmlPath)) fs.unlinkSync(tempHtmlPath);
+            } catch {}
+          });
         } catch (err) {
           console.error('Failed to parse chat export JSON:', err);
           dialog.showErrorBox('Viewer Error', `Unable to load export file:\n${(err as Error).message}`);
@@ -384,7 +402,7 @@ export class ChatExporterManager {
     .avatar img { width: 100%; height: 100%; object-fit: cover; }
     .header-info { flex-grow: 1; min-width: 0; }
     .header-title { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .header-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    .header-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .search-box {
       background-color: #111b21;
       border: 1px solid var(--border-subtle);
@@ -432,11 +450,100 @@ export class ChatExporterManager {
     }
     .msg-row {
       display: flex;
+      align-items: flex-end;
+      gap: 8px;
       width: 100%;
-      margin-bottom: 2px;
+      margin-bottom: 3px;
     }
     .msg-row.out { justify-content: flex-end; }
     .msg-row.in { justify-content: flex-start; }
+    .msg-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background-color: #374248;
+      overflow: hidden;
+      flex-shrink: 0;
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: bold;
+      color: #e9edef;
+    }
+    .msg-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .document-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 10px;
+      background-color: rgba(0, 0, 0, 0.15);
+      border-radius: 6px;
+      margin-bottom: 4px;
+      border: 1px solid var(--border-subtle);
+      min-width: 200px;
+    }
+    .doc-icon {
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .doc-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .doc-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .doc-size {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+    .doc-download-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background-color: #202c33;
+      border: 1px solid var(--border-subtle);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      font-size: 13px;
+      flex-shrink: 0;
+      transition: background-color 0.15s;
+    }
+    .doc-download-btn:hover {
+      background-color: #2a3942;
+    }
+    .media-sticker {
+      padding: 2px 0;
+      display: flex;
+      align-items: center;
+    }
+    .media-sticker img {
+      max-width: 140px;
+      max-height: 140px;
+      object-fit: contain;
+    }
+    .media-missing {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background-color: rgba(0, 0, 0, 0.18);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-style: italic;
+    }
     .bubble {
       max-width: 65%;
       min-width: 100px;
@@ -570,12 +677,28 @@ export class ChatExporterManager {
       const timelineEl = document.getElementById("timeline");
       const searchBox = document.getElementById("searchBox");
 
+      function safeMediaSrc(src) {
+        if (!src) return "";
+        if (src.startsWith("data:") || src.startsWith("blob:") || src.startsWith("http:") || src.startsWith("https:")) {
+          return src;
+        }
+        return encodeURI(src);
+      }
+
       if (exportData.chat) {
         chatTitleEl.textContent = exportData.chat.name || "WhatsApp Chat";
         const total = exportData.exportRange?.totalMessagesCount || exportData.timeline?.length || 0;
-        chatSubEl.textContent = \`\${total} messages • \${exportData.chat.type || "chat"}\`;
+        if (exportData.chat.type === "group" && exportData.chat.groupMetadata?.participants?.length) {
+          const names = exportData.chat.groupMetadata.participants.map(p => p.displayName || p.jid).join(", ");
+          chatSubEl.textContent = names;
+          chatSubEl.title = names;
+        } else if (exportData.chat.type === "group") {
+          chatSubEl.textContent = \`Group • \${exportData.chat.groupMetadata?.participantsCount || 0} participants\`;
+        } else {
+          chatSubEl.textContent = \`\${total} messages • \${exportData.chat.type || "chat"}\`;
+        }
         if (exportData.chat.avatarUrl) {
-          chatAvatarEl.innerHTML = \`<img src="\${exportData.chat.avatarUrl}" alt="Avatar" />\`;
+          chatAvatarEl.innerHTML = \`<img src="\${safeMediaSrc(exportData.chat.avatarUrl)}" alt="Avatar" />\`;
         } else {
           chatAvatarEl.textContent = (exportData.chat.name || "W")[0].toUpperCase();
         }
@@ -620,6 +743,18 @@ export class ChatExporterManager {
             const row = document.createElement("div");
             row.className = \`msg-row \${item.direction === "outgoing" ? "out" : "in"}\`;
             row.id = \`msg-\${item.id}\`;
+
+            // Participant Avatar (for incoming messages in groups)
+            if (item.direction === "incoming" && exportData.chat?.type === "group") {
+              const av = document.createElement("div");
+              av.className = "msg-avatar";
+              if (item.sender?.avatarUrl) {
+                av.innerHTML = \`<img src="\${safeMediaSrc(item.sender.avatarUrl)}" alt="" />\`;
+              } else {
+                av.textContent = (item.sender?.displayName || "?")[0].toUpperCase();
+              }
+              row.appendChild(av);
+            }
 
             const bubble = document.createElement("div");
             bubble.className = "bubble";
@@ -679,11 +814,18 @@ export class ChatExporterManager {
               textSpan.innerHTML = formatBodyText(content.body || "");
               bubble.appendChild(textSpan);
             } else if (content.type === "image") {
-              const card = document.createElement("div");
-              card.className = "media-card";
               const mediaSrc = content.mediaRef || content.thumbnailDataUri;
-              card.innerHTML = \`<img src="\${mediaSrc}" alt="Photo" />\`;
-              bubble.appendChild(card);
+              if (mediaSrc) {
+                const card = document.createElement("div");
+                card.className = "media-card";
+                card.innerHTML = \`<img src="\${safeMediaSrc(mediaSrc)}" alt="Photo" />\`;
+                bubble.appendChild(card);
+              } else {
+                const missing = document.createElement("div");
+                missing.className = "media-missing";
+                missing.innerHTML = "<span>📷 Photo unavailable</span>";
+                bubble.appendChild(missing);
+              }
               if (content.caption) {
                 const cap = document.createElement("div");
                 cap.style.marginTop = "4px";
@@ -691,10 +833,17 @@ export class ChatExporterManager {
                 bubble.appendChild(cap);
               }
             } else if (content.type === "video") {
-              const card = document.createElement("div");
-              card.className = "media-card";
-              card.innerHTML = \`<video src="\${content.mediaRef}" controls poster="\${content.thumbnailDataUri || ''}"></video>\`;
-              bubble.appendChild(card);
+              if (content.mediaRef) {
+                const card = document.createElement("div");
+                card.className = "media-card";
+                card.innerHTML = \`<video src="\${safeMediaSrc(content.mediaRef)}" controls poster="\${safeMediaSrc(content.thumbnailDataUri)}"></video>\`;
+                bubble.appendChild(card);
+              } else {
+                const missing = document.createElement("div");
+                missing.className = "media-missing";
+                missing.innerHTML = "<span>🎬 Video unavailable</span>";
+                bubble.appendChild(missing);
+              }
               if (content.caption) {
                 const cap = document.createElement("div");
                 cap.style.marginTop = "4px";
@@ -702,10 +851,53 @@ export class ChatExporterManager {
                 bubble.appendChild(cap);
               }
             } else if (content.type === "audio") {
-              const audioDiv = document.createElement("div");
-              audioDiv.className = "audio-player";
-              audioDiv.innerHTML = \`<audio src="\${content.mediaRef}" controls></audio>\`;
-              bubble.appendChild(audioDiv);
+              if (content.mediaRef) {
+                const audioDiv = document.createElement("div");
+                audioDiv.className = "audio-player";
+                audioDiv.innerHTML = \`<audio src="\${safeMediaSrc(content.mediaRef)}" controls></audio>\`;
+                bubble.appendChild(audioDiv);
+              } else {
+                const missing = document.createElement("div");
+                missing.className = "media-missing";
+                missing.innerHTML = "<span>🎵 Audio unavailable</span>";
+                bubble.appendChild(missing);
+              }
+            } else if (content.type === "sticker") {
+              const src = content.mediaRef || content.thumbnailDataUri;
+              if (src) {
+                const stickDiv = document.createElement("div");
+                stickDiv.className = "media-sticker";
+                stickDiv.innerHTML = \`<img src="\${safeMediaSrc(src)}" alt="Sticker" />\`;
+                bubble.appendChild(stickDiv);
+              } else {
+                const missing = document.createElement("div");
+                missing.className = "media-missing";
+                missing.innerHTML = "<span>[Sticker unavailable]</span>";
+                bubble.appendChild(missing);
+              }
+            } else if (content.type === "document") {
+              const docDiv = document.createElement("div");
+              docDiv.className = "document-card";
+              const docName = escapeHtml(content.fileName || "Document");
+              const docSize = escapeHtml(content.fileSizeBytesText || "");
+              const dlBtn = content.mediaRef
+                ? \`<a href="\${safeMediaSrc(content.mediaRef)}" download="\${docName}" class="doc-download-btn" title="Download">⬇</a>\`
+                : \`<span class="doc-download-btn" style="opacity:0.4; cursor:not-allowed;" title="File unavailable">✕</span>\`;
+              docDiv.innerHTML = \`
+                <div class="doc-icon">📄</div>
+                <div class="doc-info">
+                  <div class="doc-name" title="\${docName}">\${docName}</div>
+                  <div class="doc-size">\${docSize}</div>
+                </div>
+                \${dlBtn}
+              \`;
+              bubble.appendChild(docDiv);
+              if (content.caption) {
+                const cap = document.createElement("div");
+                cap.style.marginTop = "4px";
+                cap.innerHTML = formatBodyText(content.caption);
+                bubble.appendChild(cap);
+              }
             } else if (content.type === "call_log") {
               const callDiv = document.createElement("div");
               callDiv.className = "call-card";

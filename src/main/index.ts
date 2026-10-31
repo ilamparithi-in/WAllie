@@ -109,7 +109,13 @@ if (gotTheLock) {
     createMainWindow();
     createTray();
 
-    if (typeof __ENABLE_DEV_BRIDGE__ !== 'undefined' && __ENABLE_DEV_BRIDGE__) {
+    const enableDevBridge =
+      (typeof __ENABLE_DEV_BRIDGE__ !== 'undefined' && __ENABLE_DEV_BRIDGE__) ||
+      process.env.ENABLE_DEV_BRIDGE === 'true' ||
+      process.env.WALLIE_DEV_BRIDGE === '1' ||
+      !app.isPackaged;
+
+    if (enableDevBridge) {
       import('./devBridge').then(({ startDevBridge }) => {
         startDevBridge();
       });

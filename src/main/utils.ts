@@ -157,7 +157,12 @@ export function checkPermissionForAccount(
   if (permission === 'clipboard-read') {
     return !!settings.clipboardReadEnabled;
   }
-  if (permission === 'background-sync' || permission === 'fullscreen') {
+  if (
+    permission === 'background-sync' ||
+    permission === 'fullscreen' ||
+    permission === 'durable-storage' ||
+    permission === 'storage-access'
+  ) {
     return true;
   }
   return false;

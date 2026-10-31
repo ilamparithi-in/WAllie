@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Titlebar } from './components/Titlebar';
 import { SettingsModal } from './components/SettingsModal';
-import { Download, CheckCircle, XCircle, X, Shield, ExternalLink, FolderOpen, Users, MessageSquare, Send, Link as LinkIcon, AlertTriangle, Maximize2, RotateCcw } from 'lucide-react';
+import { Download, CheckCircle, XCircle, X, Shield, ExternalLink, FolderOpen, Users, MessageSquare, Send, Link as LinkIcon, AlertTriangle, Maximize2, RotateCcw, Sparkles, StopCircle, Loader2 } from 'lucide-react';
 import { parseProtocolUrl } from './utils/protocolUrl';
 import { WhatsAppFormattedText } from './components/WhatsAppFormattedText';
 
-import type { AccountInfo, GlobalSettings, GroupInviteDetails } from '../preload';
+import type { AccountInfo, GlobalSettings, GroupInviteDetails, ChatExportProgress } from '../preload';
 
 import { useFocusTrap } from './hooks/useFocusTrap';
 

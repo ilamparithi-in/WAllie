@@ -2,6 +2,7 @@ import { app, dialog, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { state } from './state';
 import { showAppToast } from './utils';
 import { DownloadRecord } from '../shared/types';
@@ -15,15 +16,16 @@ export interface FileMatchOptions {
   hash?: string;
 }
 
-export type DownloadIntent = 'first-download' | 'second-click' | 'context-menu-download' | 'none';
+export type DownloadIntent = 'first-download' | 'second-click' | 'context-menu-download' | 'export-download' | 'none';
 
-export class DownloadManager {
+export class DownloadManager extends EventEmitter {
   private downloadsFile: string;
   private history: DownloadRecord[] = [];
   private lastManualDownloadPath?: string;
   private lastOpenedPath?: string;
   private lastOpenedFilename?: string;
   private lastOpenedTimestamp: number = 0;
+  private exportDownloadedPaths: Set<string> = new Set();
   private pendingIntent: {
     intent: DownloadIntent;
     filename?: string;
@@ -34,6 +36,7 @@ export class DownloadManager {
   } = { intent: 'none', timestamp: 0 };
 
   constructor() {
+    super();
     this.downloadsFile = path.join(app.getPath('userData'), 'downloads.json');
     this.lastManualDownloadPath = state.globalSettings?.lastManualDownloadPath;
     this.loadHistory();
@@ -125,10 +128,30 @@ export class DownloadManager {
     };
   }
 
+  private isExportActive: boolean = false;
+
+  public setExportActive(active: boolean): void {
+    this.isExportActive = active;
+    console.log(`[DownloadManager] Chat export active state set to: ${active}`);
+  }
+
+  public getIsExportActive(): boolean {
+    return this.isExportActive;
+  }
+
+  public isExportDownloadedPath(p: string): boolean {
+    return this.exportDownloadedPaths.has(path.resolve(p));
+  }
+
+  public removeExportDownloadedPath(p: string): void {
+    this.exportDownloadedPaths.delete(path.resolve(p));
+  }
+
   public consumeIntent(): { intent: DownloadIntent; filename?: string; size?: number; hash?: string; autoOpen?: boolean } {
     const now = Date.now();
-    // Allow up to 5 seconds between DOM click and will-download event
-    if (now - this.pendingIntent.timestamp <= 5000) {
+    // Allow up to 5 seconds between DOM click and will-download event (or up to 45s for export downloads)
+    const maxAge = this.pendingIntent.intent === 'export-download' ? 45000 : 5000;
+    if (now - this.pendingIntent.timestamp <= maxAge) {
       const result = { ...this.pendingIntent };
       this.pendingIntent = { intent: 'none', timestamp: 0 };
       return result;
@@ -235,60 +258,82 @@ export class DownloadManager {
   public findExistingDownloadedFile(filename: string, options?: FileMatchOptions): DownloadRecord | undefined {
     if (!filename || typeof filename !== 'string') return undefined;
 
-    // 1. Check history for completed records matching criteria
-    const inHistory = this.history.find((rec) => {
-      if (rec.state !== 'completed') return false;
-      return this.doesFileMatch(rec.savePath, rec.filename, filename, rec.fileSize, rec.fileHash, options);
-    });
+    const tryFind = (targetName: string): DownloadRecord | undefined => {
+      // 1. Check history for completed records matching criteria
+      const inHistory = this.history.find((rec) => {
+        if (rec.state !== 'completed') return false;
+        return this.doesFileMatch(rec.savePath, rec.filename, targetName, rec.fileSize, rec.fileHash, options);
+      });
 
-    if (inHistory) return inHistory;
+      if (inHistory) return inHistory;
 
-    // 2. Fallback: check default download directory
-    const defaultDir = state.globalSettings?.defaultDownloadsPath || app.getPath('downloads');
-    const defaultPath = path.join(defaultDir, filename.trim());
-    if (this.doesFileMatch(defaultPath, filename, filename, undefined, undefined, options)) {
-      let statSize: number | undefined;
-      let statHash: string | undefined;
-      try {
-        statSize = fs.statSync(defaultPath).size;
-        if (statSize <= LARGE_FILE_THRESHOLD) {
-          statHash = crypto.createHash('sha256').update(fs.readFileSync(defaultPath)).digest('hex');
-        }
-      } catch {}
-      return {
-        id: Date.now(),
-        filename: filename.trim(),
-        savePath: defaultPath,
-        fileSize: statSize,
-        fileHash: statHash,
-        timestamp: Date.now(),
-        state: 'completed',
-      };
-    }
-
-    // 3. Fallback: check last manual download directory
-    const manualDir = this.lastManualDownloadPath || state.globalSettings?.lastManualDownloadPath;
-    if (manualDir && manualDir !== defaultDir && fs.existsSync(manualDir)) {
-      const manualPath = path.join(manualDir, filename.trim());
-      if (this.doesFileMatch(manualPath, filename, filename, undefined, undefined, options)) {
+      // 2. Fallback: check default download directory
+      const defaultDir = state.globalSettings?.defaultDownloadsPath || app.getPath('downloads');
+      const defaultPath = path.join(defaultDir, targetName.trim());
+      if (this.doesFileMatch(defaultPath, targetName, targetName, undefined, undefined, options)) {
         let statSize: number | undefined;
         let statHash: string | undefined;
         try {
-          statSize = fs.statSync(manualPath).size;
+          statSize = fs.statSync(defaultPath).size;
           if (statSize <= LARGE_FILE_THRESHOLD) {
-            statHash = crypto.createHash('sha256').update(fs.readFileSync(manualPath)).digest('hex');
+            statHash = crypto.createHash('sha256').update(fs.readFileSync(defaultPath)).digest('hex');
           }
         } catch {}
         return {
           id: Date.now(),
-          filename: filename.trim(),
-          savePath: manualPath,
+          filename: targetName.trim(),
+          savePath: defaultPath,
           fileSize: statSize,
           fileHash: statHash,
           timestamp: Date.now(),
           state: 'completed',
         };
       }
+
+      // 3. Fallback: check last manual download directory
+      const manualDir = this.lastManualDownloadPath || state.globalSettings?.lastManualDownloadPath;
+      if (manualDir && manualDir !== defaultDir && fs.existsSync(manualDir)) {
+        const manualPath = path.join(manualDir, targetName.trim());
+        if (this.doesFileMatch(manualPath, targetName, targetName, undefined, undefined, options)) {
+          let statSize: number | undefined;
+          let statHash: string | undefined;
+          try {
+            statSize = fs.statSync(manualPath).size;
+            if (statSize <= LARGE_FILE_THRESHOLD) {
+              statHash = crypto.createHash('sha256').update(fs.readFileSync(manualPath)).digest('hex');
+            }
+          } catch {}
+          return {
+            id: Date.now(),
+            filename: targetName.trim(),
+            savePath: manualPath,
+            fileSize: statSize,
+            fileHash: statHash,
+            timestamp: Date.now(),
+            state: 'completed',
+          };
+        }
+      }
+
+      return undefined;
+    };
+
+    // Primary search with exact filename
+    const direct = tryFind(filename);
+    if (direct) return direct;
+
+    // WhatsApp often appends .txt to script/code files or .zip to compressed models
+    if (!filename.toLowerCase().endsWith('.txt')) {
+      const withTxt = tryFind(`${filename}.txt`);
+      if (withTxt) return withTxt;
+    }
+    if (!filename.toLowerCase().endsWith('.zip')) {
+      const withZip = tryFind(`${filename}.zip`);
+      if (withZip) return withZip;
+    }
+    if (filename.toLowerCase().endsWith('.txt')) {
+      const stripped = tryFind(filename.slice(0, -4));
+      if (stripped) return stripped;
     }
 
     return undefined;
@@ -392,7 +437,8 @@ export class DownloadManager {
 
     const isContextMenu = intent === 'context-menu-download';
     const isSecondClick = intent === 'second-click';
-    const askEveryTime = !!state.globalSettings?.askWhereToSaveEveryTime;
+    const isExportDownload = intent === 'export-download' || this.isExportActive;
+    const askEveryTime = !this.isExportActive && !!state.globalSettings?.askWhereToSaveEveryTime;
     const secondClickAction = state.globalSettings?.fileSecondClickAction || 'open';
 
     const matchOpts: FileMatchOptions = {
@@ -405,8 +451,8 @@ export class DownloadManager {
       (intentFilename ? this.findExistingDownloadedFile(intentFilename, matchOpts) : undefined);
 
     // If file already exists and matches on disk, handle as second click (open / showInFolder)
-    // unless user explicitly selected "Download" from context menu or action is 'download'
-    if (!isContextMenu && existing) {
+    // unless user explicitly selected "Download" from context menu or action is 'download' or an export is active
+    if (!isContextMenu && !isExportDownload && !this.isExportActive && existing) {
       const isRecentlyOpened = (
         (this.lastOpenedPath && (this.lastOpenedPath === path.resolve(existing.savePath) || path.basename(this.lastOpenedPath).toLowerCase() === fileName.toLowerCase())) ||
         (this.lastOpenedFilename && (this.lastOpenedFilename === fileName.toLowerCase() || (intentFilename && this.lastOpenedFilename === intentFilename.toLowerCase())))
@@ -439,7 +485,7 @@ export class DownloadManager {
       // If secondClickAction === 'download', fall through to download again
     }
 
-    const shouldPrompt = isContextMenu || askEveryTime || (isSecondClick && secondClickAction === 'saveAs');
+    const shouldPrompt = !isExportDownload && (isContextMenu || askEveryTime || (isSecondClick && secondClickAction === 'saveAs'));
     const defaultDir = state.globalSettings?.defaultDownloadsPath || app.getPath('downloads');
 
     if (!fs.existsSync(defaultDir)) {
@@ -543,7 +589,7 @@ export class DownloadManager {
           }
         }
 
-        await this.addRecord({
+        const record: DownloadRecord = {
           id: startTime,
           filename: fileName,
           savePath: finalPath,
@@ -553,7 +599,13 @@ export class DownloadManager {
           timestamp: Date.now(),
           accountId,
           state: 'completed',
-        });
+        };
+
+        await this.addRecord(record);
+        if (isExportDownload || this.isExportActive) {
+          this.exportDownloadedPaths.add(path.resolve(finalPath));
+        }
+        this.emit('download-completed', record);
 
         state.mainWindow?.webContents.send('download:progress', {
           id: startTime,
@@ -563,44 +615,48 @@ export class DownloadManager {
           state: 'completed',
         });
 
-        // Auto-open if user initiated download by clicking file card to open it
-        const shouldAutoOpen = intentAutoOpen || (intent === 'first-download' && secondClickAction === 'open');
-        if (shouldAutoOpen) {
-          console.log(`[DownloadManager] Auto-opening freshly downloaded file: ${finalPath}`);
-          await this.openDownloadedFile(finalPath);
-          showAppToast(`Opened ${fileName}`);
-        } else if (secondClickAction === 'showInFolder' && intentAutoOpen) {
-          console.log(`[DownloadManager] Auto-revealing freshly downloaded file: ${finalPath}`);
-          this.showItemInFolder(finalPath);
-          showAppToast(`Revealed ${fileName} in folder.`);
-        }
+        // Do not auto-open or notify for background chat export downloads or whenever an export is active
+        if (!isExportDownload && !this.isExportActive) {
+          // Auto-open if user initiated download by clicking file card to open it
+          const shouldAutoOpen = intentAutoOpen || (intent === 'first-download' && secondClickAction === 'open');
+          if (shouldAutoOpen) {
+            console.log(`[DownloadManager] Auto-opening freshly downloaded file: ${finalPath}`);
+            await this.openDownloadedFile(finalPath);
+            showAppToast(`Opened ${fileName}`);
+          } else if (secondClickAction === 'showInFolder' && intentAutoOpen) {
+            console.log(`[DownloadManager] Auto-revealing freshly downloaded file: ${finalPath}`);
+            this.showItemInFolder(finalPath);
+            showAppToast(`Revealed ${fileName} in folder.`);
+          }
 
-        if (state.globalSettings?.downloadNotificationsEnabled !== false) {
-          const dismissalTimeSec = typeof state.globalSettings?.notificationDismissalTime === 'number'
-            ? state.globalSettings.notificationDismissalTime
-            : 10;
-          const timeoutMs = dismissalTimeSec === -1 ? -1 : (dismissalTimeSec === 0 ? 0 : dismissalTimeSec * 1000);
+          if (state.globalSettings?.downloadNotificationsEnabled !== false) {
+            const dismissalTimeSec = typeof state.globalSettings?.notificationDismissalTime === 'number'
+              ? state.globalSettings.notificationDismissalTime
+              : 10;
+            const timeoutMs = dismissalTimeSec === -1 ? -1 : (dismissalTimeSec === 0 ? 0 : dismissalTimeSec * 1000);
 
-          await notificationManager.notify({
-            title: 'Download Complete',
-            body: `Successfully downloaded ${path.basename(finalPath)}`,
-            icon: 'document-save',
-            timeoutMs,
-            actions: [
-              { id: 'default', label: 'Open' },
-              { id: 'open', label: 'Open' },
-              { id: 'show_in_folder', label: 'Show in Folder' },
-            ],
-            onAction: (actionId) => {
-              if (actionId === 'default' || actionId === 'open') {
-                this.openDownloadedFile(finalPath);
-              } else if (actionId === 'show_in_folder') {
-                this.showItemInFolder(finalPath);
-              }
-            },
-          });
+            await notificationManager.notify({
+              title: 'Download Complete',
+              body: `Successfully downloaded ${path.basename(finalPath)}`,
+              icon: 'document-save',
+              timeoutMs,
+              actions: [
+                { id: 'default', label: 'Open' },
+                { id: 'open', label: 'Open' },
+                { id: 'show_in_folder', label: 'Show in Folder' },
+              ],
+              onAction: (actionId) => {
+                if (actionId === 'default' || actionId === 'open') {
+                  this.openDownloadedFile(finalPath);
+                } else if (actionId === 'show_in_folder') {
+                  this.showItemInFolder(finalPath);
+                }
+              },
+            });
+          }
         }
       } else if (stateName === 'cancelled') {
+        this.emit('download-failed', { filename: fileName, savePath: finalPath, state: 'cancelled' });
         state.mainWindow?.webContents.send('download:progress', {
           id: startTime,
           filename: fileName,
@@ -609,6 +665,7 @@ export class DownloadManager {
           state: 'cancelled',
         });
       } else {
+        this.emit('download-failed', { filename: fileName, savePath: finalPath, state: 'failed' });
         state.mainWindow?.webContents.send('download:progress', {
           id: startTime,
           filename: fileName,
@@ -617,6 +674,69 @@ export class DownloadManager {
           state: 'failed',
         });
       }
+    });
+  }
+
+  /**
+   * Waits for a pending download to complete matching an optional expected filename.
+   */
+  public waitForRecentDownload(
+    expectedFilename?: string,
+    timeoutMs: number = 25000
+  ): Promise<DownloadRecord | null> {
+    return new Promise((resolve) => {
+      let timer: NodeJS.Timeout | null = null;
+      const cleanExpected = expectedFilename ? expectedFilename.trim().toLowerCase() : '';
+      const expectedBase = cleanExpected ? cleanExpected.split('.')[0] : '';
+
+      const onComplete = (rec: DownloadRecord) => {
+        if (cleanExpected) {
+          const baseName = path.basename(rec.savePath).toLowerCase();
+          const recFile = (rec.filename || '').toLowerCase();
+          const recBase = (path.parse(rec.savePath).name || '').toLowerCase();
+
+          if (
+            baseName === cleanExpected ||
+            recFile === cleanExpected ||
+            baseName.includes(cleanExpected) ||
+            cleanExpected.includes(baseName) ||
+            (expectedBase && (recBase.includes(expectedBase) || expectedBase.includes(recBase)))
+          ) {
+            cleanup();
+            resolve(rec);
+            return;
+          }
+        } else {
+          cleanup();
+          resolve(rec);
+          return;
+        }
+      };
+
+      const onFailed = (info: any) => {
+        if (cleanExpected) {
+          const file = (info.filename || '').toLowerCase();
+          if (file === cleanExpected || file.includes(cleanExpected)) {
+            cleanup();
+            resolve(null);
+            return;
+          }
+        }
+      };
+
+      const cleanup = () => {
+        if (timer) clearTimeout(timer);
+        this.removeListener('download-completed', onComplete);
+        this.removeListener('download-failed', onFailed);
+      };
+
+      timer = setTimeout(() => {
+        cleanup();
+        resolve(null);
+      }, timeoutMs);
+
+      this.on('download-completed', onComplete);
+      this.on('download-failed', onFailed);
     });
   }
 }

@@ -927,6 +927,11 @@ function setupWhatsAppIntegration() {
         return;
       }
 
+      // If a chat export is active, never intercept clicks to auto-open or override export intents
+      if ((window as any).__wallie_is_exporting || document.getElementById('wallie-export-hud-overlay')) {
+        return;
+      }
+
       // Check if the click is on/inside a document/media/audio card
       const docCard = target.closest(
         '[data-testid="document-thumb"], [data-testid*="document"], [data-testid="audio-play"], [data-testid="audio-download"], [role="button"][title*="."], [role="button"][title^="View "], [role="button"][title^="Download "]'
@@ -1110,6 +1115,30 @@ function setupWhatsAppIntegration() {
     },
     isChatExportAborted: (exportId: string) => {
       return ipcRenderer.invoke('chat-export:is-aborted', exportId);
+    },
+    stopChatExport: (exportId?: string) => {
+      return ipcRenderer.invoke('chat-export:stop', exportId);
+    },
+    openPath: (targetPath: string) => {
+      return ipcRenderer.invoke('downloads:open-file', targetPath);
+    },
+    showInFolder: (targetPath: string) => {
+      return ipcRenderer.invoke('downloads:show-in-folder', targetPath);
+    },
+    openExportViewer: (filePath: string) => {
+      return ipcRenderer.invoke('chat-export:open-viewer', filePath);
+    },
+    findExistingDownload: (filename: string, size?: number) => {
+      return ipcRenderer.invoke('chat-export:find-existing-file', filename, size);
+    },
+    copyFileToExport: (outputDirectory: string, filesDirName: string, subPath: string, sourcePath: string) => {
+      return ipcRenderer.invoke('chat-export:copy-file-to-export', outputDirectory, filesDirName, subPath, sourcePath);
+    },
+    prepareExportDownload: (filename?: string, size?: number) => {
+      return ipcRenderer.invoke('chat-export:prepare-export-download', filename, size);
+    },
+    waitForDownload: (expectedFilename?: string, timeoutMs?: number) => {
+      return ipcRenderer.invoke('chat-export:wait-for-download', expectedFilename, timeoutMs);
     },
   });
 

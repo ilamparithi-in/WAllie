@@ -1147,6 +1147,7 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.handle('chat-export:stop', (_event, exportId?: string) => {
+    downloadManager.setExportActive(false);
     return chatExporterManager.stopExport(exportId);
   });
 
@@ -1157,6 +1158,7 @@ export function registerIpcHandlers() {
   ipcMain.handle(
     'chat-export:register-job',
     (_event, exportId: string, options: ChatExportOptions, totalChats: number, currentChatIndex: number) => {
+      downloadManager.setExportActive(true);
       chatExporterManager.registerJob(exportId, options, totalChats, currentChatIndex);
       return true;
     }
@@ -1168,6 +1170,7 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.handle('chat-export:complete-job', (_event, exportId: string) => {
+    downloadManager.setExportActive(false);
     chatExporterManager.completeJob(exportId);
     return true;
   });
@@ -1185,9 +1188,52 @@ export function registerIpcHandlers() {
     }
   );
 
+  ipcMain.handle('chat-export:find-existing-file', async (_event, filename: string, size?: number) => {
+    const existing = downloadManager.findExistingDownloadedFile(filename, { size });
+    if (existing && existing.savePath && fs.existsSync(existing.savePath)) {
+      return { found: true, path: existing.savePath };
+    }
+    return { found: false };
+  });
+
+  ipcMain.handle(
+    'chat-export:copy-file-to-export',
+    async (_event, outputDirectory: string, filesDirName: string, subPath: string, sourcePath: string) => {
+      const fullDest = path.join(outputDirectory, filesDirName, subPath);
+      const destDir = path.dirname(fullDest);
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+      }
+      await fs.promises.copyFile(sourcePath, fullDest);
+
+      // Clean up temporary download from the downloads folder if it was downloaded specifically for this export
+      if (downloadManager.isExportDownloadedPath(sourcePath)) {
+        try {
+          await fs.promises.unlink(sourcePath);
+          downloadManager.removeExportDownloadedPath(sourcePath);
+        } catch (e) {
+          console.warn('[chat-export] Failed to clean up temporary download file:', e);
+        }
+      }
+
+      return `${filesDirName}/${subPath}`;
+    }
+  );
+
+  ipcMain.handle('chat-export:prepare-export-download', async (_event, filename?: string, size?: number) => {
+    downloadManager.setIntent('export-download', filename, size);
+    return true;
+  });
+
+  ipcMain.handle('chat-export:wait-for-download', async (_event, expectedFilename?: string, timeoutMs?: number) => {
+    const rec = await downloadManager.waitForRecentDownload(expectedFilename, timeoutMs || 35000);
+    return { success: !!rec, savePath: rec?.savePath, filename: rec?.filename };
+  });
+
   ipcMain.handle(
     'chat-export:finalize',
     async (_event, outputDirectory: string, exportData: WhatsAppChatExport, includeViewer: boolean) => {
+      downloadManager.setExportActive(false);
       return await chatExporterManager.finalizeExport(outputDirectory, exportData, includeViewer);
     }
   );
