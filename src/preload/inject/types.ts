@@ -6,6 +6,12 @@ export interface WalinuxIpcBridge {
   closeNotification: (tag: string) => void;
   dismissChat?: (data: { tag?: string; contactName?: string }) => void;
   fetchLinkPreview?: (url: string) => Promise<any>;
+  saveChatMedia?: (outputDirectory: string, filesDirName: string, subPath: string, data: string | ArrayBuffer) => Promise<string>;
+  finalizeChatExport?: (outputDirectory: string, exportData: any, includeViewer: boolean) => Promise<{ jsonPath: string; htmlPath?: string }>;
+  registerChatExportJob?: (exportId: string, options: any, totalChats: number, currentChatIndex: number) => Promise<boolean>;
+  updateChatExportProgress?: (exportId: string, partial: any) => Promise<boolean>;
+  completeChatExportJob?: (exportId: string) => Promise<boolean>;
+  isChatExportAborted?: (exportId: string) => Promise<boolean>;
 }
 
 declare global {
