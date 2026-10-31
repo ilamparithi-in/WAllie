@@ -536,6 +536,8 @@ function showOrUpdateExportHUD(state: {
   statusText: string;
   msgCount: number;
   mediaCount: number;
+  totalMedia?: number;
+  skippedCount?: number;
   oldestDate?: string;
   exportId: string;
   canSkip?: boolean;
@@ -583,7 +585,7 @@ function showOrUpdateExportHUD(state: {
           <div id="wallie-hud-title" style="font-size: 15px; font-weight: 600; color: #e9edef; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px;">Exporting Chat</div>
           <div style="display: flex; align-items: flex-start; gap: 10px; background: #111b21; padding: 10px 12px; border-radius: 8px; border: 1px solid #222d34;">
             <div class="wallie-hud-spinner" style="margin-top: 2px;"></div>
-            <span id="wallie-hud-status" style="font-size: 12px; color: #8696a0; word-break: break-all; white-space: normal; line-height: 1.4; max-height: 72px; overflow-y: auto;">Initializing export...</span>
+            <span id="wallie-hud-status" style="font-size: 12px; color: #8696a0; word-break: break-word; overflow-wrap: anywhere; white-space: normal; line-height: 1.4; max-height: 80px; overflow-y: auto;">Initializing export...</span>
           </div>
         </div>
 
@@ -675,7 +677,16 @@ function showOrUpdateExportHUD(state: {
   if (msgsEl) msgsEl.textContent = String(state.msgCount);
 
   const mediaEl = document.getElementById('wallie-hud-media');
-  if (mediaEl) mediaEl.textContent = String(state.mediaCount);
+  if (mediaEl) {
+    if (typeof state.totalMedia === 'number' && state.totalMedia > 0) {
+      mediaEl.textContent = `${state.mediaCount}/${state.totalMedia}`;
+      if (state.skippedCount && state.skippedCount > 0) {
+        mediaEl.title = `${state.mediaCount} saved, ${state.skippedCount} skipped`;
+      }
+    } else {
+      mediaEl.textContent = String(state.mediaCount);
+    }
+  }
 
   const oldestEl = document.getElementById('wallie-hud-oldest');
   if (oldestEl) {
@@ -1363,8 +1374,44 @@ async function downloadAndAttachMedia(
     return t === 'image' || t === 'video' || t === 'audio' || t === 'document' || t === 'sticker';
   });
 
-  const oldestDateIso = entries.length > 0 && entries[0].timestamp ? entries[0].timestamp : undefined;
+  // Reliably calculate earliest date across all harvested entries
+  let minEpoch = Infinity;
+  let computedOldestIso: string | undefined = undefined;
+  for (const e of entries) {
+    if (e.timestamp) {
+      const ep = new Date(e.timestamp).getTime();
+      if (!isNaN(ep) && ep > 0 && ep < minEpoch) {
+        minEpoch = ep;
+        computedOldestIso = e.timestamp;
+      }
+    }
+  }
+  const oldestDateIso = computedOldestIso || lastKnownOldestDate;
   const handledStanzaIds = new Set<string>();
+  let skippedCount = 0;
+
+  // Helper to resolve album information and all member entries for any given stanzaId
+  const getAlbumInfoForStanza = (
+    targetId: string
+  ): { element: HTMLElement; albumDataId: string; albumEntries: MessageEntry[] } | null => {
+    const albumEls = Array.from(document.querySelectorAll<HTMLElement>('[data-id*="album-"]'));
+    for (const aEl of albumEls) {
+      const aDataId = aEl.getAttribute('data-id') || '';
+      const match = aDataId.match(/album-([A-Za-z0-9]+)-([A-Za-z0-9]+)-(\d+)/);
+      if (match) {
+        const startId = match[1];
+        const count = parseInt(match[3], 10);
+        const startIdx = mediaEntries.findIndex((m) => m.id === startId);
+        if (startIdx !== -1 && count > 0) {
+          const albumGroup = mediaEntries.slice(startIdx, startIdx + count);
+          if (albumGroup.some((m) => m.id === targetId)) {
+            return { element: aEl, albumDataId: aDataId, albumEntries: albumGroup };
+          }
+        }
+      }
+    }
+    return null;
+  };
 
   for (let mediaIdx = 0; mediaIdx < mediaEntries.length; mediaIdx++) {
     const entry = mediaEntries[mediaIdx];
@@ -1401,14 +1448,17 @@ async function downloadAndAttachMedia(
 
     const handleSkip = () => {
       skipRequested = true;
+      skippedCount++;
       handledStanzaIds.add(stanzaId);
       showOrUpdateExportHUD({
         title: chatTitle,
         index: chatIndex,
         total: totalChats,
-        statusText: `Skipped attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
+        statusText: `Skipped attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || safeFileBase}`,
         msgCount: entries.length,
         mediaCount: savedCount,
+        totalMedia: mediaEntries.length,
+        skippedCount,
         oldestDate: oldestDateIso,
         exportId,
         canSkip: false,
@@ -1416,8 +1466,24 @@ async function downloadAndAttachMedia(
     };
 
     // Helper to find message DOM row or album DOM container
-    const findRowOrAlbumElement = (): { element: HTMLElement | null; isAlbum: boolean; albumDataId?: string } => {
-      // 1. Direct message row match
+    const findRowOrAlbumElement = (): {
+      element: HTMLElement | null;
+      isAlbum: boolean;
+      albumDataId?: string;
+      albumEntries?: MessageEntry[];
+    } => {
+      // 1. Grouped media album match
+      const albumInfo = getAlbumInfoForStanza(stanzaId);
+      if (albumInfo) {
+        return {
+          element: albumInfo.element,
+          isAlbum: true,
+          albumDataId: albumInfo.albumDataId,
+          albumEntries: albumInfo.albumEntries,
+        };
+      }
+
+      // 2. Direct message row match
       const el = document.querySelector<HTMLElement>(`[data-id*="${stanzaId}"], [data-id*="${serializedId}"]`);
       if (el) {
         const dataId = el.getAttribute('data-id') || '';
@@ -1433,7 +1499,7 @@ async function downloadAndAttachMedia(
         };
       }
 
-      // 2. Check if any album element in DOM covers this stanzaId
+      // 3. Fallback: check all album elements in DOM covering this stanzaId
       const albumEls = Array.from(document.querySelectorAll<HTMLElement>('[data-id*="album-"]'));
       for (const aEl of albumEls) {
         const aDataId = aEl.getAttribute('data-id') || '';
@@ -1445,20 +1511,29 @@ async function downloadAndAttachMedia(
       return { element: null, isAlbum: false };
     };
 
-    // Locate DOM element (sweeping downward if needed)
+    // Locate DOM element (sweeping downward gently if needed)
     let found = findRowOrAlbumElement();
     if (!found.element && scrollContainer) {
+      const initialScrollTop = scrollContainer.scrollTop;
       let scrollAttempts = 0;
-      while (!found.element && scrollContainer && scrollAttempts < 45) {
+      const maxScrollAttempts = 20;
+      while (!found.element && scrollContainer && scrollAttempts < maxScrollAttempts) {
         const prevTop = scrollContainer.scrollTop;
-        scrollContainer.scrollTop += 550;
-        await sleep(100);
+        scrollContainer.scrollTop += 450;
+        scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+        await sleep(150);
         captureLiveBlobsFromDom(liveBlobs, capturedBuffers);
         found = findRowOrAlbumElement();
         if (scrollContainer.scrollTop === prevTop && scrollAttempts > 2) {
           break;
         }
         scrollAttempts++;
+      }
+      // CRITICAL: If not found after downward sweep, restore scroll position so subsequent files are NOT stranded!
+      if (!found.element) {
+        scrollContainer.scrollTop = initialScrollTop;
+        scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+        await sleep(100);
       }
     }
 
@@ -1474,26 +1549,32 @@ async function downloadAndAttachMedia(
       // Find all album entries from mediaEntries
       const startIdx = startId ? mediaEntries.findIndex((m) => m.id === startId) : -1;
       const albumEntries =
-        startIdx !== -1 && count > 0
+        found.albumEntries ||
+        (startIdx !== -1 && count > 0
           ? mediaEntries.slice(startIdx, startIdx + count)
-          : [mediaEntries[mediaIdx]];
+          : [mediaEntries[mediaIdx]]);
       const albumStanzaIds = albumEntries.map((ae) => ae.id);
 
       showOrUpdateExportHUD({
         title: chatTitle,
         index: chatIndex,
         total: totalChats,
-        statusText: `Downloading grouped media album (${albumEntries.length} items)...`,
+        statusText: `Downloading grouped media album (${albumEntries.length} items)`,
         msgCount: entries.length,
         mediaCount: savedCount,
+        totalMedia: mediaEntries.length,
+        skippedCount,
         oldestDate: oldestDateIso,
         exportId,
         canSkip: true,
         onSkip: () => {
           skipRequested = true;
+          skippedCount += albumEntries.length;
           for (const ae of albumEntries) handledStanzaIds.add(ae.id);
         },
       });
+
+      let albumProcessedSuccessfully = false;
 
       try {
         rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1503,9 +1584,12 @@ async function downloadAndAttachMedia(
         await window.__walinux_ipc?.prepareExportDownload?.('.zip', 0);
         const dlPromise = window.__walinux_ipc?.waitForDownload?.('.zip', 35000);
 
-        // Reveal context menu: try hover & chevron or right-click
-        rowEl.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        // Open context menu: target the first tile button/img for reliable right-click dispatch
+        const tileTarget =
+          rowEl.querySelector<HTMLElement>('div[role="button"], button, img, [aria-label*="picture" i]') || rowEl;
+        tileTarget.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
         await sleep(100);
+
         const chevron = rowEl.querySelector(
           '[data-testid="down-context"], [data-icon="down-context"], [aria-label*="Context menu"], [aria-label*="Menu"]'
         ) as HTMLElement | null;
@@ -1513,13 +1597,13 @@ async function downloadAndAttachMedia(
         if (chevron) {
           chevron.click();
         } else {
-          const rect = rowEl.getBoundingClientRect();
-          const cx = rect.left + rect.width / 2;
-          const cy = rect.top + rect.height / 2;
+          const rect = tileTarget.getBoundingClientRect();
+          const cx = Math.floor(rect.left + rect.width / 2);
+          const cy = Math.floor(rect.top + rect.height / 2);
           const evt = { bubbles: true, cancelable: true, view: window, button: 2, buttons: 2, clientX: cx, clientY: cy };
-          rowEl.dispatchEvent(new MouseEvent('mousedown', evt));
-          rowEl.dispatchEvent(new MouseEvent('mouseup', evt));
-          rowEl.dispatchEvent(new MouseEvent('contextmenu', evt));
+          tileTarget.dispatchEvent(new MouseEvent('mousedown', evt));
+          tileTarget.dispatchEvent(new MouseEvent('mouseup', evt));
+          tileTarget.dispatchEvent(new MouseEvent('contextmenu', evt));
         }
 
         await sleep(250);
@@ -1553,24 +1637,70 @@ async function downloadAndAttachMedia(
                 handledStanzaIds.add(ae.id);
               }
             }
-            savedCount += albumSavedCount;
-            onMediaSaved(savedCount);
-            showOrUpdateExportHUD({
-              title: chatTitle,
-              index: chatIndex,
-              total: totalChats,
-              statusText: `Saved grouped media album (${albumSavedCount}/${albumEntries.length} items)`,
-              msgCount: entries.length,
-              mediaCount: savedCount,
-              oldestDate: oldestDateIso,
-              exportId,
-              canSkip: false,
-            });
-            continue; // Successfully saved album!
+            if (albumSavedCount > 0) {
+              savedCount += albumSavedCount;
+              onMediaSaved(savedCount);
+              albumProcessedSuccessfully = true;
+              showOrUpdateExportHUD({
+                title: chatTitle,
+                index: chatIndex,
+                total: totalChats,
+                statusText: `Saved grouped media album (${albumSavedCount}/${albumEntries.length} items)`,
+                msgCount: entries.length,
+                mediaCount: savedCount,
+                totalMedia: mediaEntries.length,
+                skippedCount,
+                oldestDate: oldestDateIso,
+                exportId,
+                canSkip: false,
+              });
+            }
           }
         }
       } catch (err) {
         console.warn('[walinux-exporter] Grouped media album zip download error:', err);
+      }
+
+      // Fallback: If zip download didn't resolve all images, harvest visible decrypted blobs from album tiles
+      if (!albumProcessedSuccessfully) {
+        const tileImgs = Array.from(rowEl.querySelectorAll<HTMLImageElement | HTMLMediaElement>('img, video')).filter(
+          (m) => m.src && m.src.startsWith('blob:') && !m.src.includes('data:image/gif')
+        );
+        let tileSavedCount = 0;
+        for (let ti = 0; ti < Math.min(tileImgs.length, albumEntries.length); ti++) {
+          const ae = albumEntries[ti];
+          if (handledStanzaIds.has(ae.id)) continue;
+          try {
+            const resp = await fetch(tileImgs[ti].src);
+            const buf = await resp.arrayBuffer();
+            if (buf.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
+              const aSubPath = `media/${ae.id}_${ae.id}.jpeg`;
+              const savedRef = await window.__walinux_ipc.saveChatMedia(
+                outputDirectory,
+                filesDirName,
+                aSubPath,
+                buf
+              );
+              (ae.content as any).mediaRef = savedRef;
+              handledStanzaIds.add(ae.id);
+              tileSavedCount++;
+            }
+          } catch {}
+        }
+        if (tileSavedCount > 0) {
+          savedCount += tileSavedCount;
+          onMediaSaved(savedCount);
+          albumProcessedSuccessfully = true;
+        }
+      }
+
+      // Mark all album entries as handled so individual passes don't re-sweep or strand the scroll container
+      for (const ae of albumEntries) {
+        handledStanzaIds.add(ae.id);
+      }
+
+      if (albumProcessedSuccessfully) {
+        continue; // Successfully saved album!
       }
     }
 
@@ -1605,6 +1735,8 @@ async function downloadAndAttachMedia(
             statusText: `Saved attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
             msgCount: entries.length,
             mediaCount: savedCount,
+            totalMedia: mediaEntries.length,
+            skippedCount,
             oldestDate: oldestDateIso,
             exportId,
             canSkip: false,
@@ -1641,6 +1773,8 @@ async function downloadAndAttachMedia(
               statusText: `Saved attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName}`,
               msgCount: entries.length,
               mediaCount: savedCount,
+              totalMedia: mediaEntries.length,
+              skippedCount,
               oldestDate: oldestDateIso,
               exportId,
               canSkip: false,
@@ -1708,6 +1842,8 @@ async function downloadAndAttachMedia(
                 statusText: `Saved attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
                 msgCount: entries.length,
                 mediaCount: savedCount,
+                totalMedia: mediaEntries.length,
+                skippedCount,
                 oldestDate: oldestDateIso,
                 exportId,
                 canSkip: false,
@@ -1755,6 +1891,8 @@ async function downloadAndAttachMedia(
                 statusText: `Saved attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
                 msgCount: entries.length,
                 mediaCount: savedCount,
+                totalMedia: mediaEntries.length,
+                skippedCount,
                 oldestDate: oldestDateIso,
                 exportId,
                 canSkip: false,
@@ -1773,10 +1911,12 @@ async function downloadAndAttachMedia(
         index: chatIndex,
         total: totalChats,
         statusText: isRetry
-          ? `Retrying download [Attempt ${attempt}/${MAX_DOWNLOAD_ATTEMPTS}]: ${targetFileName || `${stanzaId}.${ext}`}...`
-          : `Downloading (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}...`,
+          ? `Retrying download [Attempt ${attempt}/${MAX_DOWNLOAD_ATTEMPTS}]: ${targetFileName || `${stanzaId}.${ext}`}`
+          : `Downloading (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
         msgCount: entries.length,
         mediaCount: savedCount,
+        totalMedia: mediaEntries.length,
+        skippedCount,
         oldestDate: oldestDateIso,
         exportId,
         canSkip: true,
@@ -1811,13 +1951,17 @@ async function downloadAndAttachMedia(
             if (chevron) {
               chevron.click();
             } else {
-              const rect = rowEl.getBoundingClientRect();
-              const cx = rect.left + rect.width / 2;
-              const cy = rect.top + rect.height / 2;
+              const bubbleEl =
+                rowEl.querySelector<HTMLElement>(
+                  'div[data-testid="msg-container"], div.copyable-text, [role="button"], div[tabindex="-1"]'
+                ) || rowEl;
+              const rect = bubbleEl.getBoundingClientRect();
+              const cx = Math.floor(rect.left + rect.width / 2);
+              const cy = Math.floor(rect.top + rect.height / 2);
               const evt = { bubbles: true, cancelable: true, view: window, button: 2, buttons: 2, clientX: cx, clientY: cy };
-              rowEl.dispatchEvent(new MouseEvent('mousedown', evt));
-              rowEl.dispatchEvent(new MouseEvent('mouseup', evt));
-              rowEl.dispatchEvent(new MouseEvent('contextmenu', evt));
+              bubbleEl.dispatchEvent(new MouseEvent('mousedown', evt));
+              bubbleEl.dispatchEvent(new MouseEvent('mouseup', evt));
+              bubbleEl.dispatchEvent(new MouseEvent('contextmenu', evt));
             }
 
             await sleep(200);
@@ -1860,9 +2004,11 @@ async function downloadAndAttachMedia(
             title: chatTitle,
             index: chatIndex,
             total: totalChats,
-            statusText: `Downloading (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`} (${waitElapsed}s)...`,
+            statusText: `Downloading (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`} (${waitElapsed}s)`,
             msgCount: entries.length,
             mediaCount: savedCount,
+            totalMedia: mediaEntries.length,
+            skippedCount,
             oldestDate: oldestDateIso,
             exportId,
             canSkip: true,
@@ -1956,6 +2102,8 @@ async function downloadAndAttachMedia(
             statusText: `Saved attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
             msgCount: entries.length,
             mediaCount: savedCount,
+            totalMedia: mediaEntries.length,
+            skippedCount,
             oldestDate: oldestDateIso,
             exportId,
             canSkip: false,

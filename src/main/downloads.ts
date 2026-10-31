@@ -26,6 +26,7 @@ export class DownloadManager extends EventEmitter {
   private lastOpenedFilename?: string;
   private lastOpenedTimestamp: number = 0;
   private exportDownloadedPaths: Set<string> = new Set();
+  private consumedExportPaths: Set<string> = new Set();
   private pendingIntent: {
     intent: DownloadIntent;
     filename?: string;
@@ -132,7 +133,16 @@ export class DownloadManager extends EventEmitter {
 
   public setExportActive(active: boolean): void {
     this.isExportActive = active;
+    if (!active) {
+      this.consumedExportPaths.clear();
+    }
     console.log(`[DownloadManager] Chat export active state set to: ${active}`);
+  }
+
+  public markExportPathConsumed(p: string): void {
+    if (p) {
+      this.consumedExportPaths.add(path.resolve(p));
+    }
   }
 
   public getIsExportActive(): boolean {
@@ -185,13 +195,29 @@ export class DownloadManager extends EventEmitter {
   ): boolean {
     if (!fs.existsSync(candidatePath)) return false;
 
-    // 1. Filename match (case-insensitive & trimmed)
+    // 1. Filename match (case-insensitive & trimmed, tolerating duplicate counter suffixes like ' (1)')
     const norm = (s: string) => s.trim().toLowerCase();
     const cleanTarget = norm(targetFilename);
     const cleanCandidateName = norm(candidateFilename);
     const cleanBase = norm(path.basename(candidatePath));
 
-    if (cleanCandidateName !== cleanTarget && cleanBase !== cleanTarget) {
+    const stripCounter = (name: string) => {
+      const ext = path.extname(name);
+      const base = path.basename(name, ext).replace(/\s*\(\d+\)$/, '').trim();
+      return `${base}${ext}`.toLowerCase();
+    };
+
+    const targetNoCounter = stripCounter(cleanTarget);
+    const candidateNoCounter = stripCounter(cleanCandidateName);
+    const baseNoCounter = stripCounter(cleanBase);
+
+    const isNameMatch =
+      cleanCandidateName === cleanTarget ||
+      cleanBase === cleanTarget ||
+      candidateNoCounter === targetNoCounter ||
+      baseNoCounter === targetNoCounter;
+
+    if (!isNameMatch) {
       return false;
     }
 
@@ -689,31 +715,38 @@ export class DownloadManager extends EventEmitter {
       const cleanExpected = expectedFilename ? expectedFilename.trim().toLowerCase() : '';
       const expectedBase = cleanExpected ? cleanExpected.split('.')[0] : '';
 
-      // Immediately check if a matching download completed recently (e.g. within last 30 seconds)
-      const now = Date.now();
-      const recentMatch = this.history.find((rec) => {
-        if (rec.state !== 'completed' || now - rec.timestamp > 30000) return false;
-        if (!cleanExpected) return true;
-        const baseName = path.basename(rec.savePath).toLowerCase();
-        const recFile = (rec.filename || '').toLowerCase();
-        const recBase = (path.parse(rec.savePath).name || '').toLowerCase();
-        const isZipMatch = (cleanExpected.endsWith('.zip') || cleanExpected === 'zip') && (baseName.endsWith('.zip') || recFile.endsWith('.zip'));
-        return (
-          isZipMatch ||
-          baseName === cleanExpected ||
-          recFile === cleanExpected ||
-          baseName.includes(cleanExpected) ||
-          cleanExpected.includes(baseName) ||
-          (expectedBase && (recBase.includes(expectedBase) || expectedBase.includes(recBase)))
-        );
-      });
+      // Immediately check if a matching download completed recently (only when an expected name is provided and file exists on disk)
+      if (cleanExpected) {
+        const now = Date.now();
+        const recentMatch = this.history.find((rec) => {
+          if (rec.state !== 'completed' || now - rec.timestamp > 30000) return false;
+          const resolvedPath = path.resolve(rec.savePath);
+          if (!fs.existsSync(resolvedPath) || this.consumedExportPaths.has(resolvedPath)) return false;
+          const baseName = path.basename(rec.savePath).toLowerCase();
+          const recFile = (rec.filename || '').toLowerCase();
+          const recBase = (path.parse(rec.savePath).name || '').toLowerCase();
+          const isZipMatch = (cleanExpected.endsWith('.zip') || cleanExpected === 'zip') && (baseName.endsWith('.zip') || recFile.endsWith('.zip'));
+          return (
+            isZipMatch ||
+            baseName === cleanExpected ||
+            recFile === cleanExpected ||
+            baseName.includes(cleanExpected) ||
+            cleanExpected.includes(baseName) ||
+            (expectedBase && (recBase.includes(expectedBase) || expectedBase.includes(recBase)))
+          );
+        });
 
-      if (recentMatch) {
-        resolve(recentMatch);
-        return;
+        if (recentMatch) {
+          this.consumedExportPaths.add(path.resolve(recentMatch.savePath));
+          resolve(recentMatch);
+          return;
+        }
       }
 
       const onComplete = (rec: DownloadRecord) => {
+        const resolvedPath = path.resolve(rec.savePath);
+        if (this.consumedExportPaths.has(resolvedPath)) return;
+
         if (cleanExpected) {
           const baseName = path.basename(rec.savePath).toLowerCase();
           const recFile = (rec.filename || '').toLowerCase();
@@ -728,11 +761,13 @@ export class DownloadManager extends EventEmitter {
             cleanExpected.includes(baseName) ||
             (expectedBase && (recBase.includes(expectedBase) || expectedBase.includes(recBase)))
           ) {
+            this.consumedExportPaths.add(resolvedPath);
             cleanup();
             resolve(rec);
             return;
           }
         } else {
+          this.consumedExportPaths.add(resolvedPath);
           cleanup();
           resolve(rec);
           return;
