@@ -1,12 +1,12 @@
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
 import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GroupInviteDetails, WhatsAppChatExport, ChatMetadata, TimelineEntry, MessageEntry, SystemNotificationEntry, DateDividerEntry, NativePromptOptions, NativePromptResult, NativeConfirmOptions } from '../shared/types';
-import type { ChatExportProgress, ChatExportOptions, ChatExportResult } from '../shared/chatExportTypes';
+import type { ChatExportProgress, ChatExportOptions, ChatExportResult, MultiChatExportRequest } from '../shared/chatExportTypes';
 import type { GoogleFontResolution } from '../shared/fonts';
 
 // Inlined at build time by scripts/build-preload.cjs from src/preload/inject/whatsappMainWorld.ts
 const MAIN_WORLD_SCRIPT = '__MAIN_WORLD_SCRIPT__';
 
-export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GoogleFontResolution, GroupInviteDetails, WhatsAppChatExport, ChatMetadata, TimelineEntry, MessageEntry, SystemNotificationEntry, DateDividerEntry, NativePromptOptions, NativePromptResult, NativeConfirmOptions, ChatExportProgress, ChatExportOptions, ChatExportResult };
+export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GoogleFontResolution, GroupInviteDetails, WhatsAppChatExport, ChatMetadata, TimelineEntry, MessageEntry, SystemNotificationEntry, DateDividerEntry, NativePromptOptions, NativePromptResult, NativeConfirmOptions, ChatExportProgress, ChatExportOptions, ChatExportResult, MultiChatExportRequest };
 
 export interface ElectronAPI {
   // Window controls
@@ -126,6 +126,10 @@ export interface ElectronAPI {
   promptOpenExportFile: () => Promise<string | null>;
   openExportViewer: (filePath: string) => Promise<void>;
   stopChatExport: (exportId?: string) => Promise<boolean>;
+  getExportableChats: () => Promise<Array<{ jid: string; title: string; isGroup: boolean; isCommunity: boolean; isBroadcast: boolean; unreadCount: number; timestamp: number; avatarUrl?: string }>>;
+  getActiveExportChat: () => Promise<{ jid: string; title: string; isGroup: boolean } | null>;
+  startChatExport: (options: ChatExportOptions) => Promise<{ success: boolean; exportId?: string; error?: string }>;
+  startMultiChatExport: (request: MultiChatExportRequest) => Promise<{ success: boolean; exportId?: string; error?: string }>;
   onChatExportProgress: (callback: (progress: ChatExportProgress) => void) => () => void;
   onChatExportEnded: (callback: (exportId: string) => void) => () => void;
 }
@@ -317,6 +321,10 @@ const api: ElectronAPI = {
   promptOpenExportFile: () => ipcRenderer.invoke('chat-export:prompt-open-file'),
   openExportViewer: (filePath) => ipcRenderer.invoke('chat-export:open-viewer', filePath),
   stopChatExport: (exportId) => ipcRenderer.invoke('chat-export:stop', exportId),
+  getExportableChats: () => ipcRenderer.invoke('chat-export:get-chats'),
+  getActiveExportChat: () => ipcRenderer.invoke('chat-export:get-active-chat'),
+  startChatExport: (options) => ipcRenderer.invoke('chat-export:start', options),
+  startMultiChatExport: (request) => ipcRenderer.invoke('chat-export:start-multi', request),
   onChatExportProgress: (callback) => {
     const subscription = (_event: unknown, progress: ChatExportProgress) => callback(progress);
     ipcRenderer.on('chat-export:progress', subscription);
