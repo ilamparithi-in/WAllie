@@ -15,6 +15,7 @@ import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedS
 import { downloadManager } from './downloads';
 import { fetchLinkPreview, clearLinkPreviewCache, getLinkPreviewCacheSize } from './linkPreview';
 import { chatExporterManager } from './chatExporter';
+import AdmZip from 'adm-zip';
 import type { WhatsAppChatExport, ChatExportOptions } from '../shared/chatExportTypes';
 
 const execAsync = promisify(exec);
@@ -1229,6 +1230,61 @@ export function registerIpcHandlers() {
     const rec = await downloadManager.waitForRecentDownload(expectedFilename, timeoutMs || 35000);
     return { success: !!rec, savePath: rec?.savePath, filename: rec?.filename };
   });
+
+  ipcMain.handle(
+    'chat-export:unzip-album-download',
+    async (
+      _event,
+      outputDirectory: string,
+      filesDirName: string,
+      zipPath: string,
+      stanzaIds: string[]
+    ) => {
+      try {
+        if (!fs.existsSync(zipPath)) {
+          return { success: false, error: 'Zip file does not exist', count: 0, mapping: {} };
+        }
+        const zip = new AdmZip(zipPath);
+        const entries = zip
+          .getEntries()
+          .filter((e) => !e.isDirectory && !e.entryName.includes('__MACOSX') && !path.basename(e.entryName).startsWith('.'));
+
+        // Natural sort by entry name
+        entries.sort((a, b) => a.entryName.localeCompare(b.entryName, undefined, { numeric: true, sensitivity: 'base' }));
+
+        const mediaDir = path.join(outputDirectory, filesDirName, 'media');
+        await fs.promises.mkdir(mediaDir, { recursive: true });
+
+        const mapping: Record<string, string> = {};
+
+        for (let i = 0; i < entries.length; i++) {
+          const zipEntry = entries[i];
+          const stanzaId = stanzaIds[i] || `album_item_${i + 1}`;
+          const ext = path.extname(zipEntry.entryName) || '.jpeg';
+          const safeName = `${stanzaId}${ext}`;
+          const destPath = path.join(mediaDir, safeName);
+
+          await fs.promises.writeFile(destPath, zipEntry.getData());
+          mapping[stanzaId] = `${filesDirName}/media/${safeName}`;
+        }
+
+        // Clean up the temporary zip file if tracked
+        if (downloadManager.isExportDownloadedPath(zipPath)) {
+          try {
+            await fs.promises.unlink(zipPath);
+            downloadManager.removeExportDownloadedPath(zipPath);
+          } catch (e) {
+            console.warn('[chat-export] Failed to clean up zip file:', e);
+          }
+        }
+
+        return { success: true, count: entries.length, mapping };
+      } catch (err: any) {
+        console.error('[chat-export] Failed to unzip album download:', err);
+        return { success: false, error: err.message, count: 0, mapping: {} };
+      }
+    }
+  );
 
   ipcMain.handle(
     'chat-export:finalize',

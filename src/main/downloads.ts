@@ -689,13 +689,39 @@ export class DownloadManager extends EventEmitter {
       const cleanExpected = expectedFilename ? expectedFilename.trim().toLowerCase() : '';
       const expectedBase = cleanExpected ? cleanExpected.split('.')[0] : '';
 
+      // Immediately check if a matching download completed recently (e.g. within last 30 seconds)
+      const now = Date.now();
+      const recentMatch = this.history.find((rec) => {
+        if (rec.state !== 'completed' || now - rec.timestamp > 30000) return false;
+        if (!cleanExpected) return true;
+        const baseName = path.basename(rec.savePath).toLowerCase();
+        const recFile = (rec.filename || '').toLowerCase();
+        const recBase = (path.parse(rec.savePath).name || '').toLowerCase();
+        const isZipMatch = (cleanExpected.endsWith('.zip') || cleanExpected === 'zip') && (baseName.endsWith('.zip') || recFile.endsWith('.zip'));
+        return (
+          isZipMatch ||
+          baseName === cleanExpected ||
+          recFile === cleanExpected ||
+          baseName.includes(cleanExpected) ||
+          cleanExpected.includes(baseName) ||
+          (expectedBase && (recBase.includes(expectedBase) || expectedBase.includes(recBase)))
+        );
+      });
+
+      if (recentMatch) {
+        resolve(recentMatch);
+        return;
+      }
+
       const onComplete = (rec: DownloadRecord) => {
         if (cleanExpected) {
           const baseName = path.basename(rec.savePath).toLowerCase();
           const recFile = (rec.filename || '').toLowerCase();
           const recBase = (path.parse(rec.savePath).name || '').toLowerCase();
 
+          const isZipMatch = (cleanExpected.endsWith('.zip') || cleanExpected === 'zip') && (baseName.endsWith('.zip') || recFile.endsWith('.zip'));
           if (
+            isZipMatch ||
             baseName === cleanExpected ||
             recFile === cleanExpected ||
             baseName.includes(cleanExpected) ||

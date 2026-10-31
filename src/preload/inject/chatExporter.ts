@@ -519,6 +519,16 @@ function extractMessageEntry(
  * Renders or updates the floating in-viewport progress HUD inside the WhatsApp DOM.
  * Semi-transparent dark background without blur so the chat DOM remains visible underneath.
  */
+/**
+ * Cache last known oldest message date across all HUD updates
+ */
+let lastKnownOldestDate: string = '';
+
+/**
+ * Renders or updates the floating HUD overlay in the top-center of the screen.
+ * Semi-transparent dark background without blur so the chat DOM remains visible underneath.
+ * Movable / draggable modal by header with word-wrapped log text (no truncation ellipses).
+ */
 function showOrUpdateExportHUD(state: {
   title: string;
   index: number;
@@ -530,14 +540,19 @@ function showOrUpdateExportHUD(state: {
   exportId: string;
   canSkip?: boolean;
   onSkip?: () => void;
+  skipLabel?: string;
 }): void {
+  if (state.oldestDate) {
+    lastKnownOldestDate = state.oldestDate;
+  }
+
   let overlay = document.getElementById('wallie-export-hud-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'wallie-export-hud-overlay';
     overlay.setAttribute(
       'style',
-      'position: fixed; inset: 0; z-index: 2147483640; display: flex; align-items: center; justify-content: center; background: rgba(11, 20, 26, 0.55); backdrop-filter: none !important; -webkit-backdrop-filter: none !important; pointer-events: auto; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #e9edef; user-select: none;'
+      'position: fixed; inset: 0; z-index: 2147483640; pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #e9edef; user-select: none;'
     );
     overlay.innerHTML = `
       <style>
@@ -555,40 +570,41 @@ function showOrUpdateExportHUD(state: {
           flex-shrink: 0;
         }
       </style>
-      <div id="wallie-export-card" style="background: #1f2c34; border: 1px solid #2a3942; border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); padding: 22px 26px; width: 440px; max-width: 90vw; display: flex; flex-direction: column; gap: 16px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2a3942; padding-bottom: 12px;">
+      <div id="wallie-export-card" style="position: fixed; top: 72px; left: calc(50% - 225px); pointer-events: auto; background: #1f2c34; border: 1px solid #2a3942; border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.65); padding: 20px 24px; width: 450px; max-width: 90vw; display: flex; flex-direction: column; gap: 14px;">
+        <div id="wallie-hud-header" style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2a3942; padding-bottom: 10px; cursor: grab; user-select: none;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-weight: 600; font-size: 13px; color: #00a884; letter-spacing: 0.3px;">WAllie Chat Exporter</span>
+            <span style="font-size: 10px; color: #8696a0;">(drag to reposition)</span>
           </div>
           <span id="wallie-hud-badge" style="font-size: 11px; background: #111b21; border: 1px solid #2a3942; padding: 2px 8px; border-radius: 12px; color: #8696a0;">Chat 1 of 1</span>
         </div>
 
         <div>
-          <div id="wallie-hud-title" style="font-size: 16px; font-weight: 600; color: #e9edef; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 8px;">Exporting Chat</div>
-          <div style="display: flex; align-items: center; gap: 10px; background: #111b21; padding: 10px 14px; border-radius: 8px; border: 1px solid #222d34;">
-            <div class="wallie-hud-spinner"></div>
-            <span id="wallie-hud-status" style="font-size: 13px; color: #8696a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Initializing export...</span>
+          <div id="wallie-hud-title" style="font-size: 15px; font-weight: 600; color: #e9edef; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px;">Exporting Chat</div>
+          <div style="display: flex; align-items: flex-start; gap: 10px; background: #111b21; padding: 10px 12px; border-radius: 8px; border: 1px solid #222d34;">
+            <div class="wallie-hud-spinner" style="margin-top: 2px;"></div>
+            <span id="wallie-hud-status" style="font-size: 12px; color: #8696a0; word-break: break-all; white-space: normal; line-height: 1.4; max-height: 72px; overflow-y: auto;">Initializing export...</span>
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: #111b21; padding: 12px; border-radius: 8px; border: 1px solid #222d34; text-align: center;">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: #111b21; padding: 10px; border-radius: 8px; border: 1px solid #222d34; text-align: center;">
           <div>
-            <div style="font-size: 11px; color: #8696a0; text-transform: uppercase;">Messages</div>
-            <div id="wallie-hud-msgs" style="font-size: 17px; font-weight: 700; color: #00a884; margin-top: 2px;">0</div>
+            <div style="font-size: 10px; color: #8696a0; text-transform: uppercase; letter-spacing: 0.3px;">Messages</div>
+            <div id="wallie-hud-msgs" style="font-size: 16px; font-weight: 700; color: #00a884; margin-top: 2px;">0</div>
           </div>
           <div>
-            <div style="font-size: 11px; color: #8696a0; text-transform: uppercase;">Media Saved</div>
-            <div id="wallie-hud-media" style="font-size: 17px; font-weight: 700; color: #53bdeb; margin-top: 2px;">0</div>
+            <div style="font-size: 10px; color: #8696a0; text-transform: uppercase; letter-spacing: 0.3px;">Media Saved</div>
+            <div id="wallie-hud-media" style="font-size: 16px; font-weight: 700; color: #53bdeb; margin-top: 2px;">0</div>
           </div>
           <div>
-            <div style="font-size: 11px; color: #8696a0; text-transform: uppercase;">Oldest Date</div>
-            <div id="wallie-hud-oldest" style="font-size: 12px; font-weight: 600; color: #e9edef; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">—</div>
+            <div style="font-size: 10px; color: #8696a0; text-transform: uppercase; letter-spacing: 0.3px;">Oldest Date</div>
+            <div id="wallie-hud-oldest" style="font-size: 12px; font-weight: 600; color: #e9edef; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">—</div>
           </div>
         </div>
 
         <div style="display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding-top: 2px;">
-          <button id="wallie-hud-skip-btn" style="display: none; background: transparent; border: 1px solid #53bdeb; color: #53bdeb; font-size: 12px; font-weight: 600; padding: 6px 16px; border-radius: 6px; cursor: pointer; transition: background 0.2s;">Skip File</button>
-          <button id="wallie-hud-cancel-btn" style="background: transparent; border: 1px solid #ea4335; color: #ea4335; font-size: 12px; font-weight: 600; padding: 6px 16px; border-radius: 6px; cursor: pointer; transition: background 0.2s;">Cancel Export</button>
+          <button id="wallie-hud-skip-btn" style="display: none; background: transparent; border: 1px solid #53bdeb; color: #53bdeb; font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: background 0.2s;">Skip File</button>
+          <button id="wallie-hud-cancel-btn" style="background: transparent; border: 1px solid #ea4335; color: #ea4335; font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: background 0.2s;">Cancel Export</button>
         </div>
       </div>
     `;
@@ -601,6 +617,48 @@ function showOrUpdateExportHUD(state: {
         (cancelBtn as HTMLButtonElement).disabled = true;
         window.__walinux_ipc?.stopChatExport?.(state.exportId);
       };
+    }
+
+    // Initialize drag repositioning
+    const header = document.getElementById('wallie-hud-header');
+    const card = document.getElementById('wallie-export-card');
+    if (header && card) {
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let initialLeft = 0;
+      let initialTop = 0;
+
+      header.addEventListener('mousedown', (e: MouseEvent) => {
+        if (e.button !== 0) return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = card.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+        card.style.left = `${initialLeft}px`;
+        card.style.top = `${initialTop}px`;
+        header.style.cursor = 'grabbing';
+        e.preventDefault();
+      });
+
+      window.addEventListener('mousemove', (e: MouseEvent) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const maxLeft = Math.max(10, window.innerWidth - card.offsetWidth - 10);
+        const maxTop = Math.max(10, window.innerHeight - card.offsetHeight - 10);
+        card.style.left = `${Math.max(10, Math.min(maxLeft, initialLeft + dx))}px`;
+        card.style.top = `${Math.max(10, Math.min(maxTop, initialTop + dy))}px`;
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          header.style.cursor = 'grab';
+        }
+      });
     }
   }
 
@@ -621,9 +679,12 @@ function showOrUpdateExportHUD(state: {
 
   const oldestEl = document.getElementById('wallie-hud-oldest');
   if (oldestEl) {
-    if (state.oldestDate) {
-      const d = new Date(state.oldestDate);
-      oldestEl.textContent = isNaN(d.getTime()) ? state.oldestDate.slice(0, 10) : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' });
+    const rawDate = state.oldestDate || lastKnownOldestDate;
+    if (rawDate) {
+      const d = new Date(rawDate);
+      oldestEl.textContent = isNaN(d.getTime())
+        ? rawDate.slice(0, 10)
+        : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     } else {
       oldestEl.textContent = '—';
     }
@@ -633,6 +694,7 @@ function showOrUpdateExportHUD(state: {
   if (skipBtn) {
     if (state.canSkip) {
       skipBtn.style.display = 'inline-block';
+      skipBtn.textContent = state.skipLabel || 'Skip File';
       skipBtn.onclick = () => {
         if (state.onSkip) state.onSkip();
       };
@@ -804,6 +866,29 @@ function captureLiveBlobsFromDom(
   }
 }
 
+/**
+ * Safely resolves the active chat's scroll container element in WhatsApp Web.
+ */
+function getConversationScrollContainer(): HTMLElement | null {
+  const panel = document.querySelector<HTMLElement>('div[data-testid="conversation-panel-messages"]');
+  if (panel && panel.scrollHeight > panel.clientHeight) {
+    return panel;
+  }
+  const main = document.querySelector<HTMLElement>('#main');
+  if (main) {
+    const divs = Array.from(main.querySelectorAll<HTMLElement>('div'));
+    for (const d of divs) {
+      try {
+        const s = window.getComputedStyle(d);
+        if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && d.scrollHeight > d.clientHeight) {
+          return d;
+        }
+      } catch {}
+    }
+  }
+  return panel || null;
+}
+
 async function scrollAndHarvestMessages(
   activeChat: any,
   timeframeBoundary: string | null,
@@ -819,15 +904,18 @@ async function scrollAndHarvestMessages(
     activeChat.isGroup === true ||
     (typeof activeChat.isGroup === 'function' && activeChat.isGroup())
   );
-  const memberLabelsMap = isGroupChat ? getMemberLabelsMap(String(activeChat.id?._serialized || activeChat.id)) : {};
+  const chatJid = String(activeChat.id?._serialized || activeChat.id || '');
+  const memberLabelsMap = isGroupChat ? getMemberLabelsMap(chatJid) : {};
   const entriesMap = new Map<string, MessageEntry | SystemNotificationEntry>();
   const liveBlobs = new Map<string, string>();
   const capturedBuffers = new Map<string, { buffer: ArrayBuffer; mimeType: string }>();
 
   const harvestModels = () => {
     captureLiveBlobsFromDom(liveBlobs, capturedBuffers);
+
+    // Source A: activeChat.msgs models (current active viewport window)
     if (activeChat.msgs) {
-      const models = activeChat.msgs.getModelsArray ? activeChat.msgs.getModelsArray() : [];
+      const models = activeChat.msgs.getModelsArray ? activeChat.msgs.getModelsArray() : (activeChat.msgs._models || []);
       for (const m of models) {
         const entry = extractMessageEntry(m, activeChat, memberLabelsMap);
         if (entry && !entriesMap.has(entry.id)) {
@@ -836,7 +924,38 @@ async function scrollAndHarvestMessages(
       }
     }
 
-    // Also harvest any DOM-rendered system notices (e.g. group description changes, security codes)
+    // Source B: WAWebMsgCollection.MsgCollection.byChat (aggregates full message history for this chat)
+    try {
+      const MsgCol = getCollection('WAWebMsgCollection')?.MsgCollection;
+      if (MsgCol?.byChat && activeChat.id) {
+        const byChatView = MsgCol.byChat(activeChat.id);
+        const byChatModels = byChatView?._models || (byChatView?.getModelsArray ? byChatView.getModelsArray() : []);
+        for (const m of byChatModels) {
+          const entry = extractMessageEntry(m, activeChat, memberLabelsMap);
+          if (entry && !entriesMap.has(entry.id)) {
+            entriesMap.set(entry.id, entry);
+          }
+        }
+      }
+
+      // Source C: MsgCollection global pool filtered by remote JID
+      if (MsgCol?.getModelsArray && chatJid) {
+        const allModels = MsgCol.getModelsArray();
+        for (const m of allModels) {
+          const remoteJid = String(m.id?.remote?._serialized || m.id?.remote || '');
+          if (remoteJid === chatJid) {
+            const entry = extractMessageEntry(m, activeChat, memberLabelsMap);
+            if (entry && !entriesMap.has(entry.id)) {
+              entriesMap.set(entry.id, entry);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[walinux-exporter] MsgCollection secondary harvest error:', e);
+    }
+
+    // Source D: DOM-rendered system notices (e.g. group description changes, security codes)
     const domNotifs = Array.from(document.querySelectorAll('div[data-testid="msg-notification-container"]'));
     for (const dn of domNotifs) {
       const row = dn.closest('div[data-id]');
@@ -862,13 +981,66 @@ async function scrollAndHarvestMessages(
   // Initial harvest from already-loaded models
   harvestModels();
 
-  const scrollContainer = document.querySelector<HTMLElement>(
-    'div[data-testid="conversation-panel-messages"], .copyable-area [tabindex="0"]'
-  );
+  const scrollContainer = getConversationScrollContainer();
+
+  // Helper to detect if a spinner or active loading state is running inside conversation panel
+  const hasConversationSpinner = (): boolean => {
+    if (!scrollContainer) return false;
+    const mainEl = document.querySelector<HTMLElement>('#main') || scrollContainer;
+    const sp =
+      scrollContainer.querySelector(
+        '[data-testid="loading-spinner"], [data-testid="spinner"], [data-visualcompletion="loading-state"], svg[role="status"], [role="progressbar"], span[data-icon*="progress"]'
+      ) ||
+      mainEl.querySelector(
+        ':scope > [data-testid="loading-spinner"], :scope > [data-testid="spinner"], :scope > [data-visualcompletion="loading-state"], :scope > svg[role="status"], :scope > [role="progressbar"], :scope > span[data-icon*="progress"]'
+      );
+    const isSpinnerRunning = Boolean(sp && !sp.closest('#wallie-export-hud-overlay'));
+    const isModelLoading = Boolean(activeChat.msgs?.msgLoadState?.isLoadingEarlierMsgs);
+    return isSpinnerRunning || isModelLoading;
+  };
+
+  // Helper to find phone sync button (both initial request and error-retry states)
+  const findPhoneSyncButton = (): { element: HTMLElement; isRetry: boolean } | null => {
+    const mainEl = document.querySelector<HTMLElement>('#main') || scrollContainer;
+    if (!mainEl) return null;
+
+    const allButtons = Array.from(
+      mainEl.querySelectorAll('button, div[role="button"], span[role="button"]')
+    ).filter((b) => !b.closest('#wallie-export-hud-overlay'));
+
+    for (const b of allButtons) {
+      const txt = (b.textContent || '').toLowerCase();
+      const isDisabled =
+        b.hasAttribute('disabled') ||
+        b.getAttribute('aria-disabled') === 'true' ||
+        b.classList.contains('disabled');
+      if (isDisabled) continue;
+
+      // Retry error button: "Couldn't get older messages. Open WhatsApp on your phone and click here to try again."
+      if (
+        txt.includes("couldn't get older messages") ||
+        txt.includes("could not get older messages") ||
+        txt.includes("unable to get older messages") ||
+        txt.includes("click here to try again")
+      ) {
+        return { element: b as HTMLElement, isRetry: true };
+      }
+
+      // Initial request button: "Click here to get older messages from your phone."
+      if (
+        txt.includes('get older messages') ||
+        txt.includes('older messages from your phone') ||
+        txt.includes('older messages from phone')
+      ) {
+        return { element: b as HTMLElement, isRetry: false };
+      }
+    }
+    return null;
+  };
 
   let consecutiveNoNewMessages = 0;
-  let phoneSyncWaitSeconds = 0;
-  let phoneSyncClickCount = 0;
+  let phoneSyncRetryCount = 0;
+  let phoneSyncExhausted = false;
   let previousCount = entriesMap.size;
 
   while (true) {
@@ -902,6 +1074,7 @@ async function scrollAndHarvestMessages(
     });
 
     if (timeframeBoundary && oldestEpoch <= new Date(timeframeBoundary).getTime()) {
+      console.log('[walinux-exporter] Reached requested timeframe boundary:', timeframeBoundary);
       break;
     }
 
@@ -909,191 +1082,233 @@ async function scrollAndHarvestMessages(
       break;
     }
 
-    // Scroll up
-    scrollContainer.scrollTop = 0;
-    await sleep(200);
+    // CRITICAL: Always ensure the real conversation container is scrolled to top first!
+    if (scrollContainer.scrollTop > 0) {
+      scrollContainer.scrollTop = 0;
+      scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+      await sleep(150);
+    } else {
+      // Nudge scroll slightly to trigger WhatsApp Web's scroll listener
+      scrollContainer.scrollTop = 60;
+      scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+      await sleep(60);
+      scrollContainer.scrollTop = 0;
+      scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+    }
 
     captureLiveBlobsFromDom(liveBlobs, capturedBuffers);
     harvestModels();
 
-    const mainEl = document.querySelector<HTMLElement>('#main') || scrollContainer;
-    const containerText = (scrollContainer.textContent || mainEl.textContent || '').toLowerCase();
-
-    // Check for explicit sync failure in DOM (accommodating transient split-second notices)
-    const hasSyncFailedNotice =
-      containerText.includes("couldn't get older messages") ||
-      containerText.includes("could not get older messages") ||
-      containerText.includes('unable to get older messages') ||
-      containerText.includes('make sure your phone has an active internet connection');
-
-    // Only conclude on sync failure notice if it persists across consecutive scroll attempts without new messages
-    if (hasSyncFailedNotice && phoneSyncClickCount >= 1 && consecutiveNoNewMessages >= 8) {
-      console.warn('[walinux-exporter] Phone sync failed persistently to load older messages. Ending scroll.');
-      break;
-    }
-
-    // Helper to detect if a spinner is actively running inside conversation panel
-    const hasConversationSpinner = (): boolean => {
-      const sp = scrollContainer.querySelector('[data-testid="spinner"], [role="progressbar"], span[data-icon*="progress"]') ||
-        mainEl.querySelector(':scope > [data-testid="spinner"], :scope > [role="progressbar"], :scope > span[data-icon*="progress"]');
-      return Boolean(sp && !sp.closest('#wallie-export-hud-overlay'));
+    // Helper to check if view shows "couldn't load older messages" error
+    const hasCouldNotLoadOlderMessages = (): boolean => {
+      const mainEl = document.querySelector<HTMLElement>('#main') || scrollContainer;
+      if (!mainEl) return false;
+      const txt = (mainEl.innerText || mainEl.textContent || '').toLowerCase();
+      return (
+        txt.includes("couldn't get older messages") ||
+        txt.includes("could not get older messages") ||
+        txt.includes("couldn't load older messages") ||
+        txt.includes("could not load older messages") ||
+        txt.includes("unable to get older messages")
+      );
     };
 
-    // Find phone sync button strictly inside mainEl, excluding WAllie HUD
-    const allButtons = Array.from(mainEl.querySelectorAll('button, div[role="button"], span[role="button"]'))
-      .filter((b) => !b.closest('#wallie-export-hud-overlay'));
+    // 1. Check for phone sync button
+    const phoneSync = findPhoneSyncButton();
 
-    const phoneSyncBtn = allButtons.find((b) => {
-      const txt = (b.textContent || '').toLowerCase();
-      if (
-        txt.includes("couldn't") ||
-        txt.includes("could not") ||
-        txt.includes("unable") ||
-        txt.includes("failed")
-      ) {
-        return false;
+    if (phoneSync && !phoneSyncExhausted) {
+      let skipSyncRequested = false;
+      const handleSkipPhoneSync = () => {
+        skipSyncRequested = true;
+        phoneSyncExhausted = true;
+        console.log('[walinux-exporter] User skipped phone sync; continuing with harvested messages.');
+      };
+
+      // If WhatsApp view shows the error / retry button
+      if (phoneSync.isRetry || hasCouldNotLoadOlderMessages()) {
+        phoneSyncRetryCount++;
+
+        // Only skip automatically if:
+        // 1. It has retried 3 times,
+        // 2. The view shows "couldn't load older messages",
+        // 3. AND no new (old) message loaded into view at all (entriesMap.size === previousCount)
+        if (phoneSyncRetryCount >= 3 && hasCouldNotLoadOlderMessages() && entriesMap.size === previousCount) {
+          console.warn('[walinux-exporter] Retried 3 times, view shows error and no new messages loaded; concluding phone sync.');
+          phoneSyncExhausted = true;
+          continue;
+        }
+
+        // Wait 5 seconds before clicking retry, prompting user to open WhatsApp on their phone
+        showOrUpdateExportHUD({
+          title: chatTitle,
+          index: chatIndex,
+          total: totalChats,
+          statusText: `Couldn't get older messages from phone. Open WhatsApp on your phone (Retry ${phoneSyncRetryCount}/3 in 5s)...`,
+          msgCount: entriesMap.size,
+          mediaCount: 0,
+          oldestDate: oldestDateIso,
+          exportId,
+          canSkip: true,
+          skipLabel: 'Skip Phone Sync',
+          onSkip: handleSkipPhoneSync,
+        });
+
+        for (let s = 0; s < 5 && !skipSyncRequested; s++) {
+          const aborted = await window.__walinux_ipc?.isChatExportAborted?.(exportId);
+          if (aborted) break;
+          await sleep(1000);
+        }
+
+        if (skipSyncRequested) {
+          phoneSyncExhausted = true;
+          continue;
+        }
+
+        // Click retry
+        phoneSync.element.click();
+        await sleep(1500);
+      } else {
+        // Initial request button: click immediately
+        showOrUpdateExportHUD({
+          title: chatTitle,
+          index: chatIndex,
+          total: totalChats,
+          statusText: 'Requesting older messages from phone... Open WhatsApp on your phone',
+          msgCount: entriesMap.size,
+          mediaCount: 0,
+          oldestDate: oldestDateIso,
+          exportId,
+          canSkip: true,
+          skipLabel: 'Skip Phone Sync',
+          onSkip: handleSkipPhoneSync,
+        });
+
+        phoneSync.element.click();
+        await sleep(1500);
       }
-      return (
-        txt.includes('get older messages') ||
-        txt.includes('older messages from your phone') ||
-        txt.includes('older messages from phone')
-      );
-    }) as HTMLElement | undefined;
 
-    const isBtnDisabled = Boolean(
-      phoneSyncBtn && (
-        phoneSyncBtn.hasAttribute('disabled') ||
-        phoneSyncBtn.getAttribute('aria-disabled') === 'true' ||
-        phoneSyncBtn.classList.contains('disabled')
-      )
-    );
-
-    // 1. If phone sync button is available and enabled: click it once and dynamically wait
-    if (phoneSyncBtn && !isBtnDisabled && phoneSyncClickCount < 1) {
-      phoneSyncClickCount++;
-      showOrUpdateExportHUD({
-        title: chatTitle,
-        index: chatIndex,
-        total: totalChats,
-        statusText: 'Requesting older messages from phone...',
-        msgCount: entriesMap.size,
-        mediaCount: 0,
-        oldestDate: oldestDateIso,
-        exportId,
-      });
-
-      phoneSyncBtn.click();
-      await sleep(1500);
-
-      // Dynamically wait while WhatsApp is loading/syncing from phone
-      // WhatsApp might briefly flash a transient "couldn't get older messages" error for a split second before loading; accommodate it with a grace period
-      phoneSyncWaitSeconds = 0;
-      let stableCountWithoutSpinner = 0;
-
-      while (phoneSyncWaitSeconds < 75) {
-        phoneSyncWaitSeconds++;
-        const spinner = hasConversationSpinner();
+      // Wait until messages load, or error reappears, or user clicks Skip Phone Sync (no hardcoded timeout)
+      let waitElapsedSec = 0;
+      while (!phoneSyncExhausted && !skipSyncRequested) {
+        waitElapsedSec++;
+        const aborted = await window.__walinux_ipc?.isChatExportAborted?.(exportId);
+        if (aborted) break;
 
         showOrUpdateExportHUD({
           title: chatTitle,
           index: chatIndex,
           total: totalChats,
-          statusText: `Syncing older messages from phone (${phoneSyncWaitSeconds}s)... Waiting for phone.`,
+          statusText: `Waiting for phone sync (${waitElapsedSec}s)... Open WhatsApp on your phone`,
           msgCount: entriesMap.size,
           mediaCount: 0,
           oldestDate: oldestDateIso,
           exportId,
+          canSkip: true,
+          skipLabel: 'Skip Phone Sync',
+          onSkip: handleSkipPhoneSync,
         });
 
-        const aborted = await window.__walinux_ipc?.isChatExportAborted?.(exportId);
-        if (aborted) break;
-
         await sleep(1000);
-
-        // Check if messages have begun landing in memory
         harvestModels();
+
+        // Check if new messages arrived
         if (entriesMap.size > previousCount) {
-          console.log('[walinux-exporter] New messages detected during phone sync wait!');
+          const delta = entriesMap.size - previousCount;
+          console.log(`[walinux-exporter] Received ${delta} new messages from phone sync! Total: ${entriesMap.size}`);
+          previousCount = entriesMap.size;
+          consecutiveNoNewMessages = 0;
+          phoneSyncRetryCount = 0; // RESET retry count on successful load!
+          phoneSyncExhausted = false; // Reset exhausted state so next batch card is processed!
+
+          // Scroll back to top immediately so next batch card can mount
+          scrollContainer.scrollTop = 0;
+          scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+          await sleep(800);
+          harvestModels();
+          break; // Break the wait loop to evaluate next cycle!
+        }
+
+        const spinner = hasConversationSpinner();
+        const currentBtn = findPhoneSyncButton();
+
+        // If spinner finished and error reappeared, exit wait loop to handle retry evaluation
+        if (!spinner && (currentBtn?.isRetry || hasCouldNotLoadOlderMessages())) {
           break;
         }
 
-        if (!spinner && !isBtnDisabled) {
-          stableCountWithoutSpinner++;
-          // Allow at least 4 seconds without spinner and 5s total so any transient error flash settles and messages load
-          if (stableCountWithoutSpinner >= 4 && phoneSyncWaitSeconds >= 5) {
-            break;
+        // If spinner finished and button disappeared, wait 2s for DOM to settle and break
+        if (!spinner && !currentBtn && waitElapsedSec >= 3) {
+          await sleep(2000);
+          harvestModels();
+          if (entriesMap.size > previousCount) {
+            previousCount = entriesMap.size;
+            consecutiveNoNewMessages = 0;
+            phoneSyncRetryCount = 0;
+            phoneSyncExhausted = false;
           }
-        } else {
-          stableCountWithoutSpinner = 0;
+          scrollContainer.scrollTop = 0;
+          scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+          break;
         }
       }
 
-      // CRITICAL: Once WhatsApp's spinner/sync settles, wait for models to be committed to activeChat.msgs and rendered to DOM!
-      showOrUpdateExportHUD({
-        title: chatTitle,
-        index: chatIndex,
-        total: totalChats,
-        statusText: 'Phone sync completed. Loading received messages into chat...',
-        msgCount: entriesMap.size,
-        mediaCount: 0,
-        oldestDate: oldestDateIso,
-        exportId,
-      });
-      await sleep(3500);
-
-      captureLiveBlobsFromDom(liveBlobs, capturedBuffers);
-      harvestModels();
-      consecutiveNoNewMessages = 0;
-      previousCount = entriesMap.size;
+      await sleep(500);
       continue;
     }
 
-    // 2. If phone sync was already attempted and is not active
-    if (phoneSyncBtn && phoneSyncClickCount >= 1 && !hasConversationSpinner()) {
-      console.warn('[walinux-exporter] Phone sync was already completed; concluding history scroll.');
-      break;
-    }
-
-    // 3. Dynamic wait if conversation spinner is active outside button click
+    // 2. Dynamic wait if conversation spinner is active outside button click
     if (hasConversationSpinner()) {
-      phoneSyncWaitSeconds++;
       showOrUpdateExportHUD({
         title: chatTitle,
         index: chatIndex,
         total: totalChats,
-        statusText: `Loading chat history (${phoneSyncWaitSeconds}s)...`,
+        statusText: 'Loading chat history...',
         msgCount: entriesMap.size,
         mediaCount: 0,
         oldestDate: oldestDateIso,
         exportId,
       });
       await sleep(1000);
+      harvestModels();
       consecutiveNoNewMessages = 0;
       continue;
     }
 
-    phoneSyncWaitSeconds = 0;
+    await sleep(350);
+    captureLiveBlobsFromDom(liveBlobs, capturedBuffers);
+    harvestModels();
 
-    // 4. Standard scroll checking: advance or conclude
-    if (entriesMap.size === previousCount) {
+    // 3. Progress evaluation
+    if (entriesMap.size > previousCount) {
+      consecutiveNoNewMessages = 0;
+      previousCount = entriesMap.size;
+      phoneSyncRetryCount = 0;
+      phoneSyncExhausted = false;
+    } else {
       consecutiveNoNewMessages++;
-      if (consecutiveNoNewMessages === 12 || consecutiveNoNewMessages === 24) {
-        try {
-          if (typeof activeChat.loadEarlierMsgs === 'function') {
-            activeChat.loadEarlierMsgs();
-          } else if (typeof activeChat.msgs?.loadEarlierMsgs === 'function') {
-            activeChat.msgs.loadEarlierMsgs();
-          }
-        } catch {}
+
+      const currentBtn = findPhoneSyncButton();
+      // If a phone sync card is visible (or reappeared), NEVER conclude!
+      if (currentBtn && !phoneSyncExhausted) {
+        consecutiveNoNewMessages = 0;
+        continue;
       }
 
-      if (consecutiveNoNewMessages >= 28) {
+      const noEarlier = Boolean(activeChat.msgs?.msgLoadState?.noEarlierMsgs);
+      if (noEarlier && !currentBtn) {
+        console.log('[walinux-exporter] WhatsApp reports no earlier messages and no phone sync button; concluding harvest.');
+        break;
+      }
+
+      if (phoneSyncExhausted && consecutiveNoNewMessages >= 25) {
+        console.log('[walinux-exporter] Phone sync exhausted and no new messages; concluding history harvest.');
+        break;
+      }
+
+      if (consecutiveNoNewMessages >= 40) {
         console.log('[walinux-exporter] Reached top of conversation history; concluding harvest.');
         break;
       }
-    } else {
-      consecutiveNoNewMessages = 0;
-      previousCount = entriesMap.size;
     }
   }
 
@@ -1134,9 +1349,7 @@ async function downloadAndAttachMedia(
 ): Promise<void> {
   let savedCount = 0;
   const handlers = getCollection('WAWebMediaHubMessageActionHandlers');
-  const scrollContainer = document.querySelector<HTMLElement>(
-    'div[data-testid="conversation-panel-messages"], .copyable-area [tabindex="0"]'
-  );
+  const scrollContainer = getConversationScrollContainer();
 
   // Guarantee we start at the top of the chat so we can sweep downward chronologically
   if (scrollContainer) {
@@ -1150,13 +1363,20 @@ async function downloadAndAttachMedia(
     return t === 'image' || t === 'video' || t === 'audio' || t === 'document' || t === 'sticker';
   });
 
+  const oldestDateIso = entries.length > 0 && entries[0].timestamp ? entries[0].timestamp : undefined;
+  const handledStanzaIds = new Set<string>();
+
   for (let mediaIdx = 0; mediaIdx < mediaEntries.length; mediaIdx++) {
     const entry = mediaEntries[mediaIdx];
     const isAborted = await window.__walinux_ipc?.isChatExportAborted?.(exportId);
     if (isAborted) break;
 
-    const content = entry.content;
     const stanzaId = entry.id;
+    if (handledStanzaIds.has(stanzaId)) {
+      continue;
+    }
+
+    const content = entry.content;
     const serializedId = entry.serializedId || stanzaId;
 
     let ext = 'bin';
@@ -1181,23 +1401,189 @@ async function downloadAndAttachMedia(
 
     const handleSkip = () => {
       skipRequested = true;
+      handledStanzaIds.add(stanzaId);
       showOrUpdateExportHUD({
         title: chatTitle,
         index: chatIndex,
         total: totalChats,
-        statusText: `Skipping attachment: ${targetFileName || `${stanzaId}.${ext}`}...`,
+        statusText: `Skipped attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
         msgCount: entries.length,
         mediaCount: savedCount,
+        oldestDate: oldestDateIso,
         exportId,
         canSkip: false,
       });
     };
 
+    // Helper to find message DOM row or album DOM container
+    const findRowOrAlbumElement = (): { element: HTMLElement | null; isAlbum: boolean; albumDataId?: string } => {
+      // 1. Direct message row match
+      const el = document.querySelector<HTMLElement>(`[data-id*="${stanzaId}"], [data-id*="${serializedId}"]`);
+      if (el) {
+        const dataId = el.getAttribute('data-id') || '';
+        const isAlbum = dataId.includes('album-') || Boolean(el.querySelector('[data-id*="album-"]'));
+        return {
+          element: el,
+          isAlbum,
+          albumDataId: isAlbum
+            ? dataId.includes('album-')
+              ? dataId
+              : el.querySelector('[data-id*="album-"]')?.getAttribute('data-id') || ''
+            : undefined,
+        };
+      }
+
+      // 2. Check if any album element in DOM covers this stanzaId
+      const albumEls = Array.from(document.querySelectorAll<HTMLElement>('[data-id*="album-"]'));
+      for (const aEl of albumEls) {
+        const aDataId = aEl.getAttribute('data-id') || '';
+        if (aDataId.includes(stanzaId)) {
+          return { element: aEl, isAlbum: true, albumDataId: aDataId };
+        }
+      }
+
+      return { element: null, isAlbum: false };
+    };
+
+    // Locate DOM element (sweeping downward if needed)
+    let found = findRowOrAlbumElement();
+    if (!found.element && scrollContainer) {
+      let scrollAttempts = 0;
+      while (!found.element && scrollContainer && scrollAttempts < 45) {
+        const prevTop = scrollContainer.scrollTop;
+        scrollContainer.scrollTop += 550;
+        await sleep(100);
+        captureLiveBlobsFromDom(liveBlobs, capturedBuffers);
+        found = findRowOrAlbumElement();
+        if (scrollContainer.scrollTop === prevTop && scrollAttempts > 2) {
+          break;
+        }
+        scrollAttempts++;
+      }
+    }
+
+    const rowEl = found.element;
+    const isAlbum = found.isAlbum;
+
+    // A. GROUPED MEDIA (ALBUMS): Attempt context menu download + unzip first!
+    if (isAlbum && rowEl && found.albumDataId) {
+      const match = found.albumDataId.match(/album-([A-Za-z0-9]+)-([A-Za-z0-9]+)-(\d+)/);
+      const count = match ? parseInt(match[3], 10) : 0;
+      const startId = match ? match[1] : '';
+
+      // Find all album entries from mediaEntries
+      const startIdx = startId ? mediaEntries.findIndex((m) => m.id === startId) : -1;
+      const albumEntries =
+        startIdx !== -1 && count > 0
+          ? mediaEntries.slice(startIdx, startIdx + count)
+          : [mediaEntries[mediaIdx]];
+      const albumStanzaIds = albumEntries.map((ae) => ae.id);
+
+      showOrUpdateExportHUD({
+        title: chatTitle,
+        index: chatIndex,
+        total: totalChats,
+        statusText: `Downloading grouped media album (${albumEntries.length} items)...`,
+        msgCount: entries.length,
+        mediaCount: savedCount,
+        oldestDate: oldestDateIso,
+        exportId,
+        canSkip: true,
+        onSkip: () => {
+          skipRequested = true;
+          for (const ae of albumEntries) handledStanzaIds.add(ae.id);
+        },
+      });
+
+      try {
+        rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await sleep(250);
+
+        // Prepare wait for zip download in IPC BEFORE triggering menu
+        await window.__walinux_ipc?.prepareExportDownload?.('.zip', 0);
+        const dlPromise = window.__walinux_ipc?.waitForDownload?.('.zip', 35000);
+
+        // Reveal context menu: try hover & chevron or right-click
+        rowEl.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        await sleep(100);
+        const chevron = rowEl.querySelector(
+          '[data-testid="down-context"], [data-icon="down-context"], [aria-label*="Context menu"], [aria-label*="Menu"]'
+        ) as HTMLElement | null;
+
+        if (chevron) {
+          chevron.click();
+        } else {
+          const rect = rowEl.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const evt = { bubbles: true, cancelable: true, view: window, button: 2, buttons: 2, clientX: cx, clientY: cy };
+          rowEl.dispatchEvent(new MouseEvent('mousedown', evt));
+          rowEl.dispatchEvent(new MouseEvent('mouseup', evt));
+          rowEl.dispatchEvent(new MouseEvent('contextmenu', evt));
+        }
+
+        await sleep(250);
+
+        const menuItems = Array.from(document.querySelectorAll('li, div[role="button"], span'));
+        const dlAllOption = menuItems.find((el) => {
+          const txt = (el.textContent || '').trim().toLowerCase();
+          return txt === 'download all' || txt.includes('download all') || txt === 'download';
+        }) as HTMLElement | null;
+
+        if (dlAllOption) {
+          dlAllOption.click();
+        }
+
+        const dlRes = await dlPromise;
+        if (dlRes && dlRes.success && dlRes.savePath && window.__walinux_ipc?.unzipAlbumDownload) {
+          const unzipRes = await window.__walinux_ipc.unzipAlbumDownload(
+            outputDirectory,
+            filesDirName,
+            dlRes.savePath,
+            albumStanzaIds
+          );
+
+          if (unzipRes && unzipRes.success && unzipRes.mapping) {
+            let albumSavedCount = 0;
+            for (const ae of albumEntries) {
+              const mRef = unzipRes.mapping[ae.id];
+              if (mRef) {
+                (ae.content as any).mediaRef = mRef;
+                albumSavedCount++;
+                handledStanzaIds.add(ae.id);
+              }
+            }
+            savedCount += albumSavedCount;
+            onMediaSaved(savedCount);
+            showOrUpdateExportHUD({
+              title: chatTitle,
+              index: chatIndex,
+              total: totalChats,
+              statusText: `Saved grouped media album (${albumSavedCount}/${albumEntries.length} items)`,
+              msgCount: entries.length,
+              mediaCount: savedCount,
+              oldestDate: oldestDateIso,
+              exportId,
+              canSkip: false,
+            });
+            continue; // Successfully saved album!
+          }
+        }
+      } catch (err) {
+        console.warn('[walinux-exporter] Grouped media album zip download error:', err);
+      }
+    }
+
+    if (handledStanzaIds.has(stanzaId)) {
+      continue;
+    }
+
+    // B. INDIVIDUAL MEDIA DOWNLOAD (Documents, Voice Notes, Images, Videos, Stickers)
     const MAX_DOWNLOAD_ATTEMPTS = 2;
     for (let attempt = 1; attempt <= MAX_DOWNLOAD_ATTEMPTS && !entrySaved && !skipRequested; attempt++) {
       const isRetry = attempt > 1;
 
-      // 1. Check if the binary was already captured into memory during scrolling
+      // 1. Check if binary was captured into memory during scrolling
       const captured = capturedBuffers.get(stanzaId) || capturedBuffers.get(serializedId);
       if (captured && captured.buffer.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
         try {
@@ -1210,14 +1596,16 @@ async function downloadAndAttachMedia(
           (content as any).mediaRef = relativeSavedRef;
           entrySaved = true;
           savedCount++;
+          handledStanzaIds.add(stanzaId);
           onMediaSaved(savedCount);
           showOrUpdateExportHUD({
             title: chatTitle,
             index: chatIndex,
             total: totalChats,
-            statusText: `Saved attachment (${savedCount}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
+            statusText: `Saved attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
             msgCount: entries.length,
             mediaCount: savedCount,
+            oldestDate: oldestDateIso,
             exportId,
             canSkip: false,
           });
@@ -1227,7 +1615,7 @@ async function downloadAndAttachMedia(
         }
       }
 
-      // 2. Check if the file was already downloaded to disk previously
+      // 2. Check if file was already downloaded to disk previously
       if (targetFileName && window.__walinux_ipc?.findExistingDownload) {
         try {
           const existing = await window.__walinux_ipc.findExistingDownload(
@@ -1244,14 +1632,16 @@ async function downloadAndAttachMedia(
             (content as any).mediaRef = relativeSavedRef;
             entrySaved = true;
             savedCount++;
+            handledStanzaIds.add(stanzaId);
             onMediaSaved(savedCount);
             showOrUpdateExportHUD({
               title: chatTitle,
               index: chatIndex,
               total: totalChats,
-              statusText: `Saved attachment (${savedCount}/${mediaEntries.length}): ${targetFileName}`,
+              statusText: `Saved attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName}`,
               msgCount: entries.length,
               mediaCount: savedCount,
+              oldestDate: oldestDateIso,
               exportId,
               canSkip: false,
             });
@@ -1265,17 +1655,19 @@ async function downloadAndAttachMedia(
       // 3. Find WhatsApp model for this message
       let model: any = null;
       if (activeChat?.msgs) {
-        model = typeof activeChat.msgs.get === 'function'
-          ? (activeChat.msgs.get(serializedId) || activeChat.msgs.get(stanzaId))
-          : null;
+        model =
+          typeof activeChat.msgs.get === 'function'
+            ? activeChat.msgs.get(serializedId) || activeChat.msgs.get(stanzaId)
+            : null;
 
         if (!model && typeof activeChat.msgs.getModelsArray === 'function') {
           const models = activeChat.msgs.getModelsArray();
-          model = models.find((m: any) =>
-            m.id?._serialized === serializedId ||
-            m.id?._serialized === stanzaId ||
-            m.id?.id === stanzaId ||
-            m.id === serializedId
+          model = models.find(
+            (m: any) =>
+              m.id?._serialized === serializedId ||
+              m.id?._serialized === stanzaId ||
+              m.id?.id === stanzaId ||
+              m.id === serializedId
           );
         }
       }
@@ -1307,14 +1699,16 @@ async function downloadAndAttachMedia(
               (content as any).mediaRef = relativeSavedRef;
               entrySaved = true;
               savedCount++;
+              handledStanzaIds.add(stanzaId);
               onMediaSaved(savedCount);
               showOrUpdateExportHUD({
                 title: chatTitle,
                 index: chatIndex,
                 total: totalChats,
-                statusText: `Saved attachment (${savedCount}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
+                statusText: `Saved attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
                 msgCount: entries.length,
                 mediaCount: savedCount,
+                oldestDate: oldestDateIso,
                 exportId,
                 canSkip: false,
               });
@@ -1324,32 +1718,20 @@ async function downloadAndAttachMedia(
         }
       }
 
-      // 4. Locate message DOM row (search downward sequentially)
-      let rowEl = document.querySelector(`[data-id*="${stanzaId}"], [data-id*="${serializedId}"]`) as HTMLElement | null;
-      if (!rowEl && scrollContainer) {
-        let scrollAttempts = 0;
-        while (!rowEl && scrollContainer && scrollAttempts < 45) {
-          const prevTop = scrollContainer.scrollTop;
-          scrollContainer.scrollTop += 550;
-          await sleep(100);
-          captureLiveBlobsFromDom(liveBlobs, capturedBuffers);
-          rowEl = document.querySelector(`[data-id*="${stanzaId}"], [data-id*="${serializedId}"]`) as HTMLElement | null;
-          if (scrollContainer.scrollTop === prevTop && scrollAttempts > 2) {
-            break;
-          }
-          scrollAttempts++;
-        }
-      }
-
+      // 4. Check visible DOM element media blob
       if (rowEl) {
         try {
           rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          await sleep(250);
+          await sleep(200);
         } catch {}
 
-        // Check if newly visible media element has a live blob
-        const mediaEls = Array.from(rowEl.querySelectorAll('img, video, audio')) as (HTMLMediaElement | HTMLImageElement)[];
-        const validMedia = mediaEls.find((m) => m && m.src && m.src.startsWith('blob:') && !m.src.includes('data:image/gif'));
+        const mediaEls = Array.from(rowEl.querySelectorAll('img, video, audio')) as (
+          | HTMLMediaElement
+          | HTMLImageElement
+        )[];
+        const validMedia = mediaEls.find(
+          (m) => m && m.src && m.src.startsWith('blob:') && !m.src.includes('data:image/gif')
+        );
         if (validMedia?.src) {
           try {
             const resp = await fetch(validMedia.src);
@@ -1364,14 +1746,16 @@ async function downloadAndAttachMedia(
               (content as any).mediaRef = relativeSavedRef;
               entrySaved = true;
               savedCount++;
+              handledStanzaIds.add(stanzaId);
               onMediaSaved(savedCount);
               showOrUpdateExportHUD({
                 title: chatTitle,
                 index: chatIndex,
                 total: totalChats,
-                statusText: `Saved attachment (${savedCount}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
+                statusText: `Saved attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
                 msgCount: entries.length,
                 mediaCount: savedCount,
+                oldestDate: oldestDateIso,
                 exportId,
                 canSkip: false,
               });
@@ -1383,28 +1767,32 @@ async function downloadAndAttachMedia(
 
       if (skipRequested) break;
 
-      // 5. Trigger download for documents or un-fetched media (including grouped media)
+      // 5. Trigger download for documents or un-fetched media (including voice notes)
       showOrUpdateExportHUD({
         title: chatTitle,
         index: chatIndex,
         total: totalChats,
         statusText: isRetry
           ? `Retrying download [Attempt ${attempt}/${MAX_DOWNLOAD_ATTEMPTS}]: ${targetFileName || `${stanzaId}.${ext}`}...`
-          : `Downloading attachment (${savedCount + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}...`,
+          : `Downloading (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}...`,
         msgCount: entries.length,
         mediaCount: savedCount,
+        oldestDate: oldestDateIso,
         exportId,
         canSkip: true,
         onSkip: handleSkip,
       });
 
       try {
-        const expectedName = targetFileName || model?.filename || undefined;
+        const expectedName =
+          targetFileName || model?.filename || (content.type === 'audio' ? '.ogg' : undefined);
         await window.__walinux_ipc?.prepareExportDownload?.(expectedName, (content as any).fileSize);
+
+        // Attach listener BEFORE click to prevent race conditions
+        const dlPromise = window.__walinux_ipc?.waitForDownload?.(expectedName, 30000);
 
         let triggered = false;
 
-        // Try DOM download button / card
         if (rowEl) {
           const dlBtn = rowEl.querySelector(
             '[role="button"][title*="Download"], [role="button"][aria-label*="Download"], [data-testid="document-thumb"], [data-testid="audio-download"], div[title*="Download"]'
@@ -1413,24 +1801,40 @@ async function downloadAndAttachMedia(
             dlBtn.click();
             triggered = true;
           } else {
-            // Try message context menu chevron -> Download
+            // Context menu right-click fallback for voice notes & un-buttoned items
+            rowEl.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+            await sleep(80);
             const chevron = rowEl.querySelector(
-              '[data-testid="down-context"], [data-icon="down-context"], [aria-label*="Context menu"], [aria-label*="options"]'
+              '[data-testid="down-context"], [data-icon="down-context"], [aria-label*="Context menu"], [aria-label*="Menu"]'
             ) as HTMLElement | null;
+
             if (chevron) {
               chevron.click();
-              await sleep(150);
-              const menuItems = Array.from(document.querySelectorAll('li, div[role="button"], span'));
-              const downloadItem = menuItems.find((el) => el.textContent?.trim().toLowerCase() === 'download') as HTMLElement | null;
-              if (downloadItem) {
-                downloadItem.click();
-                triggered = true;
-              }
+            } else {
+              const rect = rowEl.getBoundingClientRect();
+              const cx = rect.left + rect.width / 2;
+              const cy = rect.top + rect.height / 2;
+              const evt = { bubbles: true, cancelable: true, view: window, button: 2, buttons: 2, clientX: cx, clientY: cy };
+              rowEl.dispatchEvent(new MouseEvent('mousedown', evt));
+              rowEl.dispatchEvent(new MouseEvent('mouseup', evt));
+              rowEl.dispatchEvent(new MouseEvent('contextmenu', evt));
+            }
+
+            await sleep(200);
+            const menuItems = Array.from(document.querySelectorAll('li, div[role="button"], span'));
+            const downloadItem = menuItems.find((el) => {
+              const txt = (el.textContent || '').trim().toLowerCase();
+              return txt === 'download' || txt === 'download all';
+            }) as HTMLElement | null;
+
+            if (downloadItem) {
+              downloadItem.click();
+              triggered = true;
             }
           }
         }
 
-        // Fallback: Trigger via WhatsApp Web internal API (ESSENTIAL for grouped media albums!)
+        // WhatsApp Web internal API fallback
         if (!triggered) {
           if (handlers && typeof handlers.handleMessageDownloadClick === 'function' && model) {
             try {
@@ -1446,10 +1850,9 @@ async function downloadAndAttachMedia(
           }
         }
 
-        // Dynamic sequential wait: up to 30 seconds per attempt
-        const maxWaitSec = 30;
+        // Wait loop: dynamic checks
+        const maxWaitSec = 25;
         let waitElapsed = 0;
-        const dlPromise = window.__walinux_ipc?.waitForDownload?.(expectedName, maxWaitSec * 1000);
 
         while (waitElapsed < maxWaitSec && !skipRequested && !entrySaved) {
           waitElapsed++;
@@ -1457,20 +1860,22 @@ async function downloadAndAttachMedia(
             title: chatTitle,
             index: chatIndex,
             total: totalChats,
-            statusText: `Downloading (${savedCount + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`} (${waitElapsed}s)...`,
+            statusText: `Downloading (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`} (${waitElapsed}s)...`,
             msgCount: entries.length,
             mediaCount: savedCount,
+            oldestDate: oldestDateIso,
             exportId,
             canSkip: true,
             onSkip: handleSkip,
           });
 
-          // Check if model.mediaBlob became available while waiting
+          // 1. Check if model decrypted blob became available
           if (model) {
             try {
-              const blobUrl = typeof model.mediaData?.mediaBlob?.url === 'function'
-                ? model.mediaData.mediaBlob.url()
-                : (model.mediaData?.staticUrl || null);
+              const blobUrl =
+                typeof model.mediaData?.mediaBlob?.url === 'function'
+                  ? model.mediaData.mediaBlob.url()
+                  : model.mediaData?.staticUrl || null;
               if (blobUrl) {
                 const resp = await fetch(blobUrl);
                 const arrayBuf = await resp.arrayBuffer();
@@ -1484,6 +1889,7 @@ async function downloadAndAttachMedia(
                   (content as any).mediaRef = relativeSavedRef;
                   entrySaved = true;
                   savedCount++;
+                  handledStanzaIds.add(stanzaId);
                   onMediaSaved(savedCount);
                   break;
                 }
@@ -1491,7 +1897,7 @@ async function downloadAndAttachMedia(
             } catch {}
           }
 
-          // Check if file landed on disk
+          // 2. Check if file landed on disk (now checks active records immediately)
           if (targetFileName && window.__walinux_ipc?.findExistingDownload) {
             try {
               const existing = await window.__walinux_ipc.findExistingDownload(
@@ -1508,19 +1914,25 @@ async function downloadAndAttachMedia(
                 (content as any).mediaRef = relativeSavedRef;
                 entrySaved = true;
                 savedCount++;
+                handledStanzaIds.add(stanzaId);
                 onMediaSaved(savedCount);
                 break;
               }
             } catch {}
           }
 
-          // Check if Chromium download finished
+          // 3. Check if Chromium download finished
           const raceResult = await Promise.race([
             dlPromise?.then((res) => ({ settled: true, res })).catch(() => ({ settled: false, res: null })),
-            sleep(1000).then(() => ({ settled: false, res: null }))
+            sleep(1000).then(() => ({ settled: false, res: null })),
           ]);
 
-          if (raceResult?.settled && raceResult.res?.success && raceResult.res.savePath && window.__walinux_ipc?.copyFileToExport) {
+          if (
+            raceResult?.settled &&
+            raceResult.res?.success &&
+            raceResult.res.savePath &&
+            window.__walinux_ipc?.copyFileToExport
+          ) {
             const relativeSavedRef = await window.__walinux_ipc.copyFileToExport(
               outputDirectory,
               filesDirName,
@@ -1530,6 +1942,7 @@ async function downloadAndAttachMedia(
             (content as any).mediaRef = relativeSavedRef;
             entrySaved = true;
             savedCount++;
+            handledStanzaIds.add(stanzaId);
             onMediaSaved(savedCount);
             break;
           }
@@ -1540,9 +1953,10 @@ async function downloadAndAttachMedia(
             title: chatTitle,
             index: chatIndex,
             total: totalChats,
-            statusText: `Saved attachment (${savedCount}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
+            statusText: `Saved attachment (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || `${stanzaId}.${ext}`}`,
             msgCount: entries.length,
             mediaCount: savedCount,
+            oldestDate: oldestDateIso,
             exportId,
             canSkip: false,
           });
@@ -1553,12 +1967,13 @@ async function downloadAndAttachMedia(
       }
 
       if (!entrySaved && !skipRequested && attempt < MAX_DOWNLOAD_ATTEMPTS) {
-        await sleep(1500);
+        await sleep(1000);
       }
     }
 
-    // 6. If full download failed after retries (or was skipped), fallback to thumbnail if available
+    // 6. Thumbnail fallback
     if (!entrySaved) {
+      handledStanzaIds.add(stanzaId);
       if ((content as any).thumbnailDataUri && window.__walinux_ipc?.saveChatMedia) {
         try {
           const thumbSubPath = `media/${stanzaId}.jpeg`;
