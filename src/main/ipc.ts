@@ -1207,6 +1207,8 @@ export function registerIpcHandlers() {
       }
       await fs.promises.copyFile(sourcePath, fullDest);
 
+      downloadManager.markExportPathConsumed(sourcePath);
+
       // Clean up temporary download from the downloads folder if it was downloaded specifically for this export
       if (downloadManager.isExportDownloadedPath(sourcePath)) {
         try {
