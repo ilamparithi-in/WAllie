@@ -18,14 +18,6 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
   const [showRefresh, setShowRefresh] = useState<boolean>(true);
   const [showNotifHistory, setShowNotifHistory] = useState<boolean>(true);
   const [closeToTray, setCloseToTray] = useState<boolean>(true);
-  const [activeExport, setActiveExport] = useState<{
-    exportId: string;
-    chatTitle: string;
-    currentChatIndex: number;
-    totalChatsCount: number;
-    messagesExported: number;
-    status: string;
-  } | null>(null);
 
   // Renaming state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -117,25 +109,6 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
       }
     });
 
-    const unsubscribeExport = window.electronAPI.onChatExportProgress?.((progress) => {
-      if (progress.status === 'completed' || progress.status === 'aborted' || progress.status === 'failed') {
-        setActiveExport(null);
-      } else {
-        setActiveExport({
-          exportId: progress.exportId,
-          chatTitle: progress.chatTitle,
-          currentChatIndex: progress.currentChatIndex,
-          totalChatsCount: progress.totalChatsCount,
-          messagesExported: progress.messagesExported,
-          status: progress.status,
-        });
-      }
-    });
-
-    const unsubscribeExportEnded = window.electronAPI.onChatExportEnded?.(() => {
-      setActiveExport(null);
-    });
-
     return () => {
       unsubscribeAccount();
       unsubscribeUnread();
@@ -143,8 +116,6 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
       unsubscribeZoom();
       unsubscribeTriggerRename();
       unsubscribeGlobalSettings();
-      unsubscribeExport?.();
-      unsubscribeExportEnded?.();
       if (flashTimeout) clearTimeout(flashTimeout);
     };
   }, []);
@@ -376,34 +347,6 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
                 className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none cursor-pointer"
               >
                 <Bell className="w-3.5 h-3.5" />
-              </button>
-            )}
-
-            {/* Stop Export Button (Visible only while an export is actively running) */}
-            {activeExport && (
-              <button
-                onClick={async (e) => {
-                  e.currentTarget.blur();
-                  await window.electronAPI?.stopChatExport?.(activeExport.exportId);
-                  setActiveExport(null);
-                }}
-                onMouseDown={(e) => e.preventDefault()}
-                tabIndex={-1}
-                title="Stop Export: Halt extraction and save data gathered so far"
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                className="flex items-center gap-1.5 px-2 h-[22px] rounded bg-[#ea4335]/20 hover:bg-[#ea4335]/35 border border-[#ea4335]/50 text-[#ea4335] hover:text-white text-[11px] font-bold transition-all shadow-sm focus:outline-none cursor-pointer mr-1 animate-in fade-in"
-              >
-                <span>
-                  Stop Export
-                  {activeExport.totalChatsCount > 1
-                    ? ` (${activeExport.currentChatIndex + 1}/${activeExport.totalChatsCount})`
-                    : ''}
-                </span>
-                {activeExport.messagesExported > 0 && (
-                  <span className="text-[10px] opacity-80 font-normal">
-                    • {activeExport.messagesExported.toLocaleString()}
-                  </span>
-                )}
               </button>
             )}
 

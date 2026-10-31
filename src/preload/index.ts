@@ -1140,6 +1140,9 @@ function setupWhatsAppIntegration() {
     waitForDownload: (expectedFilename?: string, timeoutMs?: number) => {
       return ipcRenderer.invoke('chat-export:wait-for-download', expectedFilename, timeoutMs);
     },
+    unzipAlbumDownload: (outputDirectory: string, filesDirName: string, zipPath: string, stanzaIds: string[]) => {
+      return ipcRenderer.invoke('chat-export:unzip-album-download', outputDirectory, filesDirName, zipPath, stanzaIds);
+    },
   });
 
   ipcRenderer.on('notification:clicked-reply', (_event: any, data: any) => {

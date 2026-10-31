@@ -20,6 +20,7 @@ export interface WalinuxIpcBridge {
   copyFileToExport?: (outputDirectory: string, filesDirName: string, subPath: string, sourcePath: string) => Promise<string>;
   prepareExportDownload?: (filename?: string, size?: number) => Promise<boolean>;
   waitForDownload?: (expectedFilename?: string, timeoutMs?: number) => Promise<{ success: boolean; savePath?: string; filename?: string }>;
+  unzipAlbumDownload?: (outputDirectory: string, filesDirName: string, zipPath: string, stanzaIds: string[]) => Promise<{ success: boolean; count: number; mapping: Record<string, string> }>;
 }
 
 declare global {
