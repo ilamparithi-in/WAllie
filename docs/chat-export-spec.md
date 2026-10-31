@@ -87,6 +87,7 @@ export interface SystemNotificationEntry {
     | "participant_left"
     | "disappearing_timer_change"
     | "call_log"
+    | "group_description_change"
     | "generic";
   text: string;
 }

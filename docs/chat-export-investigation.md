@@ -139,6 +139,10 @@ WhatsApp Web implements an aggressive virtualizer inside `div[data-testid="conve
 - **Date Dividers**: Centered pills `<div class="x141l45o ..."><span>Yesterday</span></div>`.
 - **System Notices**: `<div data-testid="msg-notification-container">` with stanza ID.
 - **Group Lifecycle Events (`gp2`)**:
+  - Description Changed: `type: "gp2"`, `subtype: "description"`:
+    - DOM: `<div data-testid="msg-notification-container">` containing `"You changed the group description. View"` or `"<User> changed the group description. View"`.
+    - CTA Action: `<span role="button">View</span>` linking to the group info description sheet.
+    - Export Mapping: Stored as `SystemNotificationEntry` with `subtype: "group_description_change"`.
   - Leave: `type: "gp2"`, `subtype: "leave"` renders `"~<User> left"`.
   - Add / Join: `type: "gp2"`, `subtype: "add"` renders `"<Admin> added <User 1> & <User 2>. View members"`.
   - Community Linked Join: `type: "gp2"`, `subtype: "linked_group_join"`:
