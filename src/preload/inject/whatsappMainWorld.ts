@@ -3,6 +3,7 @@ import { activeNotificationCallbacks, initCustomNotification, initAnchorDownload
 import { initChatNavigation } from './chatNavigation';
 import { initDragDropStabilizer } from './dragDrop';
 import { initStandaloneLinkPreview } from './linkPreview';
+import { initChatExporter } from './chatExporter';
 
 (() => {
   initCustomNotification();
@@ -10,4 +11,5 @@ import { initStandaloneLinkPreview } from './linkPreview';
   initChatNavigation(activeNotificationCallbacks);
   initDragDropStabilizer();
   initStandaloneLinkPreview();
+  initChatExporter();
 })();

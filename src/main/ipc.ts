@@ -1191,4 +1191,64 @@ export function registerIpcHandlers() {
       return await chatExporterManager.finalizeExport(outputDirectory, exportData, includeViewer);
     }
   );
+
+  ipcMain.handle('chat-export:get-chats', async () => {
+    const activeContents = getActiveWebContents();
+    if (!activeContents || activeContents.isDestroyed()) return [];
+    try {
+      return await activeContents.executeJavaScript(`
+        window.__wallie_chat_exporter ? window.__wallie_chat_exporter.getAvailableChats() : []
+      `);
+    } catch (err) {
+      console.error('[chat-export] Failed to get chats:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('chat-export:get-active-chat', async () => {
+    const activeContents = getActiveWebContents();
+    if (!activeContents || activeContents.isDestroyed()) return null;
+    try {
+      return await activeContents.executeJavaScript(`
+        window.__wallie_chat_exporter ? window.__wallie_chat_exporter.getActiveChatInfo() : null
+      `);
+    } catch (err) {
+      return null;
+    }
+  });
+
+  ipcMain.handle('chat-export:start', async (_event, options: ChatExportOptions) => {
+    const activeContents = getActiveWebContents();
+    if (!activeContents || activeContents.isDestroyed()) {
+      return { success: false, error: 'WhatsApp view not loaded' };
+    }
+    const exportId = `export_${Date.now()}`;
+    activeContents.executeJavaScript(`
+      window.postMessage({
+        type: 'WALLIE_START_SINGLE_EXPORT',
+        exportId: ${JSON.stringify(exportId)},
+        options: ${JSON.stringify(options)}
+      }, '*');
+    `);
+    return { success: true, exportId };
+  });
+
+  ipcMain.handle('chat-export:start-multi', async (_event, request: any) => {
+    const activeContents = getActiveWebContents();
+    if (!activeContents || activeContents.isDestroyed()) {
+      return { success: false, error: 'WhatsApp view not loaded' };
+    }
+    const exportId = `multi_export_${Date.now()}`;
+    activeContents.executeJavaScript(`
+      window.postMessage({
+        type: 'WALLIE_START_MULTI_EXPORT',
+        exportId: ${JSON.stringify(exportId)},
+        chats: ${JSON.stringify(request.chats)},
+        outputDirectory: ${JSON.stringify(request.outputDirectory)},
+        includeViewer: ${JSON.stringify(request.includeViewer)},
+        timeframeBoundary: ${JSON.stringify(request.timeframeBoundary)}
+      }, '*');
+    `);
+    return { success: true, exportId };
+  });
 }
