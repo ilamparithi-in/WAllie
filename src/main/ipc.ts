@@ -14,6 +14,8 @@ import { resolveGoogleFont, resolveGoogleFontUrl } from '../shared/fonts';
 import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedStatus, getAccountForWebContents, showAppToast } from './utils';
 import { downloadManager } from './downloads';
 import { fetchLinkPreview, clearLinkPreviewCache, getLinkPreviewCacheSize } from './linkPreview';
+import { chatExporterManager } from './chatExporter';
+import type { WhatsAppChatExport, ChatExportOptions } from '../shared/chatExportTypes';
 
 const execAsync = promisify(exec);
 
@@ -1130,4 +1132,63 @@ export function registerIpcHandlers() {
     }
     event.returnValue = true;
   });
+
+  // Chat Exporter IPC Handlers
+  ipcMain.handle('chat-export:prompt-directory', async (_event, defaultName?: string) => {
+    return await chatExporterManager.promptExportDirectory(defaultName);
+  });
+
+  ipcMain.handle('chat-export:prompt-open-file', async () => {
+    return await chatExporterManager.promptOpenExportFile();
+  });
+
+  ipcMain.handle('chat-export:open-viewer', async (_event, filePath: string) => {
+    return await chatExporterManager.openExportViewerWindow(filePath);
+  });
+
+  ipcMain.handle('chat-export:stop', (_event, exportId?: string) => {
+    return chatExporterManager.stopExport(exportId);
+  });
+
+  ipcMain.handle('chat-export:is-aborted', (_event, exportId: string) => {
+    return chatExporterManager.isExportAborted(exportId);
+  });
+
+  ipcMain.handle(
+    'chat-export:register-job',
+    (_event, exportId: string, options: ChatExportOptions, totalChats: number, currentChatIndex: number) => {
+      chatExporterManager.registerJob(exportId, options, totalChats, currentChatIndex);
+      return true;
+    }
+  );
+
+  ipcMain.handle('chat-export:update-progress', (_event, exportId: string, partial: any) => {
+    chatExporterManager.updateProgress(exportId, partial);
+    return true;
+  });
+
+  ipcMain.handle('chat-export:complete-job', (_event, exportId: string) => {
+    chatExporterManager.completeJob(exportId);
+    return true;
+  });
+
+  ipcMain.handle(
+    'chat-export:save-media',
+    async (
+      _event,
+      outputDirectory: string,
+      filesDirName: string,
+      subPath: string,
+      data: string | Buffer
+    ) => {
+      return await chatExporterManager.saveMediaFile(outputDirectory, filesDirName, subPath, data);
+    }
+  );
+
+  ipcMain.handle(
+    'chat-export:finalize',
+    async (_event, outputDirectory: string, exportData: WhatsAppChatExport, includeViewer: boolean) => {
+      return await chatExporterManager.finalizeExport(outputDirectory, exportData, includeViewer);
+    }
+  );
 }

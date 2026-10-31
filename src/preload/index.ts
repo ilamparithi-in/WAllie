@@ -1,11 +1,12 @@
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
 import type { ExtensionInfo, Account as AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GroupInviteDetails, WhatsAppChatExport, ChatMetadata, TimelineEntry, MessageEntry, SystemNotificationEntry, DateDividerEntry, NativePromptOptions, NativePromptResult, NativeConfirmOptions } from '../shared/types';
+import type { ChatExportProgress, ChatExportOptions, ChatExportResult } from '../shared/chatExportTypes';
 import type { GoogleFontResolution } from '../shared/fonts';
 
 // Inlined at build time by scripts/build-preload.cjs from src/preload/inject/whatsappMainWorld.ts
 const MAIN_WORLD_SCRIPT = '__MAIN_WORLD_SCRIPT__';
 
-export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GoogleFontResolution, GroupInviteDetails, WhatsAppChatExport, ChatMetadata, TimelineEntry, MessageEntry, SystemNotificationEntry, DateDividerEntry, NativePromptOptions, NativePromptResult, NativeConfirmOptions };
+export type { ExtensionInfo, AccountInfo, GlobalSettings, HistoricalNotification, DownloadRecord, FileSecondClickAction, AppVersionInfo, AccountSettings, SystemFontInfo, GoogleFontResolution, GroupInviteDetails, WhatsAppChatExport, ChatMetadata, TimelineEntry, MessageEntry, SystemNotificationEntry, DateDividerEntry, NativePromptOptions, NativePromptResult, NativeConfirmOptions, ChatExportProgress, ChatExportOptions, ChatExportResult };
 
 export interface ElectronAPI {
   // Window controls
@@ -119,6 +120,14 @@ export interface ElectronAPI {
   onSandboxUpdate: (callback: (data: any) => void) => () => void;
   clearLinkPreviewCache: () => Promise<{ clearedCount: number }>;
   getLinkPreviewCacheSize: () => Promise<number>;
+
+  // Chat Exporter Controls
+  promptExportDirectory: (defaultName?: string) => Promise<string | null>;
+  promptOpenExportFile: () => Promise<string | null>;
+  openExportViewer: (filePath: string) => Promise<void>;
+  stopChatExport: (exportId?: string) => Promise<boolean>;
+  onChatExportProgress: (callback: (progress: ChatExportProgress) => void) => () => void;
+  onChatExportEnded: (callback: (exportId: string) => void) => () => void;
 }
 
 const api: ElectronAPI = {
@@ -303,6 +312,21 @@ const api: ElectronAPI = {
   },
   clearLinkPreviewCache: () => ipcRenderer.invoke('link-preview:clear-cache'),
   getLinkPreviewCacheSize: () => ipcRenderer.invoke('link-preview:get-cache-size'),
+
+  promptExportDirectory: (defaultName) => ipcRenderer.invoke('chat-export:prompt-directory', defaultName),
+  promptOpenExportFile: () => ipcRenderer.invoke('chat-export:prompt-open-file'),
+  openExportViewer: (filePath) => ipcRenderer.invoke('chat-export:open-viewer', filePath),
+  stopChatExport: (exportId) => ipcRenderer.invoke('chat-export:stop', exportId),
+  onChatExportProgress: (callback) => {
+    const subscription = (_event: unknown, progress: ChatExportProgress) => callback(progress);
+    ipcRenderer.on('chat-export:progress', subscription);
+    return () => ipcRenderer.removeListener('chat-export:progress', subscription);
+  },
+  onChatExportEnded: (callback) => {
+    const subscription = (_event: unknown, exportId: string) => callback(exportId);
+    ipcRenderer.on('chat-export:ended', subscription);
+    return () => ipcRenderer.removeListener('chat-export:ended', subscription);
+  },
 };
 
 // Defined inline here because build:preload cleans dist/preload/shared.
@@ -351,7 +375,7 @@ function setupCallDetection() {
       try {
         ipcRenderer.sendSync('call:status-sync', { status });
         return;
-      } catch (err) {}
+      } catch (err) { }
     }
     ipcRenderer.send('call:status-changed', { status });
   }
@@ -406,7 +430,7 @@ function setupCallDetection() {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return null;
   }
@@ -468,7 +492,7 @@ function setupCallDetection() {
         if (window.location.pathname.includes('/call') && constraints && (constraints.audio || constraints.video)) {
           reportCallStatus('answered');
         }
-      } catch (e) {}
+      } catch (e) { }
       return origGUM(constraints);
     };
   }
@@ -595,23 +619,23 @@ function showGuestToast(msg: string, url?: string) {
 
   const iconSvg = isCancelled
     ? createSvgElement({
-        tag: 'svg',
-        attrs: { width: '16', height: '16', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' },
-        children: [
-          { tag: 'circle', attrs: { cx: '12', cy: '12', r: '10' } },
-          { tag: 'line', attrs: { x1: '15', y1: '9', x2: '9', y2: '15' } },
-          { tag: 'line', attrs: { x1: '9', y1: '9', x2: '15', y2: '15' } },
-        ],
-      })
+      tag: 'svg',
+      attrs: { width: '16', height: '16', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' },
+      children: [
+        { tag: 'circle', attrs: { cx: '12', cy: '12', r: '10' } },
+        { tag: 'line', attrs: { x1: '15', y1: '9', x2: '9', y2: '15' } },
+        { tag: 'line', attrs: { x1: '9', y1: '9', x2: '15', y2: '15' } },
+      ],
+    })
     : createSvgElement({
-        tag: 'svg',
-        attrs: { width: '16', height: '16', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' },
-        children: [
-          { tag: 'path', attrs: { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' } },
-          { tag: 'polyline', attrs: { points: '15 3 21 3 21 9' } },
-          { tag: 'line', attrs: { x1: '10', y1: '14', x2: '21', y2: '3' } },
-        ],
-      });
+      tag: 'svg',
+      attrs: { width: '16', height: '16', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' },
+      children: [
+        { tag: 'path', attrs: { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' } },
+        { tag: 'polyline', attrs: { points: '15 3 21 3 21 9' } },
+        { tag: 'line', attrs: { x1: '10', y1: '14', x2: '21', y2: '3' } },
+      ],
+    });
   iconBox.appendChild(iconSvg);
   toast.appendChild(iconBox);
 
@@ -1010,7 +1034,7 @@ function setupWhatsAppIntegration() {
   const applyVisualZoomSettings = () => {
     try {
       webFrame.setVisualZoomLevelLimits(1, 5);
-    } catch (e) {}
+    } catch (e) { }
   };
 
   applyVisualZoomSettings();
@@ -1060,6 +1084,24 @@ function setupWhatsAppIntegration() {
     },
     fetchLinkPreview: (url: string) => {
       return ipcRenderer.invoke('link-preview:fetch', url);
+    },
+    saveChatMedia: (outputDirectory: string, filesDirName: string, subPath: string, data: string | ArrayBuffer) => {
+      return ipcRenderer.invoke('chat-export:save-media', outputDirectory, filesDirName, subPath, data);
+    },
+    finalizeChatExport: (outputDirectory: string, exportData: any, includeViewer: boolean) => {
+      return ipcRenderer.invoke('chat-export:finalize', outputDirectory, exportData, includeViewer);
+    },
+    registerChatExportJob: (exportId: string, options: any, totalChats: number, currentChatIndex: number) => {
+      return ipcRenderer.invoke('chat-export:register-job', exportId, options, totalChats, currentChatIndex);
+    },
+    updateChatExportProgress: (exportId: string, partial: any) => {
+      return ipcRenderer.invoke('chat-export:update-progress', exportId, partial);
+    },
+    completeChatExportJob: (exportId: string) => {
+      return ipcRenderer.invoke('chat-export:complete-job', exportId);
+    },
+    isChatExportAborted: (exportId: string) => {
+      return ipcRenderer.invoke('chat-export:is-aborted', exportId);
     },
   });
 
