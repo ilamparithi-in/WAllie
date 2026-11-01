@@ -131,6 +131,7 @@ export interface QuotedReplyContext {
 
 export interface MessageReaction {
   emoji: string;
+  count?: number;
   senderJid?: string;
   senderName?: string;
   timestamp?: string;
