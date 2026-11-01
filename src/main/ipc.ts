@@ -129,7 +129,7 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('account:get-all', () => getAccountsWithLoadedStatus());
   ipcMain.handle('account:get-active-id', () => state.activeAccountId);
-  
+
   ipcMain.on('account:switch', async (_event, id: string) => {
     await switchActiveAccount(id);
   });
@@ -268,17 +268,17 @@ export function registerIpcHandlers() {
       { type: 'separator' },
       isLoaded
         ? {
-            label: 'Unload Account',
-            click: async () => {
-              await unloadAccountLogic(accountId);
-            },
-          }
-        : {
-            label: 'Load Account',
-            click: async () => {
-              await loadAccountLogic(accountId);
-            },
+          label: 'Unload Account',
+          click: async () => {
+            await unloadAccountLogic(accountId);
           },
+        }
+        : {
+          label: 'Load Account',
+          click: async () => {
+            await loadAccountLogic(accountId);
+          },
+        },
       { type: 'separator' },
       {
         label: 'Remove Account',
@@ -436,10 +436,10 @@ export function registerIpcHandlers() {
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       try {
         state.mainWindow.webContents.setZoomFactor(newBaseScale);
-      } catch (e) {}
+      } catch (e) { }
       state.mainWindow.webContents.send('settings:global-changed', state.globalSettings);
     }
-    
+
     if (scaleChanged) {
       for (const view of state.accountViews.values()) {
         if (view && !view.webContents.isDestroyed()) {
@@ -447,7 +447,7 @@ export function registerIpcHandlers() {
             const currentFactor = view.webContents.getZoomFactor();
             const relativeZoom = currentFactor / (oldScale / 100);
             view.webContents.setZoomFactor(newBaseScale * relativeZoom);
-          } catch (e) {}
+          } catch (e) { }
         }
       }
       updateActiveViewBounds();
@@ -1018,7 +1018,7 @@ export function registerIpcHandlers() {
 
       const targetUrl = `https://web.whatsapp.com${waPath}`;
       console.log(`Resolved target URL for WhatsApp Web: ${targetUrl}`);
-      
+
       const targetView = state.accountViews.get(accountId);
       if (!targetView) {
         return { success: false, error: 'Target account view not found' };
@@ -1079,6 +1079,9 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.handle('downloads:file-card-clicked', async (_event, payload: string | { filename: string; size?: number; hash?: string }) => {
+    if (downloadManager.getIsExportActive()) {
+      return { handled: false, isExisting: false };
+    }
     const filename = typeof payload === 'string' ? payload : payload.filename;
     const opts = typeof payload === 'object' ? { size: payload.size, hash: payload.hash } : undefined;
     return downloadManager.handleFileCardClick(filename, opts);
@@ -1190,7 +1193,10 @@ export function registerIpcHandlers() {
   );
 
   ipcMain.handle('chat-export:find-existing-file', async (_event, filename: string, size?: number) => {
-    const existing = downloadManager.findExistingDownloadedFile(filename, { size });
+    let existing = downloadManager.findExistingDownloadedFile(filename, { size });
+    if (!existing && size !== undefined) {
+      existing = downloadManager.findExistingDownloadedFile(filename);
+    }
     if (existing && existing.savePath && fs.existsSync(existing.savePath)) {
       return { found: true, path: existing.savePath };
     }
@@ -1228,8 +1234,29 @@ export function registerIpcHandlers() {
     return true;
   });
 
+  ipcMain.handle('chat-export:dispatch-mouse', async (_event, type: 'click' | 'contextmenu', x: number, y: number) => {
+    try {
+      const activeView = state.accountViews.get(state.activeAccountId);
+      const activeWebContents = activeView?.webContents;
+      if (!activeWebContents) return false;
+      const cx = Math.floor(x);
+      const cy = Math.floor(y);
+      if (type === 'contextmenu') {
+        activeWebContents.sendInputEvent({ type: 'mouseDown', x: cx, y: cy, button: 'right', clickCount: 1 });
+        activeWebContents.sendInputEvent({ type: 'mouseUp', x: cx, y: cy, button: 'right', clickCount: 1 });
+      } else {
+        activeWebContents.sendInputEvent({ type: 'mouseDown', x: cx, y: cy, button: 'left', clickCount: 1 });
+        activeWebContents.sendInputEvent({ type: 'mouseUp', x: cx, y: cy, button: 'left', clickCount: 1 });
+      }
+      return true;
+    } catch (err) {
+      console.warn('[chat-export] dispatch-mouse error:', err);
+      return false;
+    }
+  });
+
   ipcMain.handle('chat-export:wait-for-download', async (_event, expectedFilename?: string, timeoutMs?: number) => {
-    const rec = await downloadManager.waitForRecentDownload(expectedFilename, timeoutMs || 35000);
+    const rec = await downloadManager.waitForRecentDownload(expectedFilename, timeoutMs || 8000);
     return { success: !!rec, savePath: rec?.savePath, filename: rec?.filename };
   });
 

@@ -1137,6 +1137,9 @@ function setupWhatsAppIntegration() {
     prepareExportDownload: (filename?: string, size?: number) => {
       return ipcRenderer.invoke('chat-export:prepare-export-download', filename, size);
     },
+    dispatchMouse: (type: 'click' | 'contextmenu', x: number, y: number) => {
+      return ipcRenderer.invoke('chat-export:dispatch-mouse', type, x, y);
+    },
     waitForDownload: (expectedFilename?: string, timeoutMs?: number) => {
       return ipcRenderer.invoke('chat-export:wait-for-download', expectedFilename, timeoutMs);
     },

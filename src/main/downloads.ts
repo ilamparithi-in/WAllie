@@ -304,7 +304,7 @@ export class DownloadManager extends EventEmitter {
           if (statSize <= LARGE_FILE_THRESHOLD) {
             statHash = crypto.createHash('sha256').update(fs.readFileSync(defaultPath)).digest('hex');
           }
-        } catch {}
+        } catch { }
         return {
           id: Date.now(),
           filename: targetName.trim(),
@@ -328,7 +328,7 @@ export class DownloadManager extends EventEmitter {
             if (statSize <= LARGE_FILE_THRESHOLD) {
               statHash = crypto.createHash('sha256').update(fs.readFileSync(manualPath)).digest('hex');
             }
-          } catch {}
+          } catch { }
           return {
             id: Date.now(),
             filename: targetName.trim(),
@@ -473,7 +473,7 @@ export class DownloadManager extends EventEmitter {
     };
 
     // Check if file exists matching name and hash/size
-    const existing = this.findExistingDownloadedFile(fileName, matchOpts) || 
+    const existing = this.findExistingDownloadedFile(fileName, matchOpts) ||
       (intentFilename ? this.findExistingDownloadedFile(intentFilename, matchOpts) : undefined);
 
     // If file already exists and matches on disk, handle as second click (open / showInFolder)
@@ -708,14 +708,14 @@ export class DownloadManager extends EventEmitter {
    */
   public waitForRecentDownload(
     expectedFilename?: string,
-    timeoutMs: number = 25000
+    timeoutMs: number = 8000
   ): Promise<DownloadRecord | null> {
     return new Promise((resolve) => {
       let timer: NodeJS.Timeout | null = null;
       const cleanExpected = expectedFilename ? expectedFilename.trim().toLowerCase() : '';
       const expectedBase = cleanExpected ? cleanExpected.split('.')[0] : '';
 
-      // Immediately check if a matching download completed recently (only when an expected name is provided and file exists on disk)
+      // Immediately check if a matching download completed recently (only when file exists on disk and is unconsumed)
       if (cleanExpected) {
         const now = Date.now();
         const recentMatch = this.history.find((rec) => {
@@ -753,52 +753,53 @@ export class DownloadManager extends EventEmitter {
           const recBase = (path.parse(rec.savePath).name || '').toLowerCase();
 
           const isZipMatch = (cleanExpected.endsWith('.zip') || cleanExpected === 'zip') && (baseName.endsWith('.zip') || recFile.endsWith('.zip'));
-          if (
+          const matchesName =
             isZipMatch ||
             baseName === cleanExpected ||
             recFile === cleanExpected ||
             baseName.includes(cleanExpected) ||
             cleanExpected.includes(baseName) ||
-            (expectedBase && (recBase.includes(expectedBase) || expectedBase.includes(recBase)))
-          ) {
+            (expectedBase && (recBase.includes(expectedBase) || expectedBase.includes(recBase)));
+
+            if (matchesName) {
+              this.consumedExportPaths.add(resolvedPath);
+              cleanup();
+              resolve(rec);
+              return;
+            }
+          } else {
             this.consumedExportPaths.add(resolvedPath);
             cleanup();
             resolve(rec);
             return;
           }
-        } else {
-          this.consumedExportPaths.add(resolvedPath);
-          cleanup();
-          resolve(rec);
-          return;
-        }
-      };
+        };
 
-      const onFailed = (info: any) => {
-        if (cleanExpected) {
-          const file = (info.filename || '').toLowerCase();
-          if (file === cleanExpected || file.includes(cleanExpected)) {
-            cleanup();
-            resolve(null);
-            return;
+        const onFailed = (info: any) => {
+          if (cleanExpected) {
+            const file = (info.filename || '').toLowerCase();
+            if (file === cleanExpected || file.includes(cleanExpected)) {
+              cleanup();
+              resolve(null);
+              return;
+            }
           }
-        }
-      };
+        };
 
-      const cleanup = () => {
-        if (timer) clearTimeout(timer);
-        this.removeListener('download-completed', onComplete);
-        this.removeListener('download-failed', onFailed);
-      };
+        const cleanup = () => {
+          if (timer) clearTimeout(timer);
+          this.removeListener('download-completed', onComplete);
+          this.removeListener('download-failed', onFailed);
+        };
 
-      timer = setTimeout(() => {
-        cleanup();
-        resolve(null);
-      }, timeoutMs);
+        timer = setTimeout(() => {
+          cleanup();
+          resolve(null);
+        }, timeoutMs);
 
-      this.on('download-completed', onComplete);
-      this.on('download-failed', onFailed);
-    });
+        this.on('download-completed', onComplete);
+        this.on('download-failed', onFailed);
+      });
   }
 }
 

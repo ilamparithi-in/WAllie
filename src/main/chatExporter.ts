@@ -323,7 +323,7 @@ export class ChatExporterManager {
           viewerWin.on('closed', () => {
             try {
               if (fs.existsSync(tempHtmlPath)) fs.unlinkSync(tempHtmlPath);
-            } catch {}
+            } catch { }
           });
         } catch (err) {
           console.error('Failed to parse chat export JSON:', err);
@@ -927,7 +927,7 @@ export class ChatExporterManager {
             if (item.reactions && item.reactions.length > 0) {
               const pill = document.createElement("div");
               pill.className = "reaction-pill";
-              pill.textContent = item.reactions.map(r => r.emoji).join(" ");
+              pill.textContent = item.reactions.map(r => r.emoji + (r.count && r.count > 1 ? ' ' + r.count : '')).join(' ');
               bubble.appendChild(pill);
             }
 

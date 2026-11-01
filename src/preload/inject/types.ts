@@ -19,6 +19,7 @@ export interface WalinuxIpcBridge {
   findExistingDownload?: (filename: string, size?: number) => Promise<{ found: boolean; path?: string }>;
   copyFileToExport?: (outputDirectory: string, filesDirName: string, subPath: string, sourcePath: string) => Promise<string>;
   prepareExportDownload?: (filename?: string, size?: number) => Promise<boolean>;
+  dispatchMouse?: (type: 'click' | 'contextmenu', x: number, y: number) => Promise<boolean>;
   waitForDownload?: (expectedFilename?: string, timeoutMs?: number) => Promise<{ success: boolean; savePath?: string; filename?: string }>;
   unzipAlbumDownload?: (outputDirectory: string, filesDirName: string, zipPath: string, stanzaIds: string[]) => Promise<{ success: boolean; count: number; mapping: Record<string, string> }>;
 }
