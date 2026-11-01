@@ -132,6 +132,66 @@ async function fetchPageHtmlSafe(
   return null;
 }
 
+async function fetchAndProcessThumbnail(
+  imageUrl: string,
+  finalUrl: string
+): Promise<{ thumbnailBase64: string; width: number; height: number } | null> {
+  let imgTimeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const absoluteImageUrl = new URL(imageUrl, finalUrl).toString();
+    const imgController = new AbortController();
+    imgTimeout = setTimeout(() => imgController.abort(), 3500);
+
+    const imgRes = await fetch(absoluteImageUrl, {
+      signal: imgController.signal,
+      headers: {
+        'User-Agent': BROWSER_USER_AGENT,
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      },
+    });
+
+    if (!imgRes.ok) return null;
+
+    const imgBuf = await imgRes.arrayBuffer();
+    if (imgBuf.byteLength === 0 || imgBuf.byteLength > 10 * 1024 * 1024) {
+      return null;
+    }
+
+    const img = nativeImage.createFromBuffer(Buffer.from(imgBuf));
+    if (img.isEmpty()) return null;
+
+    const origSize = img.getSize();
+    let target = img;
+    const maxDim = 320;
+    if (origSize.width > maxDim || origSize.height > maxDim) {
+      const ratio = Math.min(maxDim / origSize.width, maxDim / origSize.height);
+      target = img.resize({
+        width: Math.max(1, Math.round(origSize.width * ratio)),
+        height: Math.max(1, Math.round(origSize.height * ratio)),
+        quality: 'better',
+      });
+    }
+    let jpegBuf = target.toJPEG(75);
+    // Keep inline thumbnail within WhatsApp 32KB budget
+    if (jpegBuf.byteLength > 30 * 1024) {
+      jpegBuf = target.toJPEG(50);
+    }
+    if (jpegBuf.byteLength > 0) {
+      const finalSize = target.getSize();
+      return {
+        thumbnailBase64: jpegBuf.toString('base64'),
+        width: finalSize.width,
+        height: finalSize.height,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    if (imgTimeout) clearTimeout(imgTimeout);
+  }
+}
+
 export async function fetchLinkPreview(urlStr: string): Promise<LinkPreviewData | null> {
   // Check if feature is enabled in global settings
   if (state.globalSettings?.standaloneLinkPreviewEnabled === false) {
@@ -243,90 +303,58 @@ export async function fetchLinkPreview(urlStr: string): Promise<LinkPreviewData 
     let thumbnailHeight: number | undefined;
 
     if (imageUrl) {
-      try {
-        const absoluteImageUrl = new URL(imageUrl, finalUrl).toString();
-        const imgController = new AbortController();
-        const imgTimeout = setTimeout(() => imgController.abort(), 3500);
+        // If media fails to download or process, retry immediately up to 3 times
+        const MAX_MEDIA_RETRIES = 3;
+        let thumbnailResult: { thumbnailBase64: string; width: number; height: number } | null = null;
 
-        const imgRes = await fetch(absoluteImageUrl, {
-          signal: imgController.signal,
-          headers: {
-            'User-Agent': BROWSER_USER_AGENT,
-            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-          },
-        });
-        clearTimeout(imgTimeout);
-
-        if (imgRes.ok) {
-          const imgBuf = await imgRes.arrayBuffer();
-          if (imgBuf.byteLength > 0 && imgBuf.byteLength <= 10 * 1024 * 1024) {
-            try {
-              const img = nativeImage.createFromBuffer(Buffer.from(imgBuf));
-              if (!img.isEmpty()) {
-                const origSize = img.getSize();
-                let target = img;
-                const maxDim = 320;
-                if (origSize.width > maxDim || origSize.height > maxDim) {
-                  const ratio = Math.min(maxDim / origSize.width, maxDim / origSize.height);
-                  target = img.resize({
-                    width: Math.max(1, Math.round(origSize.width * ratio)),
-                    height: Math.max(1, Math.round(origSize.height * ratio)),
-                    quality: 'better',
-                  });
-                }
-                let jpegBuf = target.toJPEG(75);
-                // Keep inline thumbnail within WhatsApp 32KB budget
-                if (jpegBuf.byteLength > 30 * 1024) {
-                  jpegBuf = target.toJPEG(50);
-                }
-                if (jpegBuf.byteLength > 0) {
-                  thumbnailBase64 = jpegBuf.toString('base64');
-                  const finalSize = target.getSize();
-                  thumbnailWidth = finalSize.width;
-                  thumbnailHeight = finalSize.height;
-                }
-              }
-            } catch {
-              // Image decoding or resizing failed; proceed with text preview
+          for (let attempt = 0; attempt <= MAX_MEDIA_RETRIES; attempt++) {
+            thumbnailResult = await fetchAndProcessThumbnail(imageUrl, finalUrl);
+            if (thumbnailResult) {
+              break;
             }
           }
+
+          if (thumbnailResult) {
+            thumbnailBase64 = thumbnailResult.thumbnailBase64;
+            thumbnailWidth = thumbnailResult.width;
+            thumbnailHeight = thumbnailResult.height;
+          }
         }
-      } catch {
-        // Thumbnail download failed; proceed with text preview
+
+        const result: LinkPreviewData = {
+          url: urlStr,
+          title,
+          description,
+          thumbnailBase64,
+          thumbnailWidth,
+          thumbnailHeight,
+          previewType: isVideo ? 'video' : 'none',
+        };
+
+          // Store in LRU cache.
+          // If the page has an image specified but media failed to download even after retrying,
+          // do NOT cache the picture-less result so future requests can retry fetching the media.
+          if (!imageUrl || thumbnailBase64) {
+            if (PREVIEW_CACHE.size >= CACHE_MAX_SIZE) {
+              const oldestKey = PREVIEW_CACHE.keys().next().value;
+              if (oldestKey) PREVIEW_CACHE.delete(oldestKey);
+            }
+            PREVIEW_CACHE.set(urlStr, { data: result, timestamp: Date.now(), ttl: CACHE_TTL_MS });
+          }
+
+          return result;
+        } catch {
+          return null;
+        }
       }
-    }
-
-    const result: LinkPreviewData = {
-      url: urlStr,
-      title,
-      description,
-      thumbnailBase64,
-      thumbnailWidth,
-      thumbnailHeight,
-      previewType: isVideo ? 'video' : 'none',
-    };
-
-    // Store in LRU cache
-    const ttl = (!imageUrl || thumbnailBase64) ? CACHE_TTL_MS : 30 * 1000;
-    if (PREVIEW_CACHE.size >= CACHE_MAX_SIZE) {
-      const oldestKey = PREVIEW_CACHE.keys().next().value;
-      if (oldestKey) PREVIEW_CACHE.delete(oldestKey);
-    }
-    PREVIEW_CACHE.set(urlStr, { data: result, timestamp: Date.now(), ttl });
-
-    return result;
-  } catch {
-    return null;
-  }
-}
 
 export function clearLinkPreviewCache(): { clearedCount: number } {
-  const clearedCount = PREVIEW_CACHE.size;
-  PREVIEW_CACHE.clear();
-  return { clearedCount };
-}
+        const clearedCount = PREVIEW_CACHE.size;
+        PREVIEW_CACHE.clear();
+        return { clearedCount };
+      }
 
-export function getLinkPreviewCacheSize(): number {
-  return PREVIEW_CACHE.size;
-}
+      export function getLinkPreviewCacheSize(): number {
+        return PREVIEW_CACHE.size;
+      }
 
