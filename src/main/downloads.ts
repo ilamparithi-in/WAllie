@@ -316,6 +316,49 @@ export class DownloadManager extends EventEmitter {
         };
       }
 
+      // 2b. If exact path not found, scan directory for duplicate counter variants e.g. "name (1).ext"
+      const scanDirForDuplicates = (dir: string): DownloadRecord | undefined => {
+        try {
+          if (!fs.existsSync(dir)) return undefined;
+          const files = fs.readdirSync(dir);
+          const candidates: { path: string; name: string; mtime: number }[] = [];
+          for (const f of files) {
+            const candidatePath = path.join(dir, f);
+            if (this.doesFileMatch(candidatePath, f, targetName, undefined, undefined, options)) {
+              try {
+                const stat = fs.statSync(candidatePath);
+                candidates.push({ path: candidatePath, name: f, mtime: stat.mtimeMs });
+              } catch { }
+            }
+          }
+          if (candidates.length > 0) {
+            candidates.sort((a, b) => b.mtime - a.mtime);
+            const best = candidates[0];
+            let statSize: number | undefined;
+            let statHash: string | undefined;
+            try {
+              statSize = fs.statSync(best.path).size;
+              if (statSize <= LARGE_FILE_THRESHOLD) {
+                statHash = crypto.createHash('sha256').update(fs.readFileSync(best.path)).digest('hex');
+              }
+            } catch { }
+            return {
+              id: Date.now(),
+              filename: best.name,
+              savePath: best.path,
+              fileSize: statSize,
+              fileHash: statHash,
+              timestamp: Date.now(),
+              state: 'completed',
+            };
+          }
+        } catch { }
+        return undefined;
+      };
+
+      const scannedDefault = scanDirForDuplicates(defaultDir);
+      if (scannedDefault) return scannedDefault;
+
       // 3. Fallback: check last manual download directory
       const manualDir = this.lastManualDownloadPath || state.globalSettings?.lastManualDownloadPath;
       if (manualDir && manualDir !== defaultDir && fs.existsSync(manualDir)) {
@@ -339,6 +382,9 @@ export class DownloadManager extends EventEmitter {
             state: 'completed',
           };
         }
+
+        const scannedManual = scanDirForDuplicates(manualDir);
+        if (scannedManual) return scannedManual;
       }
 
       return undefined;

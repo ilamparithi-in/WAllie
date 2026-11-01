@@ -101,6 +101,9 @@ export function getActiveChatInfo(): {
   isGroup: boolean;
 } | null {
   try {
+    const mainEl = document.querySelector<HTMLElement>('#main');
+    if (!mainEl) return null; // If #main is not in DOM, no chat conversation is open!
+
     const ChatCollection = getCollection('WAWebChatCollection')?.ChatCollection;
     const active = ChatCollection?.getActive ? ChatCollection.getActive() : null;
     if (!active) return null;
@@ -133,6 +136,14 @@ export async function openChatByJid(targetJid: string, targetTitle?: string): Pr
   if (targetChat) {
     try {
       const Cmd = getCollection('WAWebCmd')?.Cmd;
+      if (Cmd?.openChatBottom) {
+        Cmd.openChatBottom({ chat: targetChat });
+        await sleep(250);
+        const check = getActiveChatInfo();
+        if (check && (check.jid === targetJid || check.title === safeTitle)) {
+          return true;
+        }
+      }
       if (Cmd?.openChatFromUnread) {
         Cmd.openChatFromUnread({ chat: targetChat });
         await sleep(250);
@@ -195,6 +206,108 @@ export async function openChatByJid(targetJid: string, targetTitle?: string): Pr
   }
 
   return false;
+}
+
+/**
+ * Safely dismisses any open WhatsApp Web context menu or backdrop without sending
+ * a global Escape keyboard event to document, which would close the active chat conversation.
+ */
+function dismissContextMenuSafely(): void {
+  try {
+    const backdrop = document.querySelector('[data-testid="menu-backdrop"]') as HTMLElement | null;
+    if (backdrop) {
+      backdrop.click();
+      return;
+    }
+    const contextMenu = document.querySelector('div[data-animate-context-menu="true"], ul[role="menu"]');
+    if (contextMenu) {
+      contextMenu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: false, cancelable: true }));
+    }
+  } catch { }
+}
+
+/**
+ * Ensures the target chat remains active in the viewport. If WhatsApp Web navigated away
+ * or dropped to the default landing screen ("Voice and video calling is now available"),
+ * this automatically restores and re-opens the target chat.
+ */
+async function ensureChatOpen(chatJid: string, chatTitle?: string): Promise<boolean> {
+  try {
+    const current = getActiveChatInfo();
+    if (current && current.jid === chatJid) {
+      return true;
+    }
+    console.log(`[walinux-exporter] Target chat ${chatJid} is not open (current: ${current?.jid}). Re-opening...`);
+    return await openChatByJid(chatJid, chatTitle);
+  } catch (err) {
+    console.warn('[walinux-exporter] Failed to ensure chat open:', err);
+    return false;
+  }
+}
+
+/**
+ * Dispatches trusted native mouse clicks or clean pointer/mouse event lifecycle
+ * to guarantee that interactive WhatsApp Web components (like circular download buttons)
+ * receive and process the click without double-toggling or spamming.
+ */
+async function clickElementThoroughly(el: HTMLElement): Promise<void> {
+  try {
+    el.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    await sleep(40);
+    const rect = el.getBoundingClientRect();
+    const cx = Math.floor(rect.left + rect.width / 2);
+    const cy = Math.floor(rect.top + rect.height / 2);
+
+    if (
+      window.__walinux_ipc?.dispatchMouse &&
+      cx > 0 &&
+      cy > 0 &&
+      cx < window.innerWidth &&
+      cy < window.innerHeight
+    ) {
+      const ok = await window.__walinux_ipc.dispatchMouse('click', cx, cy);
+      if (ok) return; // Native click successfully delivered to Chromium; do not dispatch duplicate synthetic clicks!
+    }
+
+    const mouseOpts = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy };
+    el.dispatchEvent(new PointerEvent('pointerdown', mouseOpts));
+    el.dispatchEvent(new PointerEvent('pointerup', mouseOpts));
+    el.dispatchEvent(new MouseEvent('click', mouseOpts));
+    if (typeof el.click === 'function') {
+      try { el.click(); } catch { }
+    }
+  } catch (e) {
+    try { el.click(); } catch { }
+  }
+}
+
+/**
+ * Extracts binary ArrayBuffer from a media DOM element (img, video, audio)
+ * supporting blob: URLs, https: CDN URLs, and data: URIs (e.g. data:image/webp).
+ */
+async function extractBufferFromMediaElement(el: HTMLMediaElement | HTMLImageElement): Promise<ArrayBuffer | null> {
+  if (!el || !el.src) return null;
+  const src = el.src;
+  if (src.includes('data:image/gif')) return null;
+
+  if (src.startsWith('blob:') || src.startsWith('https://')) {
+    try {
+      const resp = await fetch(src);
+      return await resp.arrayBuffer();
+    } catch { }
+  } else if (src.startsWith('data:')) {
+    try {
+      const commaIdx = src.indexOf(',');
+      if (commaIdx !== -1) {
+        const base64 = src.slice(commaIdx + 1);
+        const binStr = atob(base64);
+        const bytes = new Uint8Array(binStr.length);
+        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+        return bytes.buffer;
+      }
+    } catch { }
+  }
+  return null;
 }
 
 /**
@@ -335,44 +448,36 @@ function extractMessageEntry(
   let reactions: MessageReaction[] | undefined;
   try {
     const ReactionsCollection = getCollection('WAWebReactionsCollection')?.ReactionsCollection;
-    const rModel = ReactionsCollection?.get ? ReactionsCollection.get(stanzaId) : null;
-    const rawReactions = rModel?.__x_reactions || m.reactions;
-    if (rawReactions && Array.isArray(rawReactions) && rawReactions.length > 0) {
-      reactions = rawReactions.map((r: any) => ({
-        emoji: String(r.aggregateEmoji || r.emoji || ''),
-        senderJid: r.sender ? String(r.sender) : undefined,
-        senderName: r.senderName || (r.sender ? resolveContactName(r.sender) : undefined),
-      }));
-      const rModel = ReactionsCollection?.get ? (ReactionsCollection.get(m.id) || ReactionsCollection.get(m.id?._serialized) || ReactionsCollection.get(stanzaId)) : null;
-      let rList: any[] = [];
-      if (rModel && rModel.reactions) {
-        if (typeof rModel.reactions.getModelsArray === 'function') {
-          rList = rModel.reactions.getModelsArray();
-        } else if (Array.isArray(rModel.reactions)) {
-          rList = rModel.reactions;
-        }
-      } else if (m.reactions) {
-        if (typeof m.reactions.getModelsArray === 'function') {
-          rList = m.reactions.getModelsArray();
-        } else if (Array.isArray(m.reactions)) {
-          rList = m.reactions;
-        }
+    const rModel = ReactionsCollection?.get ? (ReactionsCollection.get(m.id) || ReactionsCollection.get(m.id?._serialized) || ReactionsCollection.get(stanzaId)) : null;
+    let rList: any[] = [];
+    if (rModel && rModel.reactions) {
+      if (typeof rModel.reactions.getModelsArray === 'function') {
+        rList = rModel.reactions.getModelsArray();
+      } else if (Array.isArray(rModel.reactions)) {
+        rList = rModel.reactions;
       }
+    } else if (m.reactions) {
+      if (typeof m.reactions.getModelsArray === 'function') {
+        rList = m.reactions.getModelsArray();
+      } else if (Array.isArray(m.reactions)) {
+        rList = m.reactions;
+      }
+    }
 
-      if (rList && rList.length > 0) {
-        reactions = rList.map((r: any) => {
-          const emoji = String(r.aggregateEmoji || r.reactionText || r.emoji || '');
-          const count = r.senders?.getModelsArray ? r.senders.getModelsArray().length : (Array.isArray(r.senders) ? r.senders.length : (typeof r.count === 'number' ? r.count : 1));
-          return {
-            emoji,
-            count: count > 0 ? count : 1,
-            senderJid: r.sender ? String(r.sender) : undefined,
-            senderName: r.senderName || (r.sender ? resolveContactName(r.sender) : undefined),
-          };
-        }).filter((r) => Boolean(r.emoji));
-        if (reactions.length === 0) reactions = undefined;
-      }
-    } catch (e) { }
+    if (rList && rList.length > 0) {
+      reactions = rList.map((r: any) => {
+        const emoji = String(r.aggregateEmoji || r.reactionText || r.emoji || '');
+        const count = r.senders?.getModelsArray ? r.senders.getModelsArray().length : (Array.isArray(r.senders) ? r.senders.length : (typeof r.count === 'number' ? r.count : 1));
+        return {
+          emoji,
+          count: count > 0 ? count : 1,
+          senderJid: r.sender ? String(r.sender) : undefined,
+          senderName: r.senderName || (r.sender ? resolveContactName(r.sender) : undefined),
+        };
+      }).filter((r) => Boolean(r.emoji));
+      if (reactions.length === 0) reactions = undefined;
+    }
+  } catch (e) { }
 
     // Quoted Reply Context
     let replyContext: QuotedReplyContext | undefined;
@@ -551,6 +656,7 @@ function extractMessageEntry(
  * Cache last known oldest message date across all HUD updates
  */
 let lastKnownOldestDate: string = '';
+let isCurrentJobAborted: boolean = false;
 
   /**
    * Renders or updates the floating HUD overlay in the top-center of the screen.
@@ -582,10 +688,15 @@ let lastKnownOldestDate: string = '';
       overlay.id = 'wallie-export-hud-overlay';
       overlay.setAttribute(
         'style',
-        'position: fixed; inset: 0; z-index: 2147483640; pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #e9edef; user-select: none;'
+        'position: fixed; inset: 0; z-index: 2147483640; pointer-events: none; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #e9edef; user-select: none;'
       );
       overlay.innerHTML = `
       <style>
+        #wallie-export-hud-overlay,
+        #wallie-export-hud-overlay *,
+        #wallie-export-card button {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+        }
         @keyframes wallie-spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
@@ -603,7 +714,7 @@ let lastKnownOldestDate: string = '';
       <div id="wallie-export-card" style="position: fixed; top: 72px; left: calc(50% - 225px); pointer-events: auto; background: #1f2c34; border: 1px solid #2a3942; border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.65); padding: 20px 24px; width: 450px; max-width: 90vw; display: flex; flex-direction: column; gap: 14px;">
         <div id="wallie-hud-header" style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2a3942; padding-bottom: 10px; cursor: grab; user-select: none;">
           <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-weight: 600; font-size: 13px; color: #00a884; letter-spacing: 0.3px;">WAllie Chat Exporter</span>
+            <span style="font-weight: 600; font-size: 13px; color: #00a884;">WAllie Chat Exporter</span>
             <span style="font-size: 10px; color: #8696a0;">(drag to reposition)</span>
           </div>
           <span id="wallie-hud-badge" style="font-size: 11px; background: #111b21; border: 1px solid #2a3942; padding: 2px 8px; border-radius: 12px; color: #8696a0;">Chat 1 of 1</span>
@@ -632,6 +743,18 @@ let lastKnownOldestDate: string = '';
           </div>
         </div>
 
+        <!-- Guidance Notices -->
+        <div style="background: rgba(0, 168, 132, 0.08); border: 1px solid rgba(0, 168, 132, 0.2); border-radius: 8px; padding: 10px 12px; font-size: 11px; color: #aebac1; line-height: 1.45; display: flex; flex-direction: column; gap: 4px;">
+          <div style="color: #00a884; font-weight: 600; font-size: 11px; display: flex; align-items: center; gap: 4px;">
+            <span>ℹ️</span> <span>Export Guidance</span>
+          </div>
+          <div>• Keep the chat open and keep monitoring the exporter.</div>
+          <div>• If the exporter does not fetch older messages, you may try it manually.</div>
+          <div>• If the exporter misses some media, you may manually download it.</div>
+          <div>• Export can be cancelled at any time; if it is frozen on a file just press skip file.</div>
+          <div>• Sometimes it may take 2 or more exports for it to be complete.</div>
+        </div>
+
         <div style="display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding-top: 2px;">
           <button id="wallie-hud-skip-btn" style="display: none; background: transparent; border: 1px solid #53bdeb; color: #53bdeb; font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: background 0.2s;">Skip File</button>
           <button id="wallie-hud-cancel-btn" style="background: transparent; border: 1px solid #ea4335; color: #ea4335; font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: background 0.2s;">Cancel Export</button>
@@ -639,15 +762,6 @@ let lastKnownOldestDate: string = '';
       </div>
     `;
       document.body.appendChild(overlay);
-
-      const cancelBtn = document.getElementById('wallie-hud-cancel-btn');
-      if (cancelBtn) {
-        cancelBtn.onclick = () => {
-          cancelBtn.textContent = 'Aborting...';
-          (cancelBtn as HTMLButtonElement).disabled = true;
-          window.__walinux_ipc?.stopChatExport?.(state.exportId);
-        };
-      }
 
       // Initialize drag repositioning
       const header = document.getElementById('wallie-hud-header');
@@ -741,6 +855,20 @@ let lastKnownOldestDate: string = '';
         skipBtn.onclick = null;
       }
     }
+
+    const cancelBtn = document.getElementById('wallie-hud-cancel-btn') as HTMLButtonElement | null;
+    if (cancelBtn) {
+      if (!isCurrentJobAborted) {
+        cancelBtn.textContent = 'Cancel Export';
+        cancelBtn.disabled = false;
+      }
+      cancelBtn.onclick = () => {
+        isCurrentJobAborted = true;
+        cancelBtn.textContent = 'Aborting...';
+        cancelBtn.disabled = true;
+        window.__walinux_ipc?.stopChatExport?.(state.exportId);
+      };
+    }
   }
 
   /**
@@ -775,7 +903,7 @@ let lastKnownOldestDate: string = '';
     modal.id = 'wallie-export-modal-overlay';
     modal.setAttribute(
       'style',
-      'position: fixed; inset: 0; z-index: 2147483645; display: flex; align-items: center; justify-content: center; background: rgba(11, 20, 26, 0.55); backdrop-filter: none !important; -webkit-backdrop-filter: none !important; pointer-events: auto; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #e9edef; user-select: none; padding: 16px;'
+      'position: fixed; inset: 0; z-index: 2147483645; display: flex; align-items: center; justify-content: center; background: rgba(11, 20, 26, 0.55); backdrop-filter: none !important; -webkit-backdrop-filter: none !important; pointer-events: auto; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #e9edef; user-select: none; padding: 16px;'
     );
 
     const iconColor = isSuccess ? '#00a884' : (isAborted ? '#f59e0b' : '#ea4335');
@@ -783,6 +911,13 @@ let lastKnownOldestDate: string = '';
     const titleText = isSuccess ? 'Chat Export Completed' : (isAborted ? 'Export Cancelled' : 'Chat Export Failed');
 
     modal.innerHTML = `
+    <style>
+      #wallie-export-modal-overlay,
+      #wallie-export-modal-overlay *,
+      #wallie-export-modal-overlay button {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+      }
+    </style>
     <div style="background: #1f2c34; border: 1px solid #2a3942; border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,0.7); padding: 24px 28px; width: 480px; max-width: 92vw; display: flex; flex-direction: column; gap: 18px;">
       <div style="display: flex; align-items: center; gap: 14px; border-bottom: 1px solid #2a3942; padding-bottom: 16px;">
         <div style="width: 40px; height: 40px; border-radius: 50%; background: ${iconColor}22; border: 2px solid ${iconColor}; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; color: ${iconColor}; flex-shrink: 0;">
@@ -811,7 +946,7 @@ let lastKnownOldestDate: string = '';
         </div>
         <div style="display: flex; flex-direction: column; gap: 4px;">
           <span style="color: #8696a0;">Output Folder:</span>
-          <span style="font-size: 11px; color: #aebac1; word-break: break-all; background: #182229; padding: 6px 8px; border-radius: 4px; font-family: monospace;">${summary.outputDirectory || '—'}</span>
+          <span style="font-size: 11px; color: #aebac1; word-break: break-all; background: #182229; padding: 6px 8px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;">${summary.outputDirectory || '—'}</span>
         </div>
       </div>
 
@@ -1082,10 +1217,12 @@ let lastKnownOldestDate: string = '';
     let previousCount = entriesMap.size;
 
     while (true) {
-      const isAborted = await window.__walinux_ipc?.isChatExportAborted?.(exportId);
+      const isAborted = isCurrentJobAborted || (await window.__walinux_ipc?.isChatExportAborted?.(exportId));
       if (isAborted) {
         break;
       }
+
+      await ensureChatOpen(chatJid, chatTitle);
 
       let oldestDateIso: string = new Date().toISOString();
       let oldestEpoch = Infinity;
@@ -1389,10 +1526,13 @@ let lastKnownOldestDate: string = '';
     const handlers = getCollection('WAWebMediaHubMessageActionHandlers');
     const scrollContainer = getConversationScrollContainer();
 
-    // Guarantee we start at the top of the chat so we can sweep downward chronologically
-    if (scrollContainer) {
-      scrollContainer.scrollTop = 0;
-      await sleep(250);
+    // Do NOT reset scrollTop to 0! Setting scrollTop to 0 immediately triggers WhatsApp's
+    // infinite scroll listener to fetch older messages and prepend them, shifting scrollHeight!
+    // Instead, if currently scrolled far down, smoothly reposition near top (>= 150px) without touching 0
+    if (scrollContainer && scrollContainer.scrollTop > 300) {
+      scrollContainer.scrollTop = 150;
+      scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+      await sleep(200);
     }
 
     const mediaEntries = entries.filter((e): e is MessageEntry => {
@@ -1416,6 +1556,18 @@ let lastKnownOldestDate: string = '';
     const oldestDateIso = computedOldestIso || lastKnownOldestDate;
     const handledStanzaIds = new Set<string>();
     let skippedCount = 0;
+    const isGroup = Boolean(activeChat.isGroup || activeChat.id?.server === 'g.us' || activeChat.groupMetadata);
+    const chatJid = String(activeChat.id?._serialized || activeChat.id || '');
+    const memberLabelsMap = isGroup ? getMemberLabelsMap(chatJid) : {};
+
+    // Build fast lookup map for chronological entry indices
+    const entryIndexMap = new Map<string, number>();
+    entries.forEach((e, idx) => {
+      entryIndexMap.set(e.id, idx);
+      if ((e as any).serializedId) {
+        entryIndexMap.set((e as any).serializedId, idx);
+      }
+    });
 
     // Helper to find message DOM row or album DOM container
     const findRowOrAlbumElement = (
@@ -1427,8 +1579,10 @@ let lastKnownOldestDate: string = '';
       albumDataId?: string;
       albumEntries?: MessageEntry[];
     } => {
+      const mainEl = document.querySelector<HTMLElement>('#main');
+
       // 1. Check all mounted album elements in DOM
-      const albumEls = Array.from(document.querySelectorAll<HTMLElement>('[data-id*="album-"]'));
+      const albumEls = Array.from((mainEl || document).querySelectorAll<HTMLElement>('[data-id*="album-"]'));
       for (const aEl of albumEls) {
         const aDataId = aEl.getAttribute('data-id') || '';
         const match = aDataId.match(/album-([A-Za-z0-9]+)-([A-Za-z0-9]+)-(\d+)/);
@@ -1457,11 +1611,11 @@ let lastKnownOldestDate: string = '';
         }
       }
 
-      // 2. Direct message row match
+      // 2. Direct message row match scoped to #main conversation view
       const sel = targetSerializedId
         ? `[data-id*="${targetId}"], [data-id*="${targetSerializedId}"], [data-testid*="${targetId}"]`
         : `[data-id*="${targetId}"], [data-testid*="${targetId}"]`;
-      const el = document.querySelector<HTMLElement>(sel);
+      const el = (mainEl ? mainEl.querySelector<HTMLElement>(sel) : null) || document.querySelector<HTMLElement>(sel);
       if (el) {
         const dataId = el.getAttribute('data-id') || '';
         const isAlbum = dataId.includes('album-') || Boolean(el.querySelector('[data-id*="album-"]'));
@@ -1477,9 +1631,66 @@ let lastKnownOldestDate: string = '';
     };
 
     for (let mediaIdx = 0; mediaIdx < mediaEntries.length; mediaIdx++) {
-      const entry = mediaEntries[mediaIdx];
-      const isAborted = await window.__walinux_ipc?.isChatExportAborted?.(exportId);
+      const isAborted = isCurrentJobAborted || (await window.__walinux_ipc?.isChatExportAborted?.(exportId));
       if (isAborted) break;
+
+      // Ensure active chat remains open
+      await ensureChatOpen(chatJid, chatTitle);
+
+      // Dynamically accommodate newly loaded messages (e.g. user scrolled up or triggered phone sync)
+      try {
+        if (activeChat?.msgs && typeof activeChat.msgs.getModelsArray === 'function') {
+          const liveModels = activeChat.msgs.getModelsArray();
+          if (liveModels.length > entries.length) {
+            const existingIds = new Set(entries.map((e) => e.id));
+            let newMsgsAdded = 0;
+            for (const m of liveModels) {
+              const sId = m.id?.id || (m.id?._serialized ? m.id._serialized.split('_')[2] : '');
+              if (!sId || existingIds.has(sId)) continue;
+              const extracted = extractMessageEntry(m, activeChat, memberLabelsMap);
+              if (extracted) {
+                entries.push(extracted);
+                existingIds.add(extracted.id);
+                newMsgsAdded++;
+                if (extracted.type === 'message') {
+                  const t = extracted.content.type;
+                  if (t === 'image' || t === 'video' || t === 'audio' || t === 'document' || t === 'sticker') {
+                    mediaEntries.push(extracted);
+                  }
+                }
+              }
+            }
+            if (newMsgsAdded > 0) {
+              entries.sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());
+              mediaEntries.sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());
+              // Rebuild entryIndexMap immediately so indices reflect new positions!
+              entryIndexMap.clear();
+              entries.forEach((e, idx) => {
+                entryIndexMap.set(e.id, idx);
+                if ((e as any).serializedId) {
+                  entryIndexMap.set((e as any).serializedId, idx);
+                }
+              });
+              showOrUpdateExportHUD({
+                title: chatTitle,
+                index: chatIndex,
+                total: totalChats,
+                statusText: `Accommodated ${newMsgsAdded} newly loaded messages...`,
+                msgCount: entries.length,
+                mediaCount: savedCount,
+                totalMedia: mediaEntries.length,
+                skippedCount,
+                oldestDate: oldestDateIso,
+                exportId,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[walinux-exporter] Dynamic message accommodation error:', err);
+      }
+
+      const entry = mediaEntries[mediaIdx];
 
       const stanzaId = entry.id;
       if (handledStanzaIds.has(stanzaId)) {
@@ -1602,419 +1813,294 @@ let lastKnownOldestDate: string = '';
         }
       }
 
-      // --- STEP 2: LOCATE IN DOM (Targeted Index Scroll, Never Blind Runaway) ---
+      // --- STEP 2: LOCATE IN DOM (Accurate, Monotonic Sweep; Never Pong-Paddle) ---
       let found = findRowOrAlbumElement(stanzaId, serializedId);
       if (!found.element && scrollContainer) {
-        // Jump directly to estimated scroll height based on chronological index
-        const maxScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
-        const targetTop = Math.floor((mediaIdx / Math.max(1, mediaEntries.length - 1)) * maxScroll);
-        scrollContainer.scrollTop = targetTop;
-        await sleep(200);
-        captureLiveBlobsFromDom(liveBlobs, capturedBuffers);
-        found = findRowOrAlbumElement(stanzaId, serializedId);
-        const targetIdx = entries.findIndex(
-          (e) => e.id === stanzaId || (e as any).serializedId === stanzaId || (e as any).serializedId === serializedId
-        );
+        let liveModels: any[] = [];
+        try {
+          if (activeChat?.msgs?.getModelsArray) {
+            liveModels = activeChat.msgs.getModelsArray();
+          }
+        } catch { }
 
-        // If still not found, check minor offsets around target position
-        if (!found.element) {
-          const offsets = [-350, 350, -700, 700];
-          for (const off of offsets) {
-            scrollContainer.scrollTop = Math.max(0, Math.min(maxScroll, targetTop + off));
-            await sleep(150);
-            captureLiveBlobsFromDom(liveBlobs, capturedBuffers);
-            found = findRowOrAlbumElement(stanzaId, serializedId);
-            if (found.element) break;
-            for (let step = 0; step < 18; step++) {
-              found = findRowOrAlbumElement(stanzaId, serializedId);
-              if (found.element) break;
+        let targetModelIdx = -1;
+        if (liveModels.length > 0) {
+          targetModelIdx = liveModels.findIndex(
+            (m) =>
+              (m.id?.id && m.id.id === stanzaId) ||
+              (m.id?._serialized && (m.id._serialized === stanzaId || m.id._serialized === serializedId))
+          );
+        }
+        if (targetModelIdx === -1) {
+          targetModelIdx = entryIndexMap.get(stanzaId) ?? entryIndexMap.get(serializedId) ?? -1;
+        }
 
-              const mounted = Array.from(document.querySelectorAll<HTMLElement>('[data-id]'));
-              let minIdx = Infinity;
-              let maxIdx = -1;
-              for (const r of mounted) {
-                const did = r.getAttribute('data-id') || '';
-                const mIdx = entries.findIndex(
-                  (e) => e.id === did || ((e as any).serializedId && did.includes((e as any).serializedId)) || did.includes(e.id)
-                );
-                if (mIdx !== -1) {
-                  if (mIdx < minIdx) minIdx = mIdx;
-                  if (mIdx > maxIdx) maxIdx = mIdx;
+        for (let step = 0; step < 20; step++) {
+          found = findRowOrAlbumElement(stanzaId, serializedId);
+          if (found.element) break;
+
+          const mainEl = document.querySelector<HTMLElement>('#main');
+          const mounted = mainEl ? Array.from(mainEl.querySelectorAll<HTMLElement>('div[data-id]')) : [];
+          let minIdx = Infinity;
+          let maxIdx = -1;
+
+          if (liveModels.length > 0) {
+            for (const r of mounted) {
+              const did = r.getAttribute('data-id') || '';
+              const mIdx = liveModels.findIndex(
+                (m) => m.id?.id === did || m.id?._serialized === did || m.id?._serialized?.includes(did)
+              );
+              if (mIdx !== -1) {
+                if (mIdx < minIdx) minIdx = mIdx;
+                if (mIdx > maxIdx) maxIdx = mIdx;
+              }
+            }
+          } else {
+            for (const r of mounted) {
+              const did = r.getAttribute('data-id') || '';
+              let mIdx = entryIndexMap.get(did);
+              if (mIdx === undefined) {
+                const parts = did.split('_');
+                if (parts.length >= 3) {
+                  mIdx = entryIndexMap.get(parts[2]);
                 }
               }
-
-              const stepSize = Math.max(350, Math.floor(scrollContainer.clientHeight * 0.7));
-              if (targetIdx !== -1 && minIdx !== Infinity && maxIdx !== -1) {
-                if (targetIdx < minIdx) {
-                  // Older message: scroll UP monotonically
-                  scrollContainer.scrollTop = Math.max(0, scrollContainer.scrollTop - stepSize);
-                } else if (targetIdx > maxIdx) {
-                  // Newer message: scroll DOWN monotonically
-                  scrollContainer.scrollTop = Math.min(scrollContainer.scrollHeight, scrollContainer.scrollTop + stepSize);
-                } else {
-                  // Within mounted range, small nudge to trigger virtualization
-                  scrollContainer.scrollTop = Math.max(0, scrollContainer.scrollTop - 200);
-                }
-              } else {
-                // Index unknown or no mounted items matched: use proportional jump based on entries
-                const maxScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
-                const targetFraction =
-                  targetIdx !== -1
-                    ? targetIdx / Math.max(1, entries.length - 1)
-                    : mediaIdx / Math.max(1, mediaEntries.length - 1);
-                scrollContainer.scrollTop = Math.floor(targetFraction * maxScroll);
+              if (mIdx !== undefined) {
+                if (mIdx < minIdx) minIdx = mIdx;
+                if (mIdx > maxIdx) maxIdx = mIdx;
               }
-
-              await sleep(150);
-              captureLiveBlobsFromDom(liveBlobs, capturedBuffers);
             }
           }
 
-          const rowEl = found.element;
-          const isAlbum = found.isAlbum;
+          const stepSize = Math.max(450, Math.floor(scrollContainer.clientHeight * 0.75));
+          const maxScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
 
-          // Unvirtualize row by scrolling into center view and giving React 200ms
-          // Center row in viewport and give React time to render
-          if (rowEl) {
+          if (targetModelIdx !== -1 && minIdx !== Infinity && maxIdx !== -1) {
+            if (targetModelIdx > maxIdx) {
+              // Target is newer than visible window: scroll DOWN
+              scrollContainer.scrollTop = Math.min(maxScrollTop, scrollContainer.scrollTop + stepSize);
+            } else if (targetModelIdx < minIdx) {
+              // Target is older than visible window: scroll UP, but never touch 0 (stay >= 150)
+              scrollContainer.scrollTop = Math.max(150, scrollContainer.scrollTop - stepSize);
+            } else {
+              // Target is within mounted range: fine-tune scroll towards it proportionally
+              const ratio = (targetModelIdx - minIdx) / (maxIdx - minIdx || 1);
+              const targetTop = scrollContainer.scrollTop + (ratio - 0.5) * scrollContainer.clientHeight;
+              scrollContainer.scrollTop = Math.max(150, Math.min(maxScrollTop, targetTop));
+            }
+          } else {
+            // Index unknown or unmatched: advance DOWNWARD monotonically
+            scrollContainer.scrollTop = Math.min(maxScrollTop, scrollContainer.scrollTop + stepSize);
+          }
+
+          scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+          await sleep(180);
+          captureLiveBlobsFromDom(liveBlobs, capturedBuffers);
+        }
+      }
+
+      const rowEl = found.element;
+      const isAlbum = found.isAlbum;
+
+      // Center row in viewport and give React time to render
+      if (rowEl) {
+        try {
+          rowEl.scrollIntoView({ block: 'center', behavior: 'auto' });
+          await sleep(200);
+        } catch { }
+      }
+
+      // --- STEP 3: GROUPED MEDIA (ALBUMS) ---
+      if (isAlbum && rowEl) {
+        const albumEntries =
+          found.albumEntries ||
+          (() => {
+            const match = found.albumDataId?.match(/album-([A-Za-z0-9]+)-([A-Za-z0-9]+)-(\d+)/);
+            const firstId = match ? match[1] : '';
+            const lastId = match ? match[2] : '';
+            const count = match ? parseInt(match[3], 10) : 0;
+            const firstIdx = firstId ? mediaEntries.findIndex((m) => m.id === firstId) : -1;
+            const lastIdx = lastId ? mediaEntries.findIndex((m) => m.id === lastId) : -1;
+            return firstIdx !== -1
+              ? mediaEntries.slice(firstIdx, lastIdx !== -1 ? lastIdx + 1 : firstIdx + count)
+              : [mediaEntries[mediaIdx]];
+          })();
+        const albumStanzaIds = albumEntries.map((ae) => ae.id);
+
+        showOrUpdateExportHUD({
+          title: chatTitle,
+          index: chatIndex,
+          total: totalChats,
+          statusText: `Downloading grouped media album (${albumEntries.length} items)`,
+          msgCount: entries.length,
+          mediaCount: savedCount,
+          totalMedia: mediaEntries.length,
+          skippedCount,
+          oldestDate: oldestDateIso,
+          exportId,
+          canSkip: true,
+          onSkip: () => {
+            skipRequested = true;
+            skippedCount += albumEntries.length;
+            for (const ae of albumEntries) handledStanzaIds.add(ae.id);
+          },
+        });
+
+        let albumProcessedSuccessfully = false;
+
+        // 1. Try trusted context menu "Download all"
+        try {
+          const rect = rowEl.getBoundingClientRect();
+          const cx = Math.floor(rect.left + Math.min(80, rect.width / 2));
+          const cy = Math.floor(rect.top + Math.min(80, rect.height / 2));
+
+          await window.__walinux_ipc?.prepareExportDownload?.('.zip', 0);
+          const dlPromise = window.__walinux_ipc?.waitForDownload?.('.zip', 8000);
+
+          if (window.__walinux_ipc?.dispatchMouse) {
+            await window.__walinux_ipc.dispatchMouse('contextmenu', cx, cy);
+          } else {
+            rowEl.dispatchEvent(
+              new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: cx, clientY: cy })
+            );
+          }
+
+          await sleep(200);
+
+          const menuItems = Array.from(document.querySelectorAll('li, div[role="button"], span'));
+          const dlAllOption = menuItems.find((el) => {
+            const txt = (el.textContent || '').trim().toLowerCase();
+            return txt === 'download all' || txt.includes('download all');
+          }) as HTMLElement | null;
+
+          if (dlAllOption) {
+            dlAllOption.click();
+            const dlRes = await dlPromise;
+            if (dlRes && dlRes.success && dlRes.savePath && window.__walinux_ipc?.unzipAlbumDownload) {
+              const unzipRes = await window.__walinux_ipc.unzipAlbumDownload(
+                outputDirectory,
+                filesDirName,
+                dlRes.savePath,
+                albumStanzaIds
+              );
+              if (unzipRes && unzipRes.success && unzipRes.mapping) {
+                let albumSavedCount = 0;
+                for (const ae of albumEntries) {
+                  const mRef = unzipRes.mapping[ae.id];
+                  if (mRef) {
+                    (ae.content as any).mediaRef = mRef;
+                    albumSavedCount++;
+                    handledStanzaIds.add(ae.id);
+                  }
+                }
+                if (albumSavedCount > 0) {
+                  savedCount += albumSavedCount;
+                  onMediaSaved(savedCount);
+                  albumProcessedSuccessfully = true;
+                }
+              }
+            }
+          } else {
+            // Dismiss menu if open safely without dispatching Escape to document (which closes the chat)
+            dismissContextMenuSafely();
+          }
+        } catch (err) {
+          console.warn('[walinux-exporter] Grouped media album zip download error:', err);
+        }
+
+        // 2. Fallback: harvest visible decrypted blobs from album tiles
+        if (!albumProcessedSuccessfully) {
+          const tileImgs = Array.from(rowEl.querySelectorAll<HTMLImageElement | HTMLMediaElement>('img, video')).filter(
+            (m) => m.src && m.src.startsWith('blob:') && !m.src.includes('data:image/gif')
+          );
+          let tileSavedCount = 0;
+          for (let ti = 0; ti < Math.min(tileImgs.length, albumEntries.length); ti++) {
+            const ae = albumEntries[ti];
+            if (handledStanzaIds.has(ae.id)) continue;
             try {
-              rowEl.scrollIntoView({ block: 'center', behavior: 'auto' });
-              await sleep(200);
-              await sleep(150);
+              const resp = await fetch(tileImgs[ti].src);
+              const buf = await resp.arrayBuffer();
+              if (buf.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
+                const aSubPath = `media/${ae.id}_${ae.id}.jpeg`;
+                const savedRef = await window.__walinux_ipc.saveChatMedia(
+                  outputDirectory,
+                  filesDirName,
+                  aSubPath,
+                  buf
+                );
+                (ae.content as any).mediaRef = savedRef;
+                handledStanzaIds.add(ae.id);
+                tileSavedCount++;
+              }
             } catch { }
           }
-
-          // --- STEP 3: GROUPED MEDIA (ALBUMS) ---
-          if (isAlbum && rowEl) {
-            const albumEntries =
-              found.albumEntries ||
-              (() => {
-                const match = found.albumDataId?.match(/album-([A-Za-z0-9]+)-([A-Za-z0-9]+)-(\d+)/);
-                const firstId = match ? match[1] : '';
-                const lastId = match ? match[2] : '';
-                const count = match ? parseInt(match[3], 10) : 0;
-                const firstIdx = firstId ? mediaEntries.findIndex((m) => m.id === firstId) : -1;
-                const lastIdx = lastId ? mediaEntries.findIndex((m) => m.id === lastId) : -1;
-                return firstIdx !== -1
-                  ? mediaEntries.slice(firstIdx, lastIdx !== -1 ? lastIdx + 1 : firstIdx + count)
-                  : [mediaEntries[mediaIdx]];
-              })();
-            const albumStanzaIds = albumEntries.map((ae) => ae.id);
-
-            showOrUpdateExportHUD({
-              title: chatTitle,
-              index: chatIndex,
-              total: totalChats,
-              statusText: `Downloading grouped media album (${albumEntries.length} items)`,
-              msgCount: entries.length,
-              mediaCount: savedCount,
-              totalMedia: mediaEntries.length,
-              skippedCount,
-              oldestDate: oldestDateIso,
-              exportId,
-              canSkip: true,
-              onSkip: () => {
-                skipRequested = true;
-                skippedCount += albumEntries.length;
-                for (const ae of albumEntries) handledStanzaIds.add(ae.id);
-              },
-            });
-
-            let albumProcessedSuccessfully = false;
-
-            // 1. Try trusted context menu "Download all"
-            try {
-              const rect = rowEl.getBoundingClientRect();
-              const cx = Math.floor(rect.left + Math.min(80, rect.width / 2));
-              const cy = Math.floor(rect.top + Math.min(80, rect.height / 2));
-
-              await window.__walinux_ipc?.prepareExportDownload?.('.zip', 0);
-              const dlPromise = window.__walinux_ipc?.waitForDownload?.('.zip', 8000);
-
-              if (window.__walinux_ipc?.dispatchMouse) {
-                await window.__walinux_ipc.dispatchMouse('contextmenu', cx, cy);
-              } else {
-                rowEl.dispatchEvent(
-                  new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: cx, clientY: cy })
-                );
-              }
-
-              await sleep(200);
-
-              const menuItems = Array.from(document.querySelectorAll('li, div[role="button"], span'));
-              const dlAllOption = menuItems.find((el) => {
-                const txt = (el.textContent || '').trim().toLowerCase();
-                return txt === 'download all' || txt.includes('download all');
-              }) as HTMLElement | null;
-
-              if (dlAllOption) {
-                dlAllOption.click();
-                const dlRes = await dlPromise;
-                if (dlRes && dlRes.success && dlRes.savePath && window.__walinux_ipc?.unzipAlbumDownload) {
-                  const unzipRes = await window.__walinux_ipc.unzipAlbumDownload(
-                    outputDirectory,
-                    filesDirName,
-                    dlRes.savePath,
-                    albumStanzaIds
-                  );
-                  if (unzipRes && unzipRes.success && unzipRes.mapping) {
-                    let albumSavedCount = 0;
-                    for (const ae of albumEntries) {
-                      const mRef = unzipRes.mapping[ae.id];
-                      if (mRef) {
-                        (ae.content as any).mediaRef = mRef;
-                        albumSavedCount++;
-                        handledStanzaIds.add(ae.id);
-                      }
-                    }
-                    if (albumSavedCount > 0) {
-                      savedCount += albumSavedCount;
-                      onMediaSaved(savedCount);
-                      albumProcessedSuccessfully = true;
-                    }
-                  }
-                }
-              } else {
-                // Dismiss menu if open
-                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-              }
-            } catch (err) {
-              console.warn('[walinux-exporter] Grouped media album zip download error:', err);
-            }
-
-            // 2. Fallback: harvest visible decrypted blobs from album tiles
-            if (!albumProcessedSuccessfully) {
-              const tileImgs = Array.from(rowEl.querySelectorAll<HTMLImageElement | HTMLMediaElement>('img, video')).filter(
-                (m) => m.src && m.src.startsWith('blob:') && !m.src.includes('data:image/gif')
-              );
-              let tileSavedCount = 0;
-              for (let ti = 0; ti < Math.min(tileImgs.length, albumEntries.length); ti++) {
-                const ae = albumEntries[ti];
-                if (handledStanzaIds.has(ae.id)) continue;
-                try {
-                  const resp = await fetch(tileImgs[ti].src);
-                  const buf = await resp.arrayBuffer();
-                  if (buf.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
-                    const aSubPath = `media/${ae.id}_${ae.id}.jpeg`;
-                    const savedRef = await window.__walinux_ipc.saveChatMedia(
-                      outputDirectory,
-                      filesDirName,
-                      aSubPath,
-                      buf
-                    );
-                    (ae.content as any).mediaRef = savedRef;
-                    handledStanzaIds.add(ae.id);
-                    tileSavedCount++;
-                  }
-                } catch { }
-              }
-              if (tileSavedCount > 0) {
-                savedCount += tileSavedCount;
-                onMediaSaved(savedCount);
-                albumProcessedSuccessfully = true;
-              }
-            }
-
-            for (const ae of albumEntries) {
-              handledStanzaIds.add(ae.id);
-            }
-
-            if (albumProcessedSuccessfully) {
-              showOrUpdateExportHUD({
-                title: chatTitle,
-                index: chatIndex,
-                total: totalChats,
-                statusText: `Saved grouped media album (${albumEntries.length} items)`,
-                msgCount: entries.length,
-                mediaCount: savedCount,
-                totalMedia: mediaEntries.length,
-                skippedCount,
-                oldestDate: oldestDateIso,
-                exportId,
-                canSkip: false,
-              });
-              continue;
-            }
+          if (tileSavedCount > 0) {
+            savedCount += tileSavedCount;
+            onMediaSaved(savedCount);
+            albumProcessedSuccessfully = true;
           }
+        }
 
-          if (handledStanzaIds.has(stanzaId)) {
-            continue;
-          }
+        for (const ae of albumEntries) {
+          handledStanzaIds.add(ae.id);
+        }
 
-          // --- STEP 4: INDIVIDUAL MEDIA DOWNLOAD (Documents, Voice Notes, Images, Videos, Stickers) ---
+        if (albumProcessedSuccessfully) {
           showOrUpdateExportHUD({
             title: chatTitle,
             index: chatIndex,
             total: totalChats,
-            statusText: `Downloading (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || safeFileBase}`,
+            statusText: `Saved grouped media album (${albumEntries.length} items)`,
             msgCount: entries.length,
             mediaCount: savedCount,
             totalMedia: mediaEntries.length,
             skippedCount,
             oldestDate: oldestDateIso,
             exportId,
-            canSkip: true,
-            onSkip: handleSkip,
+            canSkip: false,
           });
+          continue;
+        }
+      }
 
-          // A. Check visible DOM element media blob
-          if (rowEl) {
-            const mediaEls = Array.from(rowEl.querySelectorAll('img, video, audio')) as (
-              | HTMLMediaElement
-              | HTMLImageElement
-            )[];
-            const validMedia = mediaEls.find(
-              (m) => m && m.src && m.src.startsWith('blob:') && !m.src.includes('data:image/gif')
-            );
-            if (validMedia?.src) {
-              try {
-                const resp = await fetch(validMedia.src);
-                const buf = await resp.arrayBuffer();
-                if (buf.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
-                  const relativeSavedRef = await window.__walinux_ipc.saveChatMedia(
-                    outputDirectory,
-                    filesDirName,
-                    subPath,
-                    buf
-                  );
-                  (content as any).mediaRef = relativeSavedRef;
-                  entrySaved = true;
-                  savedCount++;
-                  handledStanzaIds.add(stanzaId);
-                  onMediaSaved(savedCount);
-                  showOrUpdateExportHUD({
-                    title: chatTitle,
-                    index: chatIndex,
-                    total: totalChats,
-                    statusText: `Saved (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || safeFileBase}`,
-                    msgCount: entries.length,
-                    mediaCount: savedCount,
-                    totalMedia: mediaEntries.length,
-                    skippedCount,
-                    oldestDate: oldestDateIso,
-                    exportId,
-                    canSkip: false,
-                  });
-                  continue;
-                }
-              } catch { }
-            }
-          }
+      if (handledStanzaIds.has(stanzaId)) {
+        continue;
+      }
 
-          if (skipRequested) continue;
+      // --- STEP 4: INDIVIDUAL MEDIA DOWNLOAD (Documents, Voice Notes, Images, Videos, Stickers) ---
+      showOrUpdateExportHUD({
+        title: chatTitle,
+        index: chatIndex,
+        total: totalChats,
+        statusText: `Downloading (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || safeFileBase}`,
+        msgCount: entries.length,
+        mediaCount: savedCount,
+        totalMedia: mediaEntries.length,
+        skippedCount,
+        oldestDate: oldestDateIso,
+        exportId,
+        canSkip: true,
+        onSkip: handleSkip,
+      });
 
-          // B. Trigger Download (Documents, Voice Notes, Unrendered items)
-          try {
-            const expectedName = targetFileName || (content.type === 'audio' ? '.ogg' : undefined);
-            await window.__walinux_ipc?.prepareExportDownload?.(expectedName, (content as any).fileSize);
-            const dlPromise = window.__walinux_ipc?.waitForDownload?.(expectedName, 8000);
-
-            let triggered = false;
-
-            if (rowEl) {
-              const dlBtn = rowEl.querySelector(
-                '[role="button"][title*="Download" i], [role="button"][aria-label*="Download" i], [data-testid="document-thumb"], [data-testid="audio-download"], [data-icon*="download" i], div[title*="Download" i]'
-              ) as HTMLElement | null;
-
-              if (dlBtn) {
-                dlBtn.click();
-                triggered = true;
-              } else {
-                // Trusted right-click context menu for voice notes / unbuttoned rows
-                const rect = rowEl.getBoundingClientRect();
-                const cx = Math.floor(rect.left + Math.min(100, rect.width / 2));
-                const cy = Math.floor(rect.top + Math.min(50, rect.height / 2));
-
-                if (window.__walinux_ipc?.dispatchMouse) {
-                  await window.__walinux_ipc.dispatchMouse('contextmenu', cx, cy);
-                } else {
-                  rowEl.dispatchEvent(
-                    new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: cx, clientY: cy })
-                  );
-                }
-
-                await sleep(200);
-
-                const menuItems = Array.from(document.querySelectorAll('li, div[role="button"], span'));
-                const downloadItem = menuItems.find((el) => {
-                  const txt = (el.textContent || '').trim().toLowerCase();
-                  return txt === 'download';
-                }) as HTMLElement | null;
-
-                if (downloadItem) {
-                  downloadItem.click();
-                  triggered = true;
-                } else {
-                  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-                }
-              }
-            }
-
-            // Responsive wait loop (checks every 150ms, max 8 seconds, zero artificial pauses)
-            const dlHolder: { result: { success: boolean; savePath?: string; filename?: string } | null } = { result: null };
-            dlPromise
-              ?.then((res) => {
-                dlHolder.result = res;
-              })
-              .catch(() => {
-                dlHolder.result = { success: false };
-              });
-
-            const startTimeMs = Date.now();
-            const maxWaitMs = 8000;
-
-            while (Date.now() - startTimeMs < maxWaitMs && !skipRequested && !entrySaved) {
-              await sleep(150);
-
-              // 1. Check if Chromium download completed
-              const curResult = dlHolder.result;
-              if (
-                curResult &&
-                curResult.success &&
-                curResult.savePath &&
-                window.__walinux_ipc?.copyFileToExport
-              ) {
-                try {
-                  const relativeSavedRef = await window.__walinux_ipc.copyFileToExport(
-                    outputDirectory,
-                    filesDirName,
-                    subPath,
-                    curResult.savePath
-                  );
-                  (content as any).mediaRef = relativeSavedRef;
-                  entrySaved = true;
-                  savedCount++;
-                  handledStanzaIds.add(stanzaId);
-                  onMediaSaved(savedCount);
-                  break;
-                } catch (e) { }
-              }
-
-              // 2. Check if file landed on disk directly
-              if (targetFileName && window.__walinux_ipc?.findExistingDownload) {
-                try {
-                  const existing = await window.__walinux_ipc.findExistingDownload(
-                    targetFileName,
-                    (content as any).fileSize
-                  );
-                  if (existing && existing.found && existing.path && window.__walinux_ipc?.copyFileToExport) {
-                    const relativeSavedRef = await window.__walinux_ipc.copyFileToExport(
-                      outputDirectory,
-                      filesDirName,
-                      subPath,
-                      existing.path
-                    );
-                    (content as any).mediaRef = relativeSavedRef;
-                    entrySaved = true;
-                    savedCount++;
-                    handledStanzaIds.add(stanzaId);
-                    onMediaSaved(savedCount);
-                    break;
-                  }
-                } catch (e) { }
-              }
-            }
-
-            if (entrySaved) {
+      // A. Check visible DOM element media blob (or data URI for stickers/images)
+      if (rowEl) {
+        const mediaEls = Array.from(rowEl.querySelectorAll<HTMLImageElement | HTMLMediaElement>('img, video, audio'));
+        for (const m of mediaEls) {
+          const buf = await extractBufferFromMediaElement(m);
+          if (buf && buf.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
+            try {
+              const relativeSavedRef = await window.__walinux_ipc.saveChatMedia(
+                outputDirectory,
+                filesDirName,
+                subPath,
+                buf
+              );
+              (content as any).mediaRef = relativeSavedRef;
+              entrySaved = true;
+              savedCount++;
+              handledStanzaIds.add(stanzaId);
+              onMediaSaved(savedCount);
               showOrUpdateExportHUD({
                 title: chatTitle,
                 index: chatIndex,
@@ -2028,48 +2114,406 @@ let lastKnownOldestDate: string = '';
                 exportId,
                 canSkip: false,
               });
-            }
-          } catch (err) {
-            console.warn(`[walinux-exporter] Download error for ${stanzaId}:`, err);
+              break;
+            } catch (e) { }
           }
+        }
+        if (entrySaved) continue;
+      }
 
-          // C. Thumbnail fallback if binary not saved
-          if (!entrySaved) {
-            handledStanzaIds.add(stanzaId);
-            if ((content as any).thumbnailDataUri && window.__walinux_ipc?.saveChatMedia) {
-              try {
-                const thumbSubPath = `media/${stanzaId}.jpeg`;
-                const relativeSavedRef = await window.__walinux_ipc.saveChatMedia(
-                  outputDirectory,
-                  filesDirName,
-                  thumbSubPath,
-                  (content as any).thumbnailDataUri
+      if (skipRequested) continue;
+
+      // B. Trigger Download (Documents, Voice Notes, Stickers, Unrendered items)
+      try {
+        const isSticker = content.type === 'sticker';
+        const isDocument = content.type === 'document';
+        const expectedName = !isSticker ? (targetFileName || (content.type === 'audio' ? '.ogg' : undefined)) : undefined;
+        let dlPromise: Promise<{ success: boolean; savePath?: string; filename?: string } | null> | undefined;
+
+        if (!isSticker && expectedName) {
+          await window.__walinux_ipc?.prepareExportDownload?.(expectedName, (content as any).fileSize);
+          dlPromise = window.__walinux_ipc?.waitForDownload?.(expectedName, 8000);
+        }
+
+        let triggered = false;
+
+        if (rowEl) {
+          if (isSticker) {
+            // STICKERS: ALWAYS and ONLY click the circular download button on the sticker.
+            // STICKERS CANNOT BE DOWNLOADED VIA CONTEXT MENU.
+            const dlIconBtn = (
+              rowEl.querySelector<HTMLElement>(
+                'span[data-icon="download"], span[data-icon="refresh"], [data-icon*="download"], [data-testid*="download"]'
+              )?.closest<HTMLElement>('button, [role="button"]') ||
+              rowEl.querySelector<HTMLElement>(
+                '[role="button"][title*="Download" i], [role="button"][aria-label*="Download" i], button[title*="Download" i], button[aria-label*="Download" i], [data-testid="media-download"], [data-testid="button-download"]'
+              )
+            );
+
+            const stickerBtn = dlIconBtn || rowEl.querySelector<HTMLElement>('div[role="button"][aria-label*="Sticker" i]') || rowEl.querySelector<HTMLElement>('div[role="button"]');
+
+            if (stickerBtn) {
+              await clickElementThoroughly(stickerBtn);
+              triggered = true;
+            }
+          } else if (isDocument) {
+            // DOCUMENTS: First try explicit download button, then ALWAYS try right-click context menu download!
+            // 1. Explicit download button on card (e.g. download icon button)
+            const explicitDlBtn = rowEl.querySelector<HTMLElement>(
+              'span[data-icon="download"], span[data-icon="down"], [data-icon*="download"], [data-testid="audio-download"], [data-testid="document-download"]'
+            )?.closest<HTMLElement>('button, [role="button"]');
+
+            if (explicitDlBtn) {
+              await clickElementThoroughly(explicitDlBtn);
+              triggered = true;
+            }
+
+            // 2. Open context menu on document card
+            const docTarget = (
+              rowEl.querySelector<HTMLElement>(
+                '[data-testid="document-thumb"], div[title*="."], div[class*="message-in"], div[class*="message-out"], .copyable-text'
+              ) || rowEl
+            );
+
+            docTarget.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+            await sleep(60);
+            const rect = docTarget.getBoundingClientRect();
+            const cx = Math.floor(rect.left + rect.width / 2);
+            const cy = Math.floor(rect.top + rect.height / 2);
+
+            // Hover to reveal context menu chevron if present
+            docTarget.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: cx, clientY: cy }));
+            await sleep(50);
+
+            // Method A: Click chevron if present
+            const chevron = rowEl.querySelector<HTMLElement>(
+              '[data-testid="down-context"], [data-icon="down-context"], span[data-icon="chevron-down"], div[role="button"][title*="Menu" i], [aria-label*="Context menu" i], [aria-label*="Menu" i]'
+            );
+
+            let menuOpened = false;
+            if (chevron) {
+              await clickElementThoroughly(chevron);
+              await sleep(250);
+              menuOpened = Boolean(document.querySelector('div[data-animate-context-menu="true"], ul[role="menu"]'));
+            }
+
+            // Method B: If chevron did not open menu, trigger right-click contextmenu event directly
+            if (!menuOpened) {
+              if (window.__walinux_ipc?.dispatchMouse && cx > 0 && cy > 0 && cx < window.innerWidth && cy < window.innerHeight) {
+                await window.__walinux_ipc.dispatchMouse('contextmenu', cx, cy);
+              } else {
+                docTarget.dispatchEvent(
+                  new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: cx, clientY: cy })
                 );
-                (content as any).mediaRef = relativeSavedRef;
-              } catch (e) { }
+              }
+              await sleep(250);
+            }
+
+            // Select "Download" from context menu
+            const menuItems = Array.from(document.querySelectorAll('li, div[role="button"], span, div[tabindex="-1"]'));
+            const downloadItem = menuItems.find((el) => {
+              const txt = (el.textContent || '').trim().toLowerCase();
+              return txt === 'download' || txt.startsWith('download');
+            }) as HTMLElement | null;
+
+            if (downloadItem) {
+              await clickElementThoroughly(downloadItem);
+              triggered = true;
             } else {
-              (content as any).isExpired = true;
+              dismissContextMenuSafely();
+            }
+          } else {
+            // OTHER MEDIA (Audio, Voice notes, Video, Images)
+            const dlBtn = rowEl.querySelector<HTMLElement>(
+              '[role="button"][title*="Download" i], [role="button"][aria-label*="Download" i], [data-testid="audio-download"], [data-testid="media-download"], [data-testid="button-download"], [data-icon*="download" i], div[title*="Download" i], button[title*="Download" i]'
+            );
+
+            if (dlBtn) {
+              await clickElementThoroughly(dlBtn);
+              triggered = true;
+            } else {
+              // Context menu fallback
+              const mediaTarget = rowEl.querySelector<HTMLElement>(
+                'img, video, audio, [data-testid="audio-player"], .copyable-text, div[class*="message-in"], div[class*="message-out"]'
+              ) || rowEl;
+
+              mediaTarget.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+              await sleep(60);
+              const rect = mediaTarget.getBoundingClientRect();
+              const cx = Math.floor(rect.left + rect.width / 2);
+              const cy = Math.floor(rect.top + rect.height / 2);
+
+              mediaTarget.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: cx, clientY: cy }));
+              await sleep(50);
+
+              const chevron = rowEl.querySelector<HTMLElement>(
+                '[data-testid="down-context"], [data-icon="down-context"], span[data-icon="chevron-down"], div[role="button"][title*="Menu" i], [aria-label*="Context menu" i], [aria-label*="Menu" i]'
+              );
+
+              if (chevron) {
+                await clickElementThoroughly(chevron);
+              } else {
+                if (window.__walinux_ipc?.dispatchMouse && cx > 0 && cy > 0) {
+                  await window.__walinux_ipc.dispatchMouse('contextmenu', cx, cy);
+                } else {
+                  mediaTarget.dispatchEvent(
+                    new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: cx, clientY: cy })
+                  );
+                }
+              }
+
+              await sleep(300);
+
+              const menuItems = Array.from(document.querySelectorAll('li, div[role="button"], span, div[tabindex="-1"]'));
+              const downloadItem = menuItems.find((el) => {
+                const txt = (el.textContent || '').trim().toLowerCase();
+                return txt === 'download' || txt.startsWith('download');
+              }) as HTMLElement | null;
+
+              if (downloadItem) {
+                await clickElementThoroughly(downloadItem);
+                triggered = true;
+              } else {
+                dismissContextMenuSafely();
+              }
             }
           }
         }
 
-        // Restore scroll container to the bottom after download sweep
-        if (scrollContainer) {
+        // Responsive wait loop (checks every 150ms, max 8 seconds, zero artificial pauses)
+        const dlHolder: { result: { success: boolean; savePath?: string; filename?: string } | null } = { result: null };
+        if (dlPromise) {
+          dlPromise
+            .then((res) => {
+              dlHolder.result = res;
+            })
+            .catch(() => {
+              dlHolder.result = { success: false };
+            });
+        }
+
+        const startTimeMs = Date.now();
+        const maxWaitMs = 8000;
+
+        while (Date.now() - startTimeMs < maxWaitMs && !skipRequested && !entrySaved) {
+          await sleep(150);
+
+          // 1. Check if a decrypted media blob or data URI appeared in DOM (stickers, images, videos)
+          if (rowEl) {
+            const mediaEls = Array.from(rowEl.querySelectorAll<HTMLImageElement | HTMLMediaElement>('img, video, audio'));
+            for (const m of mediaEls) {
+              const buf = await extractBufferFromMediaElement(m);
+              if (buf && buf.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
+                try {
+                  const relativeSavedRef = await window.__walinux_ipc.saveChatMedia(
+                    outputDirectory,
+                    filesDirName,
+                    subPath,
+                    buf
+                  );
+                  (content as any).mediaRef = relativeSavedRef;
+                  entrySaved = true;
+                  savedCount++;
+                  handledStanzaIds.add(stanzaId);
+                  onMediaSaved(savedCount);
+                  break;
+                } catch (e) { }
+              }
+            }
+            if (entrySaved) break;
+          }
+
+          // 2. Check if Chromium download completed (documents, audio, etc.)
+          if (!isSticker) {
+            const curResult = dlHolder.result;
+            if (
+              curResult &&
+              curResult.success &&
+              curResult.savePath &&
+              window.__walinux_ipc?.copyFileToExport
+            ) {
+              try {
+                const relativeSavedRef = await window.__walinux_ipc.copyFileToExport(
+                  outputDirectory,
+                  filesDirName,
+                  subPath,
+                  curResult.savePath
+                );
+                (content as any).mediaRef = relativeSavedRef;
+                entrySaved = true;
+                savedCount++;
+                handledStanzaIds.add(stanzaId);
+                onMediaSaved(savedCount);
+                break;
+              } catch (e) { }
+            }
+
+            // 3. Check if file landed on disk directly
+            if (targetFileName && window.__walinux_ipc?.findExistingDownload) {
+              try {
+                const existing = await window.__walinux_ipc.findExistingDownload(
+                  targetFileName,
+                  (content as any).fileSize
+                );
+                if (existing && existing.found && existing.path && window.__walinux_ipc?.copyFileToExport) {
+                  const relativeSavedRef = await window.__walinux_ipc.copyFileToExport(
+                    outputDirectory,
+                    filesDirName,
+                    subPath,
+                    existing.path
+                  );
+                  (content as any).mediaRef = relativeSavedRef;
+                  entrySaved = true;
+                  savedCount++;
+                  handledStanzaIds.add(stanzaId);
+                  onMediaSaved(savedCount);
+                  break;
+                }
+              } catch (e) { }
+            }
+          }
+        }
+
+        if (entrySaved) {
+          showOrUpdateExportHUD({
+            title: chatTitle,
+            index: chatIndex,
+            total: totalChats,
+            statusText: `Saved (${mediaIdx + 1}/${mediaEntries.length}): ${targetFileName || safeFileBase}`,
+            msgCount: entries.length,
+            mediaCount: savedCount,
+            totalMedia: mediaEntries.length,
+            skippedCount,
+            oldestDate: oldestDateIso,
+            exportId,
+            canSkip: false,
+          });
+        }
+      } catch (err) {
+        console.warn(`[walinux-exporter] Download error for ${stanzaId}:`, err);
+      }
+
+      // C. Thumbnail fallback if binary not saved
+      if (!entrySaved) {
+        handledStanzaIds.add(stanzaId);
+        if ((content as any).thumbnailDataUri && window.__walinux_ipc?.saveChatMedia) {
           try {
-            scrollContainer.scrollTop = scrollContainer.scrollHeight;
+            const thumbSubPath = `media/${stanzaId}.jpeg`;
+            const relativeSavedRef = await window.__walinux_ipc.saveChatMedia(
+              outputDirectory,
+              filesDirName,
+              thumbSubPath,
+              (content as any).thumbnailDataUri
+            );
+            (content as any).mediaRef = relativeSavedRef;
+          } catch (e) { }
+        } else {
+          (content as any).isExpired = true;
+        }
+      }
+    }
+
+    // Final reconciliation pass: Accommodate any media downloaded manually by the user or loaded into view
+    const unsavedMedia = mediaEntries.filter(
+      (m) => (m.content as any).isExpired || !(m.content as any).mediaRef
+    );
+
+    if (unsavedMedia.length > 0) {
+      showOrUpdateExportHUD({
+        title: chatTitle,
+        index: chatIndex,
+        total: totalChats,
+        statusText: `Reconciling unsaved media (${unsavedMedia.length} items)...`,
+        msgCount: entries.length,
+        mediaCount: savedCount,
+        totalMedia: mediaEntries.length,
+        skippedCount,
+        oldestDate: oldestDateIso,
+        exportId,
+        canSkip: false,
+      });
+
+      for (const entry of unsavedMedia) {
+        const stanzaId = entry.id;
+        const content = entry.content;
+        let targetFileName = '';
+        let ext = 'bin';
+        if (content.type === 'document') {
+          targetFileName = (content as DocumentContent).fileName || '';
+          const match = targetFileName.match(/\.([a-zA-Z0-9]+)$/);
+          ext = match ? match[1].toLowerCase() : 'bin';
+        } else if (content.type === 'image') ext = 'jpeg';
+        else if (content.type === 'video') ext = 'mp4';
+        else if (content.type === 'audio') ext = (content as AudioContent).isVoiceNote ? 'ogg' : 'mp3';
+        else if (content.type === 'sticker') ext = 'webp';
+
+        const safeFileBase = targetFileName
+          ? targetFileName.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').trim()
+          : `${stanzaId}.${ext}`;
+        const subPath = `media/${stanzaId}_${safeFileBase}`;
+
+        // 1. Check if user manually downloaded or Chromium saved to disk
+        if (targetFileName && window.__walinux_ipc?.findExistingDownload) {
+          try {
+            const existing = await window.__walinux_ipc.findExistingDownload(
+              targetFileName,
+              (content as any).fileSize
+            );
+            if (existing && existing.found && existing.path && window.__walinux_ipc?.copyFileToExport) {
+              const relativeSavedRef = await window.__walinux_ipc.copyFileToExport(
+                outputDirectory,
+                filesDirName,
+                subPath,
+                existing.path
+              );
+              (content as any).mediaRef = relativeSavedRef;
+              (content as any).isExpired = false;
+              savedCount++;
+              handledStanzaIds.add(stanzaId);
+              onMediaSaved(savedCount);
+              continue;
+            }
+          } catch { }
+        }
+
+        // 2. Check memory buffer captured during scroll
+        const captured = capturedBuffers.get(stanzaId) || capturedBuffers.get(entry.serializedId || stanzaId);
+        if (captured && captured.buffer.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
+          try {
+            const relativeSavedRef = await window.__walinux_ipc.saveChatMedia(
+              outputDirectory,
+              filesDirName,
+              subPath,
+              captured.buffer
+            );
+            (content as any).mediaRef = relativeSavedRef;
+            (content as any).isExpired = false;
+            savedCount++;
+            handledStanzaIds.add(stanzaId);
+            onMediaSaved(savedCount);
+            continue;
           } catch { }
         }
       }
+    }
 
-      /**
-       * Interleaves DateDividerEntry objects into the chronological timeline.
-       */
-      function interleaveDateDividers(messages: (MessageEntry | SystemNotificationEntry)[]): TimelineEntry[] {
-        const timeline: TimelineEntry[] = [];
-        let lastDateKey = '';
+    // Restore scroll container to the bottom after download sweep
+    if (scrollContainer) {
+      try {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      } catch { }
+    }
+  }
 
-        for (const msg of messages) {
-          if (msg.timestamp) {
+  /**
+   * Interleaves DateDividerEntry objects into the chronological timeline.
+   */
+  function interleaveDateDividers(messages: (MessageEntry | SystemNotificationEntry)[]): TimelineEntry[] {
+    const timeline: TimelineEntry[] = [];
+    let lastDateKey = '';
+
+    for (const msg of messages) {
+      if (msg.timestamp) {
             const dateKey = msg.timestamp.slice(0, 10); // YYYY-MM-DD
             if (dateKey !== lastDateKey) {
               lastDateKey = dateKey;
@@ -2368,7 +2812,7 @@ let lastKnownOldestDate: string = '';
           const timeline = interleaveDateDividers(messages);
 
           // 7. Check abort status
-          const isAborted = Boolean(await window.__walinux_ipc?.isChatExportAborted?.(exportId));
+          const isAborted = Boolean(isCurrentJobAborted || (await window.__walinux_ipc?.isChatExportAborted?.(exportId)));
 
           // 8. Build envelope
           const envelope: WhatsAppChatExport = {
@@ -2492,12 +2936,14 @@ let lastKnownOldestDate: string = '';
           if (!event.data || typeof event.data !== 'object') return;
 
           if (event.data.type === 'WALLIE_START_SINGLE_EXPORT') {
+            isCurrentJobAborted = false;
             const { options, exportId } = event.data;
             const res = await runSingleChatExport(options, exportId, 0, 1);
             window.postMessage({ type: 'WALLIE_EXPORT_COMPLETED', exportId, result: res }, '*');
           }
 
           if (event.data.type === 'WALLIE_START_MULTI_EXPORT') {
+            isCurrentJobAborted = false;
             const { chats, outputDirectory, includeViewer, timeframeBoundary, exportId } = event.data;
             const results = [];
             let totalMsgs = 0;
@@ -2505,7 +2951,7 @@ let lastKnownOldestDate: string = '';
             let firstHtmlPath: string | undefined;
 
             for (let i = 0; i < chats.length; i++) {
-              const isAborted = await window.__walinux_ipc?.isChatExportAborted?.(exportId);
+              const isAborted = isCurrentJobAborted || (await window.__walinux_ipc?.isChatExportAborted?.(exportId));
               if (isAborted) break;
 
               const chat = chats[i];
@@ -2528,9 +2974,13 @@ let lastKnownOldestDate: string = '';
               if (!firstHtmlPath && res.htmlPath) {
                 firstHtmlPath = res.htmlPath;
               }
+
+              if (isCurrentJobAborted || (await window.__walinux_ipc?.isChatExportAborted?.(exportId))) {
+                break;
+              }
             }
 
-            const isAborted = await window.__walinux_ipc?.isChatExportAborted?.(exportId);
+            const isAborted = isCurrentJobAborted || (await window.__walinux_ipc?.isChatExportAborted?.(exportId));
             showExportCompletionModal({
               status: isAborted ? 'aborted' : 'completed',
               chatTitle: `${chats.length} Chats`,

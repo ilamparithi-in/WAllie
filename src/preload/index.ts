@@ -523,7 +523,7 @@ function showGuestToast(msg: string, url?: string) {
       gap: '8px',
       maxWidth: '384px',
       pointerEvents: 'none',
-      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
     });
     (document.body || document.documentElement).appendChild(container);
   }
@@ -1235,7 +1235,6 @@ const TITLEBAR_CSS = `
   .titlebar-left-title {
     color: #e9edef;
     font-weight: 600;
-    letter-spacing: 0.3px;
   }
   .titlebar-left-badge {
     padding: 1px 6px;

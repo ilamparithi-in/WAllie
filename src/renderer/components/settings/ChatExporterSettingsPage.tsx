@@ -473,6 +473,18 @@ export const ChatExporterSettingsPage: React.FC<ChatExporterSettingsPageProps> =
               </label>
             </div>
 
+            {/* Guidance Notices */}
+            <div className="bg-[#00a884]/10 border border-[#00a884]/25 rounded-xl p-3 text-[11px] text-[#aebac1] space-y-1 leading-relaxed">
+              <div className="text-[#00a884] font-semibold flex items-center gap-1.5 text-xs mb-1">
+                <span>ℹ️</span> <span>Export Guidance</span>
+              </div>
+              <div>• Keep the chat open and keep monitoring the exporter.</div>
+              <div>• If the exporter does not fetch older messages, you may try it manually.</div>
+              <div>• If the exporter misses some media, you may manually download it.</div>
+              <div>• Export can be cancelled at any time; if it is frozen on a file just press skip file.</div>
+              <div>• Sometimes it may take 2 or more exports for it to be complete.</div>
+            </div>
+
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#2c3943]">
               <button
                 type="button"
