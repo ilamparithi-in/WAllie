@@ -189,6 +189,11 @@ export class ChatExporterManager {
       outputDirectory: options.outputDirectory,
     };
 
+    const existing = this.activeJobs.get(exportId);
+    if (existing && existing.isAborted) {
+      return;
+    }
+
     this.activeJobs.set(exportId, {
       exportId,
       options,
@@ -232,12 +237,10 @@ export class ChatExporterManager {
         job.isAborted = true;
         job.progress.status = 'aborted';
         this.notifyProgress(job.progress);
-        return true;
       }
-      return false;
     }
 
-    // Stop all active export jobs if no specific ID is provided
+    // Stop all active export jobs if no specific ID is provided or in multi-chat exports
     let stoppedAny = false;
     for (const job of this.activeJobs.values()) {
       job.isAborted = true;
@@ -366,8 +369,10 @@ export class ChatExporterManager {
       --reply-bg: rgba(0, 0, 0, 0.2);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, button, input, select, textarea {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background-color: var(--bg-app);
       color: var(--text-primary);
       height: 100vh;

@@ -173,7 +173,7 @@ export async function buildAccountStyling(account: Account): Promise<{ fontCss: 
       }
     }
     styleRules.push(
-      `#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: "${family}", "Segoe UI", Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
+      `#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: "${family}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
     );
   }
 

@@ -149,12 +149,12 @@ export function restoreSearchBox(sbox: HTMLElement | null, originalText: string)
   const buttons = Array.from(container.querySelectorAll<HTMLElement>('button, [role="button"]')).filter(vis);
   for (const btn of buttons) {
     const svgTitle = (btn.querySelector('title')?.textContent || '').toLowerCase();
-    if (svgTitle.includes('close') || svgTitle.includes('cancel') || svgTitle.includes('back')) {
+    if (svgTitle.includes('close') || svgTitle.includes('cancel') || svgTitle.includes('clear')) {
       clearBtn = btn;
       break;
     }
     const label = (btn.getAttribute('aria-label') || '').toLowerCase();
-    if (label === 'end icon button' || /\b(cancel|clear|back|close|cerrar|cancelar)\b/i.test(label)) {
+    if (label === 'end icon button' || /\b(cancel|clear|close|cerrar|cancelar)\b/i.test(label)) {
       clearBtn = btn;
       break;
     }
@@ -162,7 +162,7 @@ export function restoreSearchBox(sbox: HTMLElement | null, originalText: string)
 
   if (!clearBtn) {
     const legacyIcon = container.querySelector(
-      'span[data-icon="x-alt"], span[data-icon="x"], span[data-icon="back"], span[data-icon="arrow-back"]'
+      'span[data-icon="x-alt"], span[data-icon="x"]'
     );
     if (legacyIcon) {
       clearBtn = (legacyIcon.closest('button, [role="button"]') || legacyIcon) as HTMLElement;
@@ -178,10 +178,10 @@ export function restoreSearchBox(sbox: HTMLElement | null, originalText: string)
     setSearchText(sbox, '');
   }
 
-  // 2. Dispatch Escape key event to ensure search overlay / filter mode is dismissed
+  // 2. Dispatch non-bubbling Escape to the search box itself only to dismiss local autocomplete/dropdown
   try {
-    sbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
-    sbox.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
+    sbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: false }));
+    sbox.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: false }));
   } catch (e) {}
 
   // 3. Remove focus so cursor doesn't remain in search box
