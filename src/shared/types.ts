@@ -117,6 +117,7 @@ export interface LinkPreviewData {
   title: string;
   description: string;
   thumbnailBase64?: string;
+  thumbnailHQBase64?: string;
   thumbnailWidth?: number;
   thumbnailHeight?: number;
   previewType?: 'video' | 'image' | 'none';
