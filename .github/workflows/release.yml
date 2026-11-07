@@ -62,6 +62,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends rpm libarchive-tools flatpak flatpak-builder
+          sudo snap install snapcraft --classic
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y flathub org.freedesktop.Platform//23.08 org.freedesktop.Sdk//23.08
 
@@ -101,6 +102,56 @@ jobs:
 
       - name: Publish Snap to Stable Channel
         if: runner.os == 'Linux'
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: dist-pack/*.snap
+          release: candidate,stable
+
+  build-snap-arm64:
+    name: Build & Release ARM64 Snap
+    runs-on: ubuntu-24.04-arm
+    needs: build-and-release
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Snapcraft
+        run: sudo snap install snapcraft --classic
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build renderer and main bundles
+        run: npm run build
+
+      - name: Print Release Version Diagnostics
+        run: node scripts/version-helper.cjs --json
+
+      - name: Package ARM64 Snap
+        run: node scripts/build-package.cjs --linux snap --arm64 --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Snap Asset to Draft Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-pack/*.snap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish ARM64 Snap to Stable Channel
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
