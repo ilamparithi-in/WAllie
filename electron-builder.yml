@@ -22,18 +22,20 @@ linux:
       arch: [x64, arm64]
     - target: snap
       arch: [x64, arm64]
-snap:
-  confinement: strict
-  grade: stable
-  summary: Unofficial WhatsApp client with multi-account and extensions support
-  plugs:
-    - default
-    - browser-support
-    - audio-playback
-    - audio-record
-    - camera
-    - home
-    - removable-media
+snapcraft:
+  base: "core24"
+  core24:
+    confinement: strict
+    grade: stable
+    summary: Unofficial WhatsApp client with multi-account and extensions support
+    plugs:
+      - default
+      - browser-support
+      - audio-playback
+      - audio-record
+      - camera
+      - home
+      - removable-media
 flatpak:
   runtimeVersion: "23.08"
   finishArgs:
