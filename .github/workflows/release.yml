@@ -103,13 +103,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve Built Snap Path
+        if: runner.os == 'Linux'
+        id: snap
+        run: echo "path=$(ls dist-pack/*.snap)" >> $GITHUB_OUTPUT
+
       - name: Publish Snap to Stable Channel
         if: runner.os == 'Linux'
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
-          snap: dist-pack/*.snap
+          snap: ${{ steps.snap.outputs.path }}
           release: candidate,stable
 
   build-snap-arm64:
@@ -154,10 +159,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve Built Snap Path
+        id: snap
+        run: echo "path=$(ls dist-pack/*.snap)" >> $GITHUB_OUTPUT
+
       - name: Publish ARM64 Snap to Stable Channel
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
-          snap: dist-pack/*.snap
+          snap: ${{ steps.snap.outputs.path }}
           release: candidate,stable

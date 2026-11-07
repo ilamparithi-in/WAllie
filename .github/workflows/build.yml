@@ -103,13 +103,18 @@ jobs:
           compression-level: 0
           if-no-files-found: warn
 
+      - name: Resolve Built Snap Path
+        if: runner.os == 'Linux' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: snap
+        run: echo "path=$(ls dist-pack/*.snap)" >> $GITHUB_OUTPUT
+
       - name: Publish Snap to Edge Channel
         if: runner.os == 'Linux' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
-          snap: dist-pack/*.snap
+          snap: ${{ steps.snap.outputs.path }}
           release: edge
 
   build-snap-arm64:
@@ -152,11 +157,16 @@ jobs:
           compression-level: 0
           if-no-files-found: warn
 
+      - name: Resolve Built Snap Path
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: snap
+        run: echo "path=$(ls dist-pack/*.snap)" >> $GITHUB_OUTPUT
+
       - name: Publish ARM64 Snap to Edge Channel
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
-          snap: dist-pack/*.snap
+          snap: ${{ steps.snap.outputs.path }}
           release: edge
