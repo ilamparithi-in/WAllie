@@ -8,6 +8,8 @@ import { createAccountView, pauseAllMedia, injectCustomCssForView, registerZoomS
 import { safeDeleteExtensionDir } from './extensions';
 import { saveSettings, saveAccounts, ACCOUNTS_FILE } from './config';
 import { TITLEBAR_HEIGHT } from '../shared/constants';
+import { DEFAULT_MIN_WINDOW_WIDTH, DEFAULT_MIN_WINDOW_HEIGHT } from '../shared/types';
+import { loadWindowState, saveWindowStateImmediate, debouncedSaveWindowState } from './windowState';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -157,13 +159,36 @@ export function animateSettingsTransition(targetOpen: boolean) {
   }
 }
 
+export function enforceWindowMinimumSize(win?: BrowserWindow | null): void {
+  const targetWin = win || state.mainWindow;
+  if (!targetWin || targetWin.isDestroyed()) return;
+  const unblocked = !!state.globalSettings?.unblockMinWindowSize;
+  if (unblocked) {
+    targetWin.setMinimumSize(0, 0);
+  } else {
+    targetWin.setMinimumSize(DEFAULT_MIN_WINDOW_WIDTH, DEFAULT_MIN_WINDOW_HEIGHT);
+    if (!targetWin.isMaximized()) {
+      const [w, h] = targetWin.getSize();
+      if (w < DEFAULT_MIN_WINDOW_WIDTH || h < DEFAULT_MIN_WINDOW_HEIGHT) {
+        const nextW = Math.max(w, DEFAULT_MIN_WINDOW_WIDTH);
+        const nextH = Math.max(h, DEFAULT_MIN_WINDOW_HEIGHT);
+        console.log(`[Window] Restoring window size from ${w}x${h} to minimum ${nextW}x${nextH} to prevent softlock`);
+        targetWin.setSize(nextW, nextH);
+      }
+    }
+  }
+}
+
 export function createMainWindow() {
-  const { width, height } = getInitialWindowSize(1100, 750);
+  const windowState = loadWindowState();
+  const unblocked = !!state.globalSettings?.unblockMinWindowSize;
   state.mainWindow = new BrowserWindow({
-    width,
-    height,
-    minWidth: 700,
-    minHeight: 500,
+    width: windowState.width,
+    height: windowState.height,
+    x: windowState.x,
+    y: windowState.y,
+    minWidth: unblocked ? 0 : DEFAULT_MIN_WINDOW_WIDTH,
+    minHeight: unblocked ? 0 : DEFAULT_MIN_WINDOW_HEIGHT,
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#111b21',
@@ -191,6 +216,14 @@ export function createMainWindow() {
 
   state.mainWindow.once('ready-to-show', async () => {
     console.log('Main window ready-to-show, activeAccountId:', state.activeAccountId);
+    enforceWindowMinimumSize(state.mainWindow);
+    if (windowState.isMaximized) {
+      state.mainWindow?.maximize();
+    } else if (windowState.x !== undefined && windowState.y !== undefined) {
+      try {
+        state.mainWindow?.setPosition(windowState.x, windowState.y);
+      } catch (e) {}
+    }
     if (!state.globalSettings?.startMinimized) {
       state.mainWindow?.show();
     } else {
@@ -228,6 +261,7 @@ export function createMainWindow() {
   });
 
   state.mainWindow.on('show', () => {
+    enforceWindowMinimumSize(state.mainWindow);
     const activeView = state.accountViews.get(state.activeAccountId);
     if (activeView && !activeView.webContents.isDestroyed()) {
       applyActiveViewBoundsImmediately(activeView);
@@ -269,19 +303,29 @@ export function createMainWindow() {
     return { action: 'deny' };
   });
 
-  state.mainWindow.on('resize', updateActiveViewBounds);
+  state.mainWindow.on('resize', () => {
+    updateActiveViewBounds();
+    debouncedSaveWindowState(state.mainWindow);
+  });
+
+  state.mainWindow.on('move', () => {
+    debouncedSaveWindowState(state.mainWindow);
+  });
 
   state.mainWindow.on('maximize', () => {
     state.mainWindow?.webContents.send('window:maximized-changed', true);
     setTimeout(updateActiveViewBounds, 100);
+    saveWindowStateImmediate(state.mainWindow);
   });
 
   state.mainWindow.on('unmaximize', () => {
     state.mainWindow?.webContents.send('window:maximized-changed', false);
     setTimeout(updateActiveViewBounds, 100);
+    debouncedSaveWindowState(state.mainWindow);
   });
 
   state.mainWindow.on('close', (event) => {
+    saveWindowStateImmediate(state.mainWindow);
     if (state.mainWindow && !(app as any).isQuitting && !state.isQuitting) {
       if (state.globalSettings?.closeToTray) {
         event.preventDefault();

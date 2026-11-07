@@ -83,6 +83,9 @@ export interface DownloadRecord {
   state: 'progressing' | 'completed' | 'failed' | 'cancelled';
 }
 
+export const DEFAULT_MIN_WINDOW_WIDTH = 480;
+export const DEFAULT_MIN_WINDOW_HEIGHT = 540;
+
 export interface GlobalSettings {
   closeToTray: boolean;
   hardwareAcceleration: boolean;
@@ -111,6 +114,7 @@ export interface GlobalSettings {
   defaultProtocolAccountId?: string;
   standaloneLinkPreviewEnabled?: boolean;
   responsiveLayoutMode?: 'disabled' | 'auto' | 'portrait';
+  unblockMinWindowSize?: boolean;
 }
 
 export interface LinkPreviewData {

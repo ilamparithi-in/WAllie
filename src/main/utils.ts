@@ -2,7 +2,7 @@ import { nativeImage, NativeImage, WebContents, screen, BrowserWindow } from 'el
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
-import { Account, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
+import { Account, DEFAULT_ACCOUNT_SETTINGS, DEFAULT_MIN_WINDOW_WIDTH, DEFAULT_MIN_WINDOW_HEIGHT } from '../shared/types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,9 +31,12 @@ export function getInitialWindowSize(
     const maxWidth = Math.floor(workWidth * maxRatio);
     const maxHeight = Math.floor(workHeight * maxRatio);
 
+    const minW = state.globalSettings?.unblockMinWindowSize ? 0 : DEFAULT_MIN_WINDOW_WIDTH;
+    const minH = state.globalSettings?.unblockMinWindowSize ? 0 : DEFAULT_MIN_WINDOW_HEIGHT;
+
     return {
-      width: Math.max(360, Math.min(targetWidth, maxWidth)),
-      height: Math.max(360, Math.min(targetHeight, maxHeight)),
+      width: Math.max(minW, Math.min(targetWidth, maxWidth)),
+      height: Math.max(minH, Math.min(targetHeight, maxHeight)),
     };
   } catch (err) {
     console.error('Failed to calculate initial window size:', err);
