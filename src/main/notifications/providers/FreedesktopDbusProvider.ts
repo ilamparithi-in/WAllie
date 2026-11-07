@@ -7,6 +7,11 @@ import {
   NotificationPayload,
   NotificationCapabilities,
 } from '../types';
+import {
+  formatNotificationSummary,
+  formatNotificationBody,
+  stripNotificationMarkup,
+} from '../../../shared/notificationFormatting';
 
 interface TrackedNotification {
   payload: NotificationPayload;
@@ -21,6 +26,7 @@ export class FreedesktopDbusProvider implements NotificationProvider {
   private iface: dbus.ClientInterface | null = null;
   private isConnected = false;
   private availabilityChecked: boolean | null = null;
+  private serverCapabilities = new Set<string>();
   private activeNotifications = new Map<number, TrackedNotification>();
   private avatarCacheDir: string;
 
@@ -29,7 +35,7 @@ export class FreedesktopDbusProvider implements NotificationProvider {
     this.initAvatarCache();
 
     app.on('before-quit', () => {
-      this.dispose().catch(() => {});
+      this.dispose().catch(() => { });
     });
   }
 
@@ -41,9 +47,9 @@ export class FreedesktopDbusProvider implements NotificationProvider {
         // Clean up leftover avatar files from previous sessions
         fs.promises.readdir(this.avatarCacheDir).then((files) => {
           for (const file of files) {
-            fs.promises.unlink(path.join(this.avatarCacheDir, file)).catch(() => {});
+            fs.promises.unlink(path.join(this.avatarCacheDir, file)).catch(() => { });
           }
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } catch (err) {
       console.error('[FreedesktopDbusProvider] Failed to initialize avatar cache directory:', err);
@@ -132,6 +138,16 @@ export class FreedesktopDbusProvider implements NotificationProvider {
 
       this.iface = iface;
       this.isConnected = true;
+
+      try {
+        const caps = await iface.GetCapabilities();
+        if (Array.isArray(caps)) {
+          this.serverCapabilities = new Set(caps.map((c) => String(c).toLowerCase()));
+        }
+      } catch (e) {
+        console.warn('[FreedesktopDbusProvider] Could not retrieve server capabilities:', e);
+      }
+
       return this.iface;
     } catch (err) {
       console.warn('[FreedesktopDbusProvider] Could not connect to org.freedesktop.Notifications:', err);
@@ -146,7 +162,7 @@ export class FreedesktopDbusProvider implements NotificationProvider {
     if (this.bus) {
       try {
         this.bus.disconnect();
-      } catch {}
+      } catch { }
       this.bus = null;
     }
   }
@@ -162,23 +178,8 @@ export class FreedesktopDbusProvider implements NotificationProvider {
     }
 
     if (tracked.tempAvatarPath) {
-      fs.promises.unlink(tracked.tempAvatarPath).catch(() => {});
+      fs.promises.unlink(tracked.tempAvatarPath).catch(() => { });
     }
-  }
-
-  private escapeXml(str: string): string {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
-  }
-
-  private sanitizeString(str: string, maxLength: number): string {
-    if (!str) return '';
-    const trimmed = str.trim().slice(0, maxLength);
-    return this.escapeXml(trimmed);
   }
 
   private writeTempAvatar(dataUrl: string): string | null {
@@ -207,8 +208,11 @@ export class FreedesktopDbusProvider implements NotificationProvider {
       return null;
     }
 
-    const title = this.sanitizeString(payload.title, 256);
-    const body = this.sanitizeString(payload.body, 4096);
+    const title = formatNotificationSummary(payload.title, 256);
+    const supportsMarkup = this.serverCapabilities.size === 0 || this.serverCapabilities.has('body-markup');
+    const body = supportsMarkup
+      ? formatNotificationBody(payload.body, 4096)
+      : stripNotificationMarkup(payload.body, 4096);
 
     let iconPath = '';
     let tempAvatarPath: string | undefined;
@@ -237,7 +241,7 @@ export class FreedesktopDbusProvider implements NotificationProvider {
     const actionsList: string[] = [];
     if (payload.actions && payload.actions.length > 0) {
       for (const action of payload.actions) {
-        actionsList.push(action.id, action.label);
+        actionsList.push(action.id, formatNotificationSummary(action.label, 100));
       }
     }
 
@@ -256,7 +260,9 @@ export class FreedesktopDbusProvider implements NotificationProvider {
     };
 
     if (payload.canReply) {
-      const placeholder = payload.replyPlaceholder || `Reply to ${payload.title}…`;
+      const placeholder = payload.replyPlaceholder
+        ? formatNotificationSummary(payload.replyPlaceholder, 256)
+        : `Reply to ${title}…`;
       hints['x-kde-reply-placeholder-text'] = new dbus.Variant('s', placeholder);
     }
 
@@ -296,13 +302,13 @@ export class FreedesktopDbusProvider implements NotificationProvider {
 
       // If notification was not accepted, clean up any temp avatar
       if (tempAvatarPath) {
-        fs.promises.unlink(tempAvatarPath).catch(() => {});
+        fs.promises.unlink(tempAvatarPath).catch(() => { });
       }
       return null;
     } catch (err) {
       console.error('[FreedesktopDbusProvider] Notify failed:', err);
       if (tempAvatarPath) {
-        fs.promises.unlink(tempAvatarPath).catch(() => {});
+        fs.promises.unlink(tempAvatarPath).catch(() => { });
       }
       return null;
     }

@@ -4,6 +4,10 @@ import {
   NotificationPayload,
   NotificationCapabilities,
 } from '../types';
+import {
+  formatNotificationSummary,
+  stripNotificationMarkup,
+} from '../../../shared/notificationFormatting';
 
 export class ElectronNativeProvider implements NotificationProvider {
   public readonly name = 'electron-native';
@@ -45,20 +49,23 @@ export class ElectronNativeProvider implements NotificationProvider {
       }
     }
 
+    const title = formatNotificationSummary(payload.title, 256);
+    const body = stripNotificationMarkup(payload.body, 4096);
+
     const nonDefaultActions = (payload.actions || []).filter((a) => a.id !== 'default');
     const electronActions: Electron.NotificationAction[] = nonDefaultActions.map((a) => ({
       type: 'button',
-      text: a.label,
+      text: formatNotificationSummary(a.label, 100),
     }));
 
     const notif = new Notification({
-      title: payload.title,
-      body: payload.body,
+      title,
+      body,
       icon: iconImage,
       silent: false,
       actions: electronActions.length > 0 ? electronActions : undefined,
       hasReply: !!payload.canReply && process.platform === 'darwin',
-      replyPlaceholder: payload.replyPlaceholder,
+      replyPlaceholder: payload.replyPlaceholder ? formatNotificationSummary(payload.replyPlaceholder, 256) : undefined,
     });
 
     const cleanup = () => {
@@ -113,7 +120,7 @@ export class ElectronNativeProvider implements NotificationProvider {
       timer = setTimeout(() => {
         try {
           notif.close();
-        } catch {}
+        } catch { }
         cleanup();
       }, payload.timeoutMs);
     }
@@ -132,7 +139,7 @@ export class ElectronNativeProvider implements NotificationProvider {
       this.activeNotifications.delete(key);
       try {
         entry.notif.close();
-      } catch {}
+      } catch { }
     }
   }
 
@@ -141,7 +148,7 @@ export class ElectronNativeProvider implements NotificationProvider {
       if (entry.timer) clearTimeout(entry.timer);
       try {
         entry.notif.close();
-      } catch {}
+      } catch { }
     }
     this.activeNotifications.clear();
   }

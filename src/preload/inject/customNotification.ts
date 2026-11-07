@@ -1,5 +1,6 @@
 import './types';
 import { norm, isChatOpen } from './chatNavigation';
+import { decodeHtmlEntities } from '../../shared/notificationFormatting';
 
 export const activeNotificationCallbacks = new Map<string, () => void>();
 
@@ -33,7 +34,7 @@ function isReadOnlyChat(tag: string, title: string, opts: any): boolean {
       try {
         const mod = (window as any).require('WAWebChatCollection');
         chatCollection = mod ? (mod.ChatCollection || mod.default) : null;
-      } catch (e) {}
+      } catch (e) { }
     }
     if (!chatCollection && (window as any).Store && (window as any).Store.Chat) {
       chatCollection = (window as any).Store.Chat;
@@ -61,7 +62,7 @@ function isReadOnlyChat(tag: string, title: string, opts: any): boolean {
         }
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // 5. Active DOM check: only if an explicit admin restriction lock banner is displayed
   try {
@@ -72,7 +73,7 @@ function isReadOnlyChat(tag: string, title: string, opts: any): boolean {
         return true;
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 
   return false;
 }
@@ -90,8 +91,8 @@ export class CustomNotification extends EventTarget {
 
   constructor(title: string, options: any = {}) {
     super();
-    this.title = title;
-    this.body = options.body || '';
+    this.title = decodeHtmlEntities(title || '');
+    this.body = decodeHtmlEntities(options.body || '');
     this.icon = options.icon || '';
     this.tag = options.tag || 'notif_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
     this.data = options.data;
@@ -164,7 +165,7 @@ export function initCustomNotification(): void {
   }
 
   if ((window as any).ServiceWorkerRegistration && (window as any).ServiceWorkerRegistration.prototype) {
-    (window as any).ServiceWorkerRegistration.prototype.showNotification = function(title: string, options: any = {}) {
+    (window as any).ServiceWorkerRegistration.prototype.showNotification = function (title: string, options: any = {}) {
       new CustomNotification(title, options);
       return Promise.resolve();
     };
@@ -174,7 +175,7 @@ export function initCustomNotification(): void {
 export function initAnchorDownloadHandler(): void {
   if ((window as any).HTMLAnchorElement && (window as any).HTMLAnchorElement.prototype) {
     const originalAnchorClick = (window as any).HTMLAnchorElement.prototype.click;
-    (window as any).HTMLAnchorElement.prototype.click = function(this: any) {
+    (window as any).HTMLAnchorElement.prototype.click = function (this: any) {
       if (this.download && window.__walinux_ipc && window.__walinux_ipc.onAnchorDownload) {
         const filename = this.download;
         const href = this.href;
@@ -193,7 +194,7 @@ export function initAnchorDownloadHandler(): void {
                   hash = Array.from(new Uint8Array(hashBuf))
                     .map((b) => b.toString(16).padStart(2, '0'))
                     .join('');
-                } catch (e) {}
+                } catch (e) { }
               }
               window.__walinux_ipc?.onAnchorDownload?.(filename, size, hash);
             })
