@@ -220,6 +220,26 @@ const RESPONSIVE_CSS = `
     max-width: none !important;
   }
 
+  /* Emoji / GIFs / Stickers Flyout Panel Positioning & Width Constraint */
+  html[data-walinux-portrait="true"] #expressions-panel-container div:has(> [data-testid="expressions-panel"]),
+  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] #expressions-panel-container div:has(> [data-testid="expressions-panel"]) {
+    left: 68px !important;
+    right: auto !important;
+    max-width: calc(100vw - 76px) !important;
+    width: min(560px, calc(100vw - 76px)) !important;
+  }
+  html[data-walinux-portrait="true"] #expressions-panel-container [data-testid="expressions-panel"],
+  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] #expressions-panel-container [data-testid="expressions-panel"] {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* Attachment Popup Menu Positioning */
+  html[data-walinux-portrait="true"] div.xu96u03[style*="-50%, -100%)"],
+  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] div.xu96u03[style*="-50%, -100%)"] {
+    left: 52px !important;
+  }
+
   /* Injected Back Button */
   .${BACK_BTN_CLASS} {
     display: inline-flex;
