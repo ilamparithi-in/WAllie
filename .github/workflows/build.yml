@@ -106,10 +106,12 @@ jobs:
       - name: Resolve Built Snap Path
         if: runner.os == 'Linux' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: snap
-        run: echo "path=$(ls dist-pack/*.snap)" >> $GITHUB_OUTPUT
+        run: |
+          SNAP_PATH=$(find dist-pack -maxdepth 1 -name "*.snap" -print -quit)
+          echo "path=$SNAP_PATH" >> $GITHUB_OUTPUT
 
       - name: Publish Snap to Edge Channel
-        if: runner.os == 'Linux' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: runner.os == 'Linux' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.snap.outputs.path != ''
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
@@ -160,10 +162,12 @@ jobs:
       - name: Resolve Built Snap Path
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: snap
-        run: echo "path=$(ls dist-pack/*.snap)" >> $GITHUB_OUTPUT
+        run: |
+          SNAP_PATH=$(find dist-pack -maxdepth 1 -name "*.snap" -print -quit)
+          echo "path=$SNAP_PATH" >> $GITHUB_OUTPUT
 
       - name: Publish ARM64 Snap to Edge Channel
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.snap.outputs.path != ''
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
