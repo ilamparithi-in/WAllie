@@ -2,6 +2,13 @@ const { spawnSync } = require('child_process');
 const path = require('path');
 const { getVersionInfo } = require('./version-helper.cjs');
 
+// Auto-patch electron-builder's snap core24 desktop file bug if needed
+try {
+  require('./patch-snap-core24.cjs');
+} catch (e) {
+  // Ignore if patching fails
+}
+
 const versionInfo = getVersionInfo();
 const userArgs = process.argv.slice(2);
 
