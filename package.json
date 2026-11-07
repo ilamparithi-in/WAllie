@@ -23,6 +23,7 @@
     "version:info": "node scripts/version-helper.cjs",
     "electron:dev": "npm run build:preload && vite",
     "electron:build": "npm run build && node scripts/build-package.cjs",
+    "postinstall": "node scripts/patch-snap-core24.cjs",
     "version": "node scripts/update-pkgbuild.cjs && git add PKGBUILD",
     "typecheck": "tsc --noEmit"
   },
