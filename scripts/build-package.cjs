@@ -4,7 +4,10 @@ const { getVersionInfo } = require('./version-helper.cjs');
 
 // Auto-patch electron-builder's snap core24 desktop file bug if needed
 try {
-  require('./patch-snap-core24.cjs');
+  const patchSnapCore24 = require('./patch-snap-core24.cjs');
+  if (typeof patchSnapCore24 === 'function') {
+    patchSnapCore24();
+  }
 } catch (e) {
   // Ignore if patching fails
 }

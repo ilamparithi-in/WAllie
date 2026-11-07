@@ -106,10 +106,12 @@ jobs:
       - name: Resolve Built Snap Path
         if: runner.os == 'Linux'
         id: snap
-        run: echo "path=$(ls dist-pack/*.snap)" >> $GITHUB_OUTPUT
+        run: |
+          SNAP_PATH=$(find dist-pack -maxdepth 1 -name "*.snap" -print -quit)
+          echo "path=$SNAP_PATH" >> $GITHUB_OUTPUT
 
       - name: Publish Snap to Stable Channel
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.snap.outputs.path != ''
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
@@ -161,9 +163,12 @@ jobs:
 
       - name: Resolve Built Snap Path
         id: snap
-        run: echo "path=$(ls dist-pack/*.snap)" >> $GITHUB_OUTPUT
+        run: |
+          SNAP_PATH=$(find dist-pack -maxdepth 1 -name "*.snap" -print -quit)
+          echo "path=$SNAP_PATH" >> $GITHUB_OUTPUT
 
       - name: Publish ARM64 Snap to Stable Channel
+        if: steps.snap.outputs.path != ''
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
