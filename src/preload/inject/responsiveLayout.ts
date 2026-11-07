@@ -240,6 +240,15 @@ const RESPONSIVE_CSS = `
     left: 52px !important;
   }
 
+  /* Fullscreen Modal Overlays & Media/Profile Lightboxes (Portal Spans in .app-wrapper-web) */
+  .app-wrapper-web > span:has(> div) {
+    position: relative !important;
+    z-index: 1000 !important;
+  }
+  .app-wrapper-web > span > div {
+    z-index: 1000 !important;
+  }
+
   /* Injected Back Button */
   .${BACK_BTN_CLASS} {
     display: inline-flex;
