@@ -240,11 +240,12 @@ const RESPONSIVE_CSS = `
     left: 52px !important;
   }
 
-  /* Fullscreen Modal Overlays & Media/Profile Lightboxes (Portal Spans in .app-wrapper-web) */
-  .app-wrapper-web > span:has(> div) {
-    position: relative !important;
-    z-index: 1000 !important;
-  }
+  /* Fullscreen Modal Overlays & Media/Profile Lightboxes (Portal Spans in .app-wrapper-web)
+   * Note: Do NOT set position: relative on .app-wrapper-web > span. All portal popups, context menus,
+   * and reaction bars mount into these spans and calculate their inline "bottom" positions assuming the containing
+   * block is .app-wrapper-web / viewport. Making the span position: relative gives it a 0px containing block,
+   * pushing reaction bars and menus off-screen at negative top coordinates.
+   */
   .app-wrapper-web > span > div {
     z-index: 1000 !important;
   }

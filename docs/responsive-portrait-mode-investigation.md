@@ -173,17 +173,13 @@ graph TD
   - Because `wa-web-main-screen` (which contains `chatlist-header`) appears after the portal `<span>` in `.app-wrapper-web`'s DOM order, with identical z-indices (`500` vs `500`), the navigation rail painted on top of the fullscreen modal overlay.
   - As a result, the left 64px of the photo viewer (including image content and top header padding) was cut off and obscured behind the rail icon buttons.
 - **Solution**:
-  - Elevate all portal overlay spans and their direct containers to `z-index: 1000 !important;`:
+  - Elevate portal container divs directly to `z-index: 1000 !important;`:
     ```css
-    .app-wrapper-web > span:has(> div) {
-      position: relative !important;
-      z-index: 1000 !important;
-    }
     .app-wrapper-web > span > div {
       z-index: 1000 !important;
     }
     ```
-  - Because `1000 > 500`, the fullscreen overlay and its backdrop now cleanly cover the entire viewport, including the navigation rail. When closed (via the top-right 'X' button or Escape), the overlay unmounts and the underlying view (Contact info or Chat) resumes without any visual artifacts.
+  - **Important Caveat**: Never apply `position: relative` to `.app-wrapper-web > span`. All WhatsApp Web portal popups, context menus, and reaction bars mount into these direct `<span>` children and compute their absolute inline `bottom` positions relative to `.app-wrapper-web` (the viewport). If `span` is given `position: relative`, it becomes a 0-height containing block, causing `bottom: Xpx` to evaluate to negative top coordinates (`top = 0 - X - height`), shooting the reaction bar and context menus completely off-screen. Leaving `span` as `position: static` allows the child's `z-index: 1000` to cleanly elevate above the rail (`z-index: 500`) within `.app-wrapper-web`'s stacking context while preserving correct layout coordinates.
 
 ---
 
