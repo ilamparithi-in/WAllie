@@ -9,7 +9,7 @@ pkgdesc="Electron-based WhatsApp Client for Linux with Multi-account and Extensi
 arch=('any')
 url="https://github.com/ilamparithi-in/WAllie"
 license=('MIT')
-depends=('electron34')
+depends=('electron44')
 makedepends=('git' 'npm' 'nodejs')
 provides=('wallie')
 conflicts=('wallie')
@@ -44,13 +44,16 @@ package() {
   install -d "${pkgdir}/usr/bin"
   cat <<EOF > "${pkgdir}/usr/bin/${_pkgname}"
 #!/bin/sh
-exec electron34 /usr/lib/${_pkgname}/dist/main/index.js "\$@"
+exec electron44 /usr/lib/${_pkgname}/dist/main/index.js "\$@"
 EOF
   chmod 755 "${pkgdir}/usr/bin/${_pkgname}"
 
   # Desktop launcher & icons
   install -Dm644 "build/${_pkgname}.desktop" "${pkgdir}/usr/share/applications/${_pkgname}.desktop"
-  install -Dm644 "build/icons/512x512.png" "${pkgdir}/usr/share/icons/hicolor/512x512/apps/${_pkgname}.png"
+  for size in 16 32 48 64 128 256 512; do
+    install -Dm644 "build/icons/${size}x${size}.png" \
+      "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/${_pkgname}.png"
+  done
 
   # License file
   install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
