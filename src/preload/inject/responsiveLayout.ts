@@ -376,12 +376,6 @@ function getActiveTabLabel(): string {
   return activeBtn?.getAttribute('aria-label')?.toLowerCase() || 'chats';
 }
 
-function hasActiveConversationOrMiddle(): boolean {
-  const hasChat = Boolean(document.querySelector('#main header'));
-  const hasMiddle = Boolean(document.querySelector('[data-testid="drawer-middle"]:has(header), [data-testid="drawer-middle"]:has(button)'));
-  return hasChat || hasMiddle;
-}
-
 function setupEventListeners(): void {
   // 1. Navigation rail click interception (capture phase)
   window.addEventListener(
@@ -396,15 +390,22 @@ function setupEventListeners(): void {
       if (railButton) {
         const isCurrentlyActive = railButton.getAttribute('aria-pressed') === 'true';
         if (isCurrentlyActive) {
+          const activeTab = getActiveTabLabel();
+
+          // Communities tab has an empty right section by default, so disable toggling from list to right pane
+          if (activeTab.includes('communit')) {
+            if (isPortraitActive && (currentViewState === 'chat' || currentViewState === 'info')) {
+              setPortraitViewState('list');
+            }
+            return;
+          }
+
           if (isPortraitActive) {
             // In portrait mode: toggle between List and Chat view
             if (currentViewState === 'chat' || currentViewState === 'info') {
               setPortraitViewState('list');
             } else {
-              // Only toggle to chat if an active conversation or middle drawer actually exists
-              if (hasActiveConversationOrMiddle()) {
-                setPortraitViewState('chat');
-              }
+              setPortraitViewState('chat');
             }
           } else {
             // In landscape mode: toggle left sidebar collapse on/off
