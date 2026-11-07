@@ -346,12 +346,72 @@ function updatePortraitState(): void {
       document.documentElement.setAttribute('data-walinux-portrait', 'true');
       document.documentElement.setAttribute('data-portrait-view', currentViewState);
       document.documentElement.removeAttribute('data-walinux-sidebar-collapsed');
+      lockMainScreenScroll();
     } else {
       document.documentElement.removeAttribute('data-walinux-portrait');
       document.documentElement.removeAttribute('data-portrait-view');
       updateLandscapeSidebar();
     }
     window.dispatchEvent(new Event('resize'));
+  }
+}
+
+function lockMainScreenScroll(): void {
+  const container = document.querySelector<HTMLElement>('[data-testid="wa-web-main-screen"] > div');
+  if (!container) return;
+
+  if (!(container as any).__walinuxScrollLocked) {
+    (container as any).__walinuxScrollLocked = true;
+
+    const origDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollLeft');
+    if (origDescriptor) {
+      Object.defineProperty(container, 'scrollLeft', {
+        get() {
+          return origDescriptor.get ? origDescriptor.get.call(this) : 0;
+        },
+        set(val) {
+          if (isPortraitActive) {
+            // Enforce 0 in portrait mode to prevent native column sliding from breaking fixed/absolute rail layout
+            if (origDescriptor.set) origDescriptor.set.call(this, 0);
+            return;
+          }
+          if (origDescriptor.set) origDescriptor.set.call(this, val);
+        },
+        configurable: true,
+      });
+    }
+
+    const origScrollTo = container.scrollTo;
+    if (origScrollTo) {
+      container.scrollTo = function (optionsOrX?: any, y?: any) {
+        if (isPortraitActive) {
+          if (typeof optionsOrX === 'object' && optionsOrX !== null) {
+            optionsOrX = { ...optionsOrX, left: 0 };
+          } else {
+            optionsOrX = 0;
+          }
+        }
+        return origScrollTo.apply(this, arguments as any);
+      };
+    }
+
+    container.addEventListener(
+      'scroll',
+      () => {
+        if (isPortraitActive && container.scrollLeft !== 0) {
+          if (origDescriptor?.set) {
+            origDescriptor.set.call(container, 0);
+          } else {
+            container.scrollLeft = 0;
+          }
+        }
+      },
+      { passive: false }
+    );
+  }
+
+  if (isPortraitActive && container.scrollLeft !== 0) {
+    container.scrollLeft = 0;
   }
 }
 
@@ -479,12 +539,19 @@ function setupEventListeners(): void {
           }
         } else if (activeTab.includes('communit')) {
           // In communities: sub-groups / announcements open #main, community headers just expand
-          setTimeout(() => {
-            if (isPortraitActive && document.querySelector('#main header')) {
+          const isSubgroup = !!target.closest(
+            '[data-testid="community-tab-subgroup-cell"], [data-testid="cell-frame-container"]'
+          );
+          const isCommunityHeader = !!target.closest(
+            '[data-testid="community-tab-community-cell"], [data-testid="new-community-row"]'
+          );
+          if (isSubgroup && !isCommunityHeader) {
+            if (isPortraitActive) {
               setPortraitViewState('chat');
-              injectBackButton();
+              setTimeout(injectBackButton, 50);
             }
-          }, 100);
+          }
+          return;
         }
         return;
       }
@@ -546,6 +613,8 @@ function setupEventListeners(): void {
   const observer = new MutationObserver(() => {
     if (!isPortraitActive) return;
 
+    lockMainScreenScroll();
+
     // Check if right drawer opened
     const drawerRight = document.querySelector('[data-testid="drawer-right"]');
     const container = document.querySelector('[data-testid="wa-web-main-screen"] > div');
@@ -587,6 +656,7 @@ export function setResponsiveLayoutMode(mode: ResponsiveLayoutMode): void {
 export function initResponsiveLayout(): void {
   ensureStyleSheet();
   updatePortraitState();
+  lockMainScreenScroll();
   setupEventListeners();
 
   // Load initial mode from IPC if available

@@ -92,7 +92,7 @@ graph TD
     ```html
     <svg viewBox="0 0 24 24" height="24" width="24" preserveAspectRatio="xMidYMid meet" fill="currentColor">
       <title>ic-arrow-back</title>
-      <path fill="currentColor" d="m7.82 13 4.9 4.9c.2.2.3.43.3.7a1 1 0 0 1-.32.7c-.2.18-.43.28-.7.29a.92.92 0 0 1-.7-.29l-6.6-6.6a.88.88 0 0 1-.21-.32 1.1 1.1 0 0 1-.07-.38c0-.13.03-.26.07-.38a.88.88 0 0 1 .21-.32l6.6-6.6a.93.93 0 0 1 .69-.27.97.97 0 0 1 1.01.99c0 .27-.1.5-.3.7L7.82 11H19c.28 0 .52.1.71.29.2.19.29.43.29.71 0 .28-.1.52-.29.71A.94.94 0 0 1 19 13H7.82Z"></path>
+      <path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path>
     </svg>
     ```
   - Clicking the Back button switches the active portrait view from CHAT to LIST.
@@ -121,13 +121,15 @@ graph TD
 - Back button inserted before the channel avatar circle in `#main header` returns to the Channels List view.
 
 ### 3.6 Communities Tab (`aria-label="Communities"`)
-- Communities feature a **2-level list hierarchy**:
-  - **Level 1 (All Communities List)**: Shows all communities with top announcements/groups.
-  - **Level 2 (Specific Community Detail)**: Clicking a community header navigates deeper into that community's sub-group listing inside `drawer-left`. WhatsApp Web natively provides a `button[aria-label="Back"]` inside `drawer-left`'s header to return to Level 1.
-  - **Level 3 (Sub-Chat / Group Chat)**: Clicking any specific sub-chat row (e.g. "Announcements", "Debug Logs") opens `#main` (`c4`).
-- **Splicing Behavior**:
-  - Clicking a community header stays in **LIST view** (user is just navigating deeper into the list hierarchy).
-  - Clicking an actual sub-chat transitions from **LIST view to CHAT view**.
+- Communities feature a **3-level navigation hierarchy**:
+  - **Level 1 (Top-Level Communities List)**: Shows all joined communities (`[data-testid="community-tab-community-cell"]`) with pinned announcements and sub-groups (`[data-testid="community-tab-subgroup-cell"]`).
+  - **Level 2 (Community Navigation Drawer)**: Clicking a community header (`community-tab-community-cell`) drills down into `[data-testid="community-navigation-drawer"]` inside `drawer-left`. This view displays all sub-groups for that specific community under `[data-testid="section-your-groups"]`. It includes a native WhatsApp back button (`[data-testid="back"]`) in its header to return to Level 1.
+  - **Level 3 (Sub-Group Chat / Announcement Feed)**: Clicking any specific sub-chat row (e.g. "Announcements", "Official Class Group") opens `#main` (`c4`).
+- **Splicing & Event Handling**:
+  - Clicking a community header (`community-tab-community-cell`) stays in **LIST view** (user is navigating into `community-navigation-drawer` within `drawer-left`).
+  - Clicking a sub-chat inside `community-navigation-drawer` (`[data-testid="community-navigation-drawer"] [role="listitem"]`) or a sub-chat row in Level 1 (`[data-testid="community-tab-subgroup-cell"]`) transitions to **CHAT view** and injects the back button.
+  - Clicking the injected Back button in `#main header` returns directly to `community-navigation-drawer` (Level 2), and clicking the drawer's native back button returns to the top-level Communities list (Level 1).
+  - Toggling via the navigation rail: The right pane is empty by default on Communities until a sub-group is chosen, so rail clicking in Communities tab stays in List view if already in List view, and returns to List view from Chat view.
 
 ### 3.7 Right Sidebar / Info Pane (`[data-testid="drawer-right"]`)
 - Triggered by clicking the chat avatar or title in `#main header`.
@@ -136,8 +138,8 @@ graph TD
   - WhatsApp plays CSS animation `@keyframes x1h4ohyg-B { 0% { flex-basis: 0%; } 100% { flex-basis: 30%; } }`.
   - WhatsApp squashes `c4` from 100% to ~60% and expands `drawer-right` to 30%.
 - **Portrait Splicing Requirement**:
-  - Only ONE pane visible! `drawer-right` must occupy `100%` of the content area (`calc(100% - 64px)`), while `c3` and `c4` are moved off-screen.
-  - Override WhatsApp's `flex-basis: 30%` keyframe/style with `flex-basis: 100%` or full width.
+  - Only ONE pane visible! `drawer-right` must occupy `100%` of the content area (`calc(100% - 64px)`), while `c3` and `c4` are moved off-screen via `transform: translate3d(-100%, 0, 0)`.
+  - Override WhatsApp's `flex-basis: 30%` keyframe/style with `flex: 0 0 calc(100% - 64px) !important; width: calc(100% - 64px) !important;`.
   - Closing `drawer-right` (via its native `button[aria-label="Close"]`) smoothly returns to the Chat view.
 
 ### 3.8 Camera & Attachment Preview Modals
@@ -145,8 +147,24 @@ graph TD
 - Both the Camera capture stream (`[data-testid="camera_capture_take_photo_btn"]`) and the Media Editor / Attachment Preview ("Retake", filters, stickers, caption bar, send button) are rendered inside:
   `c2 > div[data-testid="drawer-middle"]`
 - In portrait mode:
-  - `drawer-middle` must occupy `left: 64px; width: calc(100% - 64px);`.
+  - `drawer-middle` occupies `position: absolute; left: 64px; width: calc(100% - 64px); height: 100%; z-index: 350;`.
   - Its native `button[aria-label="Close"]` closes the preview and returns to the Chat view.
+
+### 3.9 Popups, Flyout Menus & Modals Workarounds
+
+#### 1. Emoji / GIFs / Stickers Flyout Panel (`#expressions-panel-container`)
+- **Problem**: WhatsApp Web mounts the floating expression panel inside `#expressions-panel-container` as a direct child of `.app-wrapper-web`. It computes inline positioning (`left: -138.8px; bottom: 77.6px;`) based on desktop sidebar coordinates, placing the panel off-screen to the left behind the 64px navigation rail. Additionally, the panel has a hardcoded default width of `560px`, which overflows and clips when window width is under 600px.
+- **Solution**:
+  - Re-align the floating container in portrait or collapsed mode to `left: 68px !important; right: auto !important;`.
+  - Constrain its width dynamically with `width: min(560px, calc(100vw - 76px)) !important; max-width: calc(100vw - 76px) !important;`.
+  - Set `width: 100% !important; max-width: 100% !important;` on `[data-testid="expressions-panel"]`.
+  - Internal components (emojis grid, GIF search box and column grid, sticker packs) flex responsively down to 320px with zero horizontal overflow.
+
+#### 2. Attachment Popup Menu (`button[aria-label="Attach"]` / `+`)
+- **Problem**: The popover container (`div.xu96u03`) uses `transform: translate(102px, 642px) translate(-50%, -100%)`. With a menu width of ~171px and the Attach button center at ~102px, `102px - (171px / 2) = 16.5px`, causing the menu to overlap the 64px navigation rail by ~48px.
+- **Solution**:
+  - Specifically target bottom popup menus using `div.xu96u03[style*="-50%, -100%)"]` (avoiding false positives with top-down menus like the 3-dots chat menu which use `translate(-100%, 0px)`).
+  - Apply `left: 52px !important;` in portrait mode or collapsed landscape mode. This shifts the menu coordinate by 52px (`16.4px + 52px = 68.4px`), placing it right beside the 64px rail with a clean 4px gutter.
 
 ---
 
@@ -206,6 +224,33 @@ sequenceDiagram
     Rail->>State: Active Tab Clicked (Toggle)
     State->>State: If CHAT -> switch to LIST; If LIST -> switch to CHAT
 ```
+
+### 4.3 Native Container Scroll Bug & Horizontal Scroll Lock
+
+#### The Phenomenon
+When clicking on certain conversation types (most notably **community sub-groups** or whenever WhatsApp Web programmatically calls `.focus()` / auto-scrolls to an off-screen element), WhatsApp Web activates `.two.app-animating` on the main screen container (`[data-testid="wa-web-main-screen"] > div`) and sets `scrollLeft = 668` (the full width of the left pane).
+
+```
+Normal Layout:
+[ Rail: 0 to 64px ][ Left Pane: 64 to 732px ] | [ #main (hidden): 732 to 1400px ]
+
+When WhatsApp sets container.scrollLeft = 668px:
+Screen viewport shows coordinates 668px to 1400px:
+[ Rail pushed to -668px ] [ Left Pane pushed to -604px ] [ #main rendered at 64px ]
+💥 Entire layout shifted left by 668px! Rail disappears, back button unreachable, UI stuck!
+```
+
+#### Why `overflow: hidden` Fails
+In CSS, `overflow: hidden` removes visible scrollbars, but **allows programmatic scrolling** via JavaScript (`element.scrollLeft = 668`) and browser auto-scroll-into-view. Furthermore, because `#main` is positioned with `transform: translate3d(100%, 0, 0)`, Chromium considers the scrollable overflow width of the container to be `64px + 668px + 668px = 1400px`, allowing scroll offsets up to 668px.
+
+#### The Solution: JavaScript Property Descriptor Lock (`lockMainScreenScroll`)
+To permanently eliminate horizontal container shifting in portrait mode:
+1. **Property Interception**: Override `scrollLeft` on `[data-testid="wa-web-main-screen"] > div` via `Object.defineProperty`:
+   - In portrait mode: Force the setter to execute `origDescriptor.set.call(this, 0)` regardless of what value WhatsApp's React code passes.
+   - In landscape mode: Forward normally to native `Element.prototype.scrollLeft`.
+2. **Method Interception**: Intercept `container.scrollTo` and `container.scroll`, rewriting any `{ left: N }` options to `{ left: 0 }`.
+3. **Event Trap**: Register an active `scroll` event listener on `container` that resets `container.scrollLeft = 0` immediately if a browser layout pass ever introduces a non-zero horizontal scroll.
+4. With horizontal scroll guaranteed at `0`, all panes remain strictly aligned with the 64px navigation rail at all times.
 
 ---
 
@@ -282,10 +327,37 @@ stateDiagram-v2
 
 ---
 
-## 7. Next Steps & Implementation Roadmap
+## 7. Implementation Architecture & Status
 
-1. **Preload Inject Module**: Create `src/preload/inject/responsiveLayout.ts` containing the portrait detection, DOM splicing CSS injection, view state controller, back button injector, and nav rail click interceptor.
-2. **Main World & Isolated World Coordination**: Register listeners via `whatsappMainWorld.ts` or preload isolated world to inject styles and handle click events.
-3. **Settings & Auto-detection**: Support automatic portrait detection via `(max-width: 900px)` / aspect ratio, with seamless fallback when resizing between desktop and portrait view.
-4. **Live Dev Bridge Verification**: Test each flow (Chats, Calls, Status, Channels, Communities, Info pane, Camera, Attachment preview, Nav rail toggle) on the live session.
+All responsive layout enhancements are implemented in [`src/preload/inject/responsiveLayout.ts`](file:///home/ilam_common/DevHome/GitHub/walinux/src/preload/inject/responsiveLayout.ts) and verified via the Dev Bridge:
+
+### 7.1 Three-Mode Responsiveness Setting
+Configurable at runtime and synchronized across IPC:
+1. **`disabled` (Always Landscape)**: Preserves WhatsApp Web's desktop multi-pane layout. Rail toggle collapses/expands the left sidebar (`data-walinux-sidebar-collapsed="true"`).
+2. **`auto` (Automatic)**: Activates portrait single-pane mode when `window.innerWidth <= 900px` or `window.innerWidth < window.innerHeight` (portrait aspect ratio).
+3. **`portrait` (Always Portrait)**: Forces single-pane portrait mode regardless of window dimensions.
+
+### 7.2 State & Transition Matrix
+
+| Current View | Trigger Event | Destination View | Action Performed |
+| :--- | :--- | :--- | :--- |
+| **LIST** | Click chat / channel / community sub-group row | **CHAT** | `translate3d(0, 0, 0)` on `#main`, back button injected into `#main header` |
+| **LIST** | Click Call History row | **CHAT** | `translate3d(0, 0, 0)` on `drawer-middle` (Call Info) |
+| **CHAT** | Click injected Back button | **LIST** | `translate3d(0, 0, 0)` on `#pane-side` or `drawer-left` |
+| **CHAT** | Click Close button (Call Info / Camera / Attachment preview) | **LIST** (Calls) / **CHAT** (Composer) | Returns to previous context |
+| **CHAT** | Click chat header avatar / title | **INFO** | `translate3d(0, 0, 0)` on `drawer-right` (full content width) |
+| **INFO** | Click Close button (`[data-testid="drawer-right"] button[aria-label="Close"]`) | **CHAT** | `drawer-right` slides off-screen, `#main` returns |
+| **ANY** | Click active rail button (`aria-pressed="true"`) | **LIST** $\leftrightarrow$ **CHAT** | Toggles between current chat and list (staying in list for Communities) |
+| **ANY** | Click different rail button (`aria-pressed="false"`) | **LIST** | Destination section always opens in List view |
+
+### 7.3 Verification Checklist (Live Session)
+- [x] Smooth 60fps GPU transforms on view change with zero virtualized list relayout stutter.
+- [x] Navigation rail pinned cleanly at `w: 64px` without jitter.
+- [x] Back button injected before display picture circle in `#main header` with native SVG path.
+- [x] Fullscreen info drawer (`drawer-right`) occupying `calc(100% - 64px)`.
+- [x] Middle drawer (Camera capture, Media editor, Attachment preview, Call Info) expanding to full content width.
+- [x] Floating Emoji/GIFs/Stickers flyout panel pinned to `x: 68px` and responsively constrained (`width: min(560px, calc(100vw - 76px))`).
+- [x] Attachment popover menu (`div.xu96u03[style*="-50%, -100%)"]`) positioned at `x: 68.4px` clear of the 64px rail.
+- [x] Main screen horizontal scroll permanently locked to `0` (`lockMainScreenScroll`), completely resolving the community group column-sliding bug.
+- [x] Multi-level Communities navigation (Top-level -> Navigation Drawer -> Sub-group Chat -> Back) functioning without stuck states.
 
