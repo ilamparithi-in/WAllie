@@ -1,13 +1,13 @@
 # Maintainer: Ilamparithi Murali <ilamparithi.in@gmail.com>
 
 pkgname=wallie
-pkgver=1.0.0
+pkgver=1.1.0
 pkgrel=1
 pkgdesc="Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support"
 arch=('any')
 url="https://github.com/ilamparithi-in/WAllie"
 license=('MIT')
-depends=('electron34')
+depends=('electron44')
 makedepends=('npm' 'nodejs')
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
 sha256sums=('COMPUTE_WITH_updpkgsums_OR_sha256sum')
@@ -34,13 +34,16 @@ package() {
   install -d "${pkgdir}/usr/bin"
   cat <<EOF > "${pkgdir}/usr/bin/${pkgname}"
 #!/bin/sh
-exec electron34 /usr/lib/${pkgname}/dist/main/index.js "\$@"
+exec electron44 /usr/lib/${pkgname}/dist/main/index.js "\$@"
 EOF
   chmod 755 "${pkgdir}/usr/bin/${pkgname}"
 
   # Desktop launcher & icons
   install -Dm644 "build/${pkgname}.desktop" "${pkgdir}/usr/share/applications/${pkgname}.desktop"
-  install -Dm644 "build/icons/512x512.png" "${pkgdir}/usr/share/icons/hicolor/512x512/apps/${pkgname}.png"
+  for size in 16 32 48 64 128 256 512; do
+    install -Dm644 "build/icons/${size}x${size}.png" \
+      "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/${pkgname}.png"
+  done
 
   # License file (Mandatory for MIT license)
   install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
