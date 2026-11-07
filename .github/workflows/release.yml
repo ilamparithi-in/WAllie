@@ -57,12 +57,15 @@ jobs:
           path: ~/.local/share/flatpak
           key: ${{ runner.os }}-flatpak-23.08
 
+      - name: Set up Snapcraft & LXD
+        if: runner.os == 'Linux'
+        uses: canonical/craft-actions/snapcraft/setup@v1
+
       - name: Install Linux packaging dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends rpm libarchive-tools flatpak flatpak-builder
-          sudo snap install snapcraft --classic
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y flathub org.freedesktop.Platform//23.08 org.freedesktop.Sdk//23.08
 
@@ -127,8 +130,8 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install Snapcraft
-        run: sudo snap install snapcraft --classic
+      - name: Set up Snapcraft & LXD
+        uses: canonical/craft-actions/snapcraft/setup@v1
 
       - name: Install npm dependencies
         run: npm ci
