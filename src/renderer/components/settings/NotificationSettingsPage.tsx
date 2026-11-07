@@ -13,6 +13,7 @@ import {
   History,
 } from 'lucide-react';
 import type { AccountInfo, GlobalSettings, HistoricalNotification, TimelineEntry, WhatsAppChatExport } from '../../../preload';
+import { decodeHtmlEntities, tokenizeFormattedText } from '../../../shared/notificationFormatting';
 
 interface NotificationSettingsPageProps {
   accounts: AccountInfo[];
@@ -770,6 +771,31 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
                         : (notif.type === 'system_event' ? notif.text : '');
                       const accountLabel = notif.accountName || '';
 
+                      const renderBody = (text: string) => {
+                        if (!text) return null;
+                        const tokens = tokenizeFormattedText(text);
+                        return tokens.map((token, idx) => {
+                          switch (token.type) {
+                            case 'bold':
+                              return <strong key={idx} className="font-semibold text-[#e9edef]">{token.value}</strong>;
+                            case 'italic':
+                              return <em key={idx} className="italic text-[#d1d7db]">{token.value}</em>;
+                            case 'strike':
+                              return <del key={idx} className="line-through text-[#8696a0]">{token.value}</del>;
+                            case 'code':
+                            case 'codeblock':
+                              return (
+                                <code key={idx} className="font-mono bg-[#111b21] px-1 py-0.5 rounded text-[9px] text-[#e9edef]">
+                                  {token.value}
+                                </code>
+                              );
+                            case 'text':
+                            default:
+                              return <span key={idx}>{token.value}</span>;
+                          }
+                        });
+                      };
+
                       return (
                         <div
                           key={notif.id}
@@ -800,7 +826,7 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
 
                           <div className="min-w-0 flex-grow">
                             <div className="flex items-center justify-between gap-1.5">
-                              <span className="font-semibold text-xs text-[#e9edef] truncate">{displayName}</span>
+                              <span className="font-semibold text-xs text-[#e9edef] truncate">{decodeHtmlEntities(displayName)}</span>
                               <div className="flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap">
                                 {accountLabel && (
                                   <span className="bg-[#202c33] text-[#00a884] font-medium text-[8px] px-1.5 py-0.5 rounded-md border border-[#222d34]">
@@ -812,8 +838,8 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
                                 </span>
                               </div>
                             </div>
-                            <div className="text-[10px] text-[#8696a0] mt-0.5 break-words max-h-16 overflow-y-auto no-scrollbar">
-                              {bodyText}
+                            <div className="text-[10px] text-[#8696a0] mt-0.5 break-words max-h-16 overflow-y-auto no-scrollbar whitespace-pre-wrap">
+                              {renderBody(bodyText)}
                             </div>
                           </div>
                         </div>

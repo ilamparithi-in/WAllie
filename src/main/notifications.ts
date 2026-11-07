@@ -6,6 +6,7 @@ import { switchActiveAccount } from './window';
 import { getAccountForWebContents } from './utils';
 import { HistoricalNotification, TimelineEntry, MessageEntry } from '../shared/types';
 import { getAccountDisplayName } from '../shared/constants';
+import { decodeHtmlEntities } from '../shared/notificationFormatting';
 import { notificationManager } from './notifications/index';
 
 export const NOTIFICATION_HISTORY_FILE = path.join(app.getPath('userData'), 'notification_history.json');
@@ -178,7 +179,9 @@ export async function createNotification(
   const senderAccount = getAccountForWebContents(senderWebContents);
   if (!senderAccount) return;
 
-  const brandedTitle = senderAccount.emoji ? `${senderAccount.emoji} | ${data.title}` : `| ${data.title}`;
+  const cleanTitle = decodeHtmlEntities(data.title || '').trim();
+  const cleanBody = decodeHtmlEntities(data.body || '').trim();
+  const brandedTitle = senderAccount.emoji ? `${senderAccount.emoji} | ${cleanTitle}` : `| ${cleanTitle}`;
 
   if (state.globalSettings?.notificationLoggingEnabled) {
     const now = new Date();
@@ -189,14 +192,14 @@ export async function createNotification(
       displayTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       direction: 'incoming',
       sender: {
-        displayName: data.title,
+        displayName: cleanTitle,
         avatarUrl: data.icon || undefined,
       },
       accountId: senderAccount.id,
       accountName: getAccountDisplayName(senderAccount),
       content: {
         type: 'text',
-        body: data.body,
+        body: cleanBody,
       },
     });
   }
@@ -214,14 +217,14 @@ export async function createNotification(
 
   await notificationManager.notify({
     title: brandedTitle,
-    body: data.body,
+    body: cleanBody,
     icon: data.icon,
     tag: data.tag,
-    contactName: data.title,
+    contactName: cleanTitle,
     accountId: senderAccount.id,
     timeoutMs,
     canReply: isInlineReplyEnabled && data.canReply !== false,
-    replyPlaceholder: `Reply to ${data.title}…`,
+    replyPlaceholder: `Reply to ${cleanTitle}…`,
     actions: [
       { id: 'default', label: 'Open Chat' },
     ],
@@ -238,7 +241,7 @@ export async function createNotification(
       }
       senderWebContents.send('notification:clicked-reply', {
         tag: data.tag,
-        contactName: data.title,
+        contactName: cleanTitle,
       });
     },
     onReply: (replyText) => {
@@ -246,7 +249,7 @@ export async function createNotification(
       if (!body) return;
 
       senderWebContents.send('notification:send-inline-reply', {
-        contactName: data.title,
+        contactName: cleanTitle,
         text: body,
         tag: data.tag,
       });
@@ -258,6 +261,9 @@ export async function createLogEntry(data: { title: string; body: string }, send
   const senderAccount = getAccountForWebContents(senderWebContents);
   if (!senderAccount) return;
 
+  const cleanTitle = decodeHtmlEntities(data.title || '').trim();
+  const cleanBody = decodeHtmlEntities(data.body || '').trim();
+
   if (state.globalSettings?.notificationLoggingEnabled) {
     const now = new Date();
     logNotificationToHistory({
@@ -267,13 +273,13 @@ export async function createLogEntry(data: { title: string; body: string }, send
       displayTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       direction: 'incoming',
       sender: {
-        displayName: data.title,
+        displayName: cleanTitle,
       },
       accountId: senderAccount.id,
       accountName: getAccountDisplayName(senderAccount),
       content: {
         type: 'text',
-        body: data.body,
+        body: cleanBody,
       },
     });
   }
