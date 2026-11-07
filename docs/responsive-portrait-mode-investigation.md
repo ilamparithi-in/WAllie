@@ -166,6 +166,25 @@ graph TD
   - Specifically target bottom popup menus using `div.xu96u03[style*="-50%, -100%)"]` (avoiding false positives with top-down menus like the 3-dots chat menu which use `translate(-100%, 0px)`).
   - Apply `left: 52px !important;` in portrait mode or collapsed landscape mode. This shifts the menu coordinate by 52px (`16.4px + 52px = 68.4px`), placing it right beside the 64px rail with a clean 4px gutter.
 
+#### 3. Fullscreen Profile Photo & Media Lightbox Overlays (`.app-wrapper-web > span:has(> div)`)
+- **Problem**: When clicking a contact's profile photo ("View photo") or an image in chat, WhatsApp Web mounts a fullscreen lightbox overlay into a portal `<span>` directly under `.app-wrapper-web`.
+  - The overlay uses fixed positioning with native `z-index: 500`.
+  - However, in our portrait layout, the 64px vertical navigation rail (`chatlist-header`) was also given `z-index: 500 !important;` to stay above sliding drawer panes.
+  - Because `wa-web-main-screen` (which contains `chatlist-header`) appears after the portal `<span>` in `.app-wrapper-web`'s DOM order, with identical z-indices (`500` vs `500`), the navigation rail painted on top of the fullscreen modal overlay.
+  - As a result, the left 64px of the photo viewer (including image content and top header padding) was cut off and obscured behind the rail icon buttons.
+- **Solution**:
+  - Elevate all portal overlay spans and their direct containers to `z-index: 1000 !important;`:
+    ```css
+    .app-wrapper-web > span:has(> div) {
+      position: relative !important;
+      z-index: 1000 !important;
+    }
+    .app-wrapper-web > span > div {
+      z-index: 1000 !important;
+    }
+    ```
+  - Because `1000 > 500`, the fullscreen overlay and its backdrop now cleanly cover the entire viewport, including the navigation rail. When closed (via the top-right 'X' button or Escape), the overlay unmounts and the underlying view (Contact info or Chat) resumes without any visual artifacts.
+
 ---
 
 ## 4. Why Native Resizing Fails & The DOM Splicing Solution
@@ -360,4 +379,5 @@ Configurable at runtime and synchronized across IPC:
 - [x] Attachment popover menu (`div.xu96u03[style*="-50%, -100%)"]`) positioned at `x: 68.4px` clear of the 64px rail.
 - [x] Main screen horizontal scroll permanently locked to `0` (`lockMainScreenScroll`), completely resolving the community group column-sliding bug.
 - [x] Multi-level Communities navigation (Top-level -> Navigation Drawer -> Sub-group Chat -> Back) functioning without stuck states.
+- [x] Fullscreen profile photo & media lightbox overlays (`.app-wrapper-web > span:has(> div)`) elevated to `z-index: 1000`, cleanly sitting on top of the 64px navigation rail without cutoff.
 
