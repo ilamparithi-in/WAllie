@@ -110,6 +110,7 @@ export interface GlobalSettings {
   notificationRetentionDays?: number;
   defaultProtocolAccountId?: string;
   standaloneLinkPreviewEnabled?: boolean;
+  responsiveLayoutMode?: 'disabled' | 'auto' | 'portrait';
 }
 
 export interface LinkPreviewData {

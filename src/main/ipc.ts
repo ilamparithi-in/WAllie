@@ -493,7 +493,21 @@ export function registerIpcHandlers() {
       console.log('Legal disclaimer accepted. Initializing account views.');
       await initializeAccountsLoad();
     }
+
+    const responsiveMode = newSettings.responsiveLayoutMode || 'auto';
+    for (const view of state.accountViews.values()) {
+      if (view && !view.webContents.isDestroyed()) {
+        try {
+          view.webContents.send('responsive-layout:mode-changed', responsiveMode);
+        } catch (e) { }
+      }
+    }
+
     return true;
+  });
+
+  ipcMain.handle('responsive-layout:get-mode', () => {
+    return state.globalSettings?.responsiveLayoutMode || 'auto';
   });
 
   ipcMain.handle('account:update-settings', (_event, accountId: string, settings: Account['settings']) => {
