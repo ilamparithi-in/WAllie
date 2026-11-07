@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { state } from './state';
+import { getConfigDir } from './utils';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
 
 const execFileAsync = promisify(execFile);
@@ -22,8 +23,8 @@ export const DEFAULT_USER_AGENT =
   `Mozilla/5.0 (${getOsPlatformString()}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`;
 
 
-export const ACCOUNTS_FILE = path.join(app.getPath('userData'), 'accounts.json');
-export const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
+export const ACCOUNTS_FILE = path.join(getConfigDir(), 'accounts.json');
+export const SETTINGS_FILE = path.join(getConfigDir(), 'settings.json');
 export const STORAGE_CACHE_TTL = 30000;
 
 const storageSizeCache = new Map<string, { sizes: { cache: number; localStorage: number; indexedDb: number; cookies: number }; timestamp: number }>();

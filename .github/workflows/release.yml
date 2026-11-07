@@ -93,7 +93,17 @@ jobs:
             dist-pack/*.rpm
             dist-pack/*.pkg.tar.zst
             dist-pack/*.flatpak
+            dist-pack/*.snap
             dist-pack/*.exe
             dist-pack/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Snap to Stable Channel
+        if: runner.os == 'Linux'
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: dist-pack/*.snap
+          release: candidate,stable

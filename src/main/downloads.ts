@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { state } from './state';
-import { showAppToast } from './utils';
+import { showAppToast, getConfigDir } from './utils';
 import { DownloadRecord } from '../shared/types';
 import { notificationManager } from './notifications/index';
 import { saveSettings } from './config';
@@ -38,7 +38,7 @@ export class DownloadManager extends EventEmitter {
 
   constructor() {
     super();
-    this.downloadsFile = path.join(app.getPath('userData'), 'downloads.json');
+    this.downloadsFile = path.join(getConfigDir(), 'downloads.json');
     this.lastManualDownloadPath = state.globalSettings?.lastManualDownloadPath;
     this.loadHistory();
   }

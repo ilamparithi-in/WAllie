@@ -23,10 +23,38 @@ if (process.platform === 'linux') {
 }
 app.commandLine.appendSwitch('disable-features', 'TranslateUI');
 
-// Set application name and associate desktop file for Linux notifications & taskbar grouping
-const originalUserData = app.getPath('userData');
-app.name = 'WAllie';
-app.setPath('userData', originalUserData);
+// Configure userData path: If running inside a Snap, point Chromium session & cache storage
+// to SNAP_USER_COMMON (~/snap/wallie/common/chromium-data) so heavy WhatsApp Web caches
+// are not duplicated across revision updates.
+if (process.env.SNAP_USER_COMMON) {
+  const commonUserData = path.join(process.env.SNAP_USER_COMMON, 'chromium-data');
+  try {
+    fs.mkdirSync(commonUserData, { recursive: true });
+    // Migrate existing partitions from revision folder to common if present
+    if (process.env.SNAP_USER_DATA) {
+      const oldPartitions = path.join(process.env.SNAP_USER_DATA, 'Partitions');
+      const newPartitions = path.join(commonUserData, 'Partitions');
+      if (fs.existsSync(oldPartitions) && !fs.existsSync(newPartitions)) {
+        try {
+          fs.renameSync(oldPartitions, newPartitions);
+          console.log('[Snap] Successfully migrated session partitions to SNAP_USER_COMMON');
+        } catch (migErr) {
+          console.warn('[Snap] Could not move partitions to SNAP_USER_COMMON:', migErr);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Snap] Failed to initialize SNAP_USER_COMMON directory:', err);
+  }
+  app.name = 'WAllie';
+  app.setPath('userData', commonUserData);
+} else {
+  // Set application name and keep lowercase userData directory outside Snap
+  const originalUserData = app.getPath('userData');
+  app.name = 'WAllie';
+  app.setPath('userData', originalUserData);
+}
+
 if (process.platform === 'linux') {
   (app as any).setDesktopName('wallie');
 }

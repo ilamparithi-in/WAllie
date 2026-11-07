@@ -3,13 +3,13 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { state } from './state';
 import { switchActiveAccount } from './window';
-import { getAccountForWebContents } from './utils';
+import { getAccountForWebContents, getConfigDir } from './utils';
 import { HistoricalNotification, TimelineEntry, MessageEntry } from '../shared/types';
 import { getAccountDisplayName } from '../shared/constants';
 import { decodeHtmlEntities } from '../shared/notificationFormatting';
 import { notificationManager } from './notifications/index';
 
-export const NOTIFICATION_HISTORY_FILE = path.join(app.getPath('userData'), 'notification_history.json');
+export const NOTIFICATION_HISTORY_FILE = path.join(getConfigDir(), 'notification_history.json');
 const HISTORY_FLUSH_DELAY = 5000;
 
 export function getEntryTimestampMs(item: TimelineEntry): number {
