@@ -93,7 +93,17 @@ jobs:
             dist-pack/*.rpm
             dist-pack/*.pkg.tar.zst
             dist-pack/*.flatpak
+            dist-pack/*.snap
             dist-pack/*.exe
             dist-pack/*.dmg
           compression-level: 0
           if-no-files-found: warn
+
+      - name: Publish Snap to Edge Channel
+        if: runner.os == 'Linux' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: dist-pack/*.snap
+          release: edge

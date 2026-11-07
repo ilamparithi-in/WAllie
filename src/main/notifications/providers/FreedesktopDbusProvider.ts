@@ -12,6 +12,7 @@ import {
   formatNotificationBody,
   stripNotificationMarkup,
 } from '../../../shared/notificationFormatting';
+import { getDesktopEntryName } from '../../utils';
 
 interface TrackedNotification {
   payload: NotificationPayload;
@@ -233,7 +234,7 @@ export class FreedesktopDbusProvider implements NotificationProvider {
       if (fs.existsSync(defaultIcon)) {
         iconPath = defaultIcon;
       } else {
-        iconPath = 'dev.ilamparithi.wallie';
+        iconPath = getDesktopEntryName();
       }
     }
 
@@ -256,7 +257,7 @@ export class FreedesktopDbusProvider implements NotificationProvider {
     }
 
     const hints: Record<string, dbus.Variant> = {
-      'desktop-entry': new dbus.Variant('s', 'dev.ilamparithi.wallie'),
+      'desktop-entry': new dbus.Variant('s', getDesktopEntryName()),
     };
 
     if (payload.canReply) {

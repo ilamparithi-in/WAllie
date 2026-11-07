@@ -1,4 +1,4 @@
-import { nativeImage, NativeImage, WebContents, screen, BrowserWindow } from 'electron';
+import { nativeImage, NativeImage, WebContents, screen, BrowserWindow, app } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
@@ -234,4 +234,29 @@ export async function getSystemDesktopFontName(): Promise<string> {
   }
   return cachedDesktopFontName;
 }
+
+/**
+ * Returns the directory for lightweight app configuration and JSON files.
+ * In a Snap environment, returns $SNAP_USER_DATA (~/snap/wallie/<rev>) so configs
+ * remain revision-tracked and safe for rollbacks.
+ * Outside Snap, returns the standard Electron userData directory.
+ */
+export function getConfigDir(): string {
+  if (process.env.SNAP_USER_DATA) {
+    return process.env.SNAP_USER_DATA;
+  }
+  return app.getPath('userData');
+}
+
+/**
+ * Returns the desktop entry name for system notifications and desktop integration.
+ * In Snap, desktop entries follow the snap package name (e.g. 'wallie').
+ */
+export function getDesktopEntryName(): string {
+  if (process.env.SNAP) {
+    return process.env.SNAP_NAME || 'wallie';
+  }
+  return 'dev.ilamparithi.wallie';
+}
+
 

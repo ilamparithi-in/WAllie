@@ -2,7 +2,7 @@ import { app, BrowserWindow, screen } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { state } from './state';
-import { getInitialWindowSize } from './utils';
+import { getInitialWindowSize, getConfigDir } from './utils';
 import { DEFAULT_MIN_WINDOW_WIDTH, DEFAULT_MIN_WINDOW_HEIGHT } from '../shared/types';
 
 export interface WindowState {
@@ -13,7 +13,7 @@ export interface WindowState {
   isMaximized?: boolean;
 }
 
-export const WINDOW_STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
+export const WINDOW_STATE_FILE = path.join(getConfigDir(), 'window-state.json');
 
 let saveTimeout: NodeJS.Timeout | null = null;
 
