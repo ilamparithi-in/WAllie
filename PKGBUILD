@@ -1,7 +1,7 @@
 # Maintainer: Ilamparithi Murali <ilamparithi.in@gmail.com>
 
 pkgname=wallie
-pkgver=1.1.0
+pkgver=1.2.0
 pkgrel=1
 pkgdesc="Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support"
 arch=('any')
