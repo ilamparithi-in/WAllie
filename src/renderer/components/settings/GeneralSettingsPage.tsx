@@ -301,6 +301,28 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
               className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
             />
           </label>
+
+          <div className="p-2 rounded hover:bg-[#182229] transition-colors space-y-2">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-[#e9edef] text-[11px]">Responsive Layout (Portrait Mode)</div>
+                <div className="text-[10px] text-[#8696a0]">
+                  Single-pane layout for narrow or portrait displays with smooth sliding transitions
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={globalSettings?.responsiveLayoutMode ?? 'auto'}
+                  onChange={(e) => handleToggleGlobalSetting('responsiveLayoutMode', e.target.value)}
+                  className="bg-[#202c33] text-[#e9edef] text-xs px-2 py-1 rounded border border-[#2c3943] focus:border-[#00a884] focus:outline-none cursor-pointer"
+                >
+                  <option value="auto">Auto (Responsive)</option>
+                  <option value="portrait">Always Portrait</option>
+                  <option value="disabled">Always Landscape (Disabled)</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Desktop Notifications Section */}

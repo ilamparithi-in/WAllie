@@ -79,6 +79,7 @@ export function loadSettings(): GlobalSettings {
         notificationRetentionDays: typeof parsed.notificationRetentionDays === 'number' ? parsed.notificationRetentionDays : 30,
         defaultProtocolAccountId: typeof parsed.defaultProtocolAccountId === 'string' ? parsed.defaultProtocolAccountId : 'ask',
         standaloneLinkPreviewEnabled: parsed.standaloneLinkPreviewEnabled !== false,
+        responsiveLayoutMode: (parsed.responsiveLayoutMode === 'disabled' || parsed.responsiveLayoutMode === 'portrait') ? parsed.responsiveLayoutMode : 'auto',
       };
     }
   } catch (error) {
@@ -110,6 +111,7 @@ export function loadSettings(): GlobalSettings {
     notificationRetentionDays: 30,
     defaultProtocolAccountId: 'ask',
     standaloneLinkPreviewEnabled: true,
+    responsiveLayoutMode: 'auto',
   };
 }
 

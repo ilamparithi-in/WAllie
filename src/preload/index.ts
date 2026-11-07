@@ -1146,6 +1146,14 @@ function setupWhatsAppIntegration() {
     unzipAlbumDownload: (outputDirectory: string, filesDirName: string, zipPath: string, stanzaIds: string[]) => {
       return ipcRenderer.invoke('chat-export:unzip-album-download', outputDirectory, filesDirName, zipPath, stanzaIds);
     },
+    getResponsiveLayoutMode: () => {
+      return ipcRenderer.invoke('responsive-layout:get-mode');
+    },
+    onResponsiveLayoutModeChanged: (callback: (mode: string) => void) => {
+      const sub = (_event: any, mode: string) => callback(mode);
+      ipcRenderer.on('responsive-layout:mode-changed', sub);
+      return () => ipcRenderer.removeListener('responsive-layout:mode-changed', sub);
+    },
   });
 
   ipcRenderer.on('notification:clicked-reply', (_event: any, data: any) => {

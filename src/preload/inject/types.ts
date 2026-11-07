@@ -22,6 +22,8 @@ export interface WalinuxIpcBridge {
   dispatchMouse?: (type: 'click' | 'contextmenu', x: number, y: number) => Promise<boolean>;
   waitForDownload?: (expectedFilename?: string, timeoutMs?: number) => Promise<{ success: boolean; savePath?: string; filename?: string }>;
   unzipAlbumDownload?: (outputDirectory: string, filesDirName: string, zipPath: string, stanzaIds: string[]) => Promise<{ success: boolean; count: number; mapping: Record<string, string> }>;
+  getResponsiveLayoutMode?: () => Promise<'disabled' | 'auto' | 'portrait'>;
+  onResponsiveLayoutModeChanged?: (callback: (mode: 'disabled' | 'auto' | 'portrait') => void) => () => void;
 }
 
 declare global {

@@ -4,6 +4,7 @@ import { initChatNavigation } from './chatNavigation';
 import { initDragDropStabilizer } from './dragDrop';
 import { initStandaloneLinkPreview } from './linkPreview';
 import { initChatExporter } from './chatExporter';
+import { initResponsiveLayout } from './responsiveLayout';
 
 (() => {
   initCustomNotification();
@@ -12,4 +13,5 @@ import { initChatExporter } from './chatExporter';
   initDragDropStabilizer();
   initStandaloneLinkPreview();
   initChatExporter();
+  initResponsiveLayout();
 })();
