@@ -8,6 +8,7 @@ const BACK_BTN_CLASS = 'walinux-back-button';
 
 let currentMode: ResponsiveLayoutMode = 'auto';
 let isPortraitActive = false;
+let isLandscapeSidebarCollapsed = false;
 let currentViewState: PortraitViewState = 'list';
 
 const RESPONSIVE_CSS = `
@@ -34,11 +35,12 @@ const RESPONSIVE_CSS = `
   html[data-walinux-portrait="true"] [data-testid="drawer-fullscreen"] {
     left: 64px !important;
     width: calc(100% - 64px) !important;
+    max-width: calc(100% - 64px) !important;
     z-index: 600 !important;
   }
 
   /* Drawer Container c2 (Houses drawer-left and drawer-middle) */
-  html[data-walinux-portrait="true"] [data-testid="wa-web-main-screen"] > div > div:nth-child(3) {
+  html[data-walinux-portrait="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
@@ -56,6 +58,9 @@ const RESPONSIVE_CSS = `
     margin-left: 0 !important;
     top: 0 !important;
     width: calc(100% - 64px) !important;
+    max-width: calc(100% - 64px) !important;
+    min-width: calc(100% - 64px) !important;
+    flex: 0 0 calc(100% - 64px) !important;
     height: 100% !important;
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     will-change: transform;
@@ -63,6 +68,10 @@ const RESPONSIVE_CSS = `
   html[data-walinux-portrait="true"] [data-testid="drawer-left"]:not(:has(header)) {
     display: none !important;
     pointer-events: none !important;
+  }
+  html[data-walinux-portrait="true"] [data-testid="drawer-left"] > * {
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   /* Middle Drawer (Call Info, Camera Capture, Attachment Preview) */
@@ -73,6 +82,9 @@ const RESPONSIVE_CSS = `
     margin-left: 0 !important;
     top: 0 !important;
     width: calc(100% - 64px) !important;
+    max-width: calc(100% - 64px) !important;
+    min-width: calc(100% - 64px) !important;
+    flex: 0 0 calc(100% - 64px) !important;
     height: 100% !important;
     z-index: 350 !important;
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -82,13 +94,20 @@ const RESPONSIVE_CSS = `
     display: none !important;
     pointer-events: none !important;
   }
+  html[data-walinux-portrait="true"] [data-testid="drawer-middle"] > * {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
 
   /* c3: Chats List Pane (#pane-side container) */
-  html[data-walinux-portrait="true"] [data-testid="wa-web-main-screen"] > div > div:nth-child(4) {
+  html[data-walinux-portrait="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div {
     position: absolute !important;
     left: 64px !important;
     top: 0 !important;
     width: calc(100% - 64px) !important;
+    max-width: calc(100% - 64px) !important;
+    min-width: calc(100% - 64px) !important;
+    flex: 0 0 calc(100% - 64px) !important;
     height: 100% !important;
     z-index: 200 !important;
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -96,15 +115,23 @@ const RESPONSIVE_CSS = `
   }
 
   /* c4: Active Conversation Pane (#main container) */
-  html[data-walinux-portrait="true"] [data-testid="wa-web-main-screen"] > div > div:nth-child(5) {
+  html[data-walinux-portrait="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div {
     position: absolute !important;
     left: 64px !important;
     top: 0 !important;
     width: calc(100% - 64px) !important;
+    max-width: calc(100% - 64px) !important;
+    min-width: calc(100% - 64px) !important;
+    flex: 0 0 calc(100% - 64px) !important;
     height: 100% !important;
     z-index: 250 !important;
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     will-change: transform;
+  }
+  html[data-walinux-portrait="true"] #main {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
   }
 
   /* c6: Right Drawer (Contact/Group/Channel Info) */
@@ -113,21 +140,28 @@ const RESPONSIVE_CSS = `
     left: 64px !important;
     top: 0 !important;
     width: calc(100% - 64px) !important;
+    max-width: calc(100% - 64px) !important;
+    min-width: calc(100% - 64px) !important;
+    flex: 0 0 calc(100% - 64px) !important;
     height: 100% !important;
     z-index: 400 !important;
     animation: none !important;
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     will-change: transform;
   }
+  html[data-walinux-portrait="true"] [data-testid="drawer-right"] > * {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
 
   /* ---------------- STATE 1: LIST VIEW ---------------- */
-  html[data-walinux-portrait="true"][data-portrait-view="list"] [data-testid="wa-web-main-screen"] > div > div:nth-child(4),
+  html[data-walinux-portrait="true"][data-portrait-view="list"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div,
   html[data-walinux-portrait="true"][data-portrait-view="list"] [data-testid="drawer-left"] {
     transform: translate3d(0, 0, 0) !important;
     visibility: visible !important;
     pointer-events: auto !important;
   }
-  html[data-walinux-portrait="true"][data-portrait-view="list"] [data-testid="wa-web-main-screen"] > div > div:nth-child(5),
+  html[data-walinux-portrait="true"][data-portrait-view="list"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div,
   html[data-walinux-portrait="true"][data-portrait-view="list"] [data-testid="drawer-middle"],
   html[data-walinux-portrait="true"][data-portrait-view="list"] [data-testid="drawer-right"] {
     transform: translate3d(100%, 0, 0) !important;
@@ -136,13 +170,13 @@ const RESPONSIVE_CSS = `
   }
 
   /* ---------------- STATE 2: CHAT VIEW ---------------- */
-  html[data-walinux-portrait="true"][data-portrait-view="chat"] [data-testid="wa-web-main-screen"] > div > div:nth-child(4),
+  html[data-walinux-portrait="true"][data-portrait-view="chat"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div,
   html[data-walinux-portrait="true"][data-portrait-view="chat"] [data-testid="drawer-left"] {
     transform: translate3d(-100%, 0, 0) !important;
     visibility: hidden !important;
     pointer-events: none !important;
   }
-  html[data-walinux-portrait="true"][data-portrait-view="chat"] [data-testid="wa-web-main-screen"] > div > div:nth-child(5),
+  html[data-walinux-portrait="true"][data-portrait-view="chat"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div,
   html[data-walinux-portrait="true"][data-portrait-view="chat"] [data-testid="drawer-middle"] {
     transform: translate3d(0, 0, 0) !important;
     visibility: visible !important;
@@ -155,9 +189,9 @@ const RESPONSIVE_CSS = `
   }
 
   /* ---------------- STATE 3: INFO VIEW ---------------- */
-  html[data-walinux-portrait="true"][data-portrait-view="info"] [data-testid="wa-web-main-screen"] > div > div:nth-child(4),
+  html[data-walinux-portrait="true"][data-portrait-view="info"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div,
   html[data-walinux-portrait="true"][data-portrait-view="info"] [data-testid="drawer-left"],
-  html[data-walinux-portrait="true"][data-portrait-view="info"] [data-testid="wa-web-main-screen"] > div > div:nth-child(5),
+  html[data-walinux-portrait="true"][data-portrait-view="info"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div,
   html[data-walinux-portrait="true"][data-portrait-view="info"] [data-testid="drawer-middle"] {
     transform: translate3d(-100%, 0, 0) !important;
     visibility: hidden !important;
@@ -167,6 +201,23 @@ const RESPONSIVE_CSS = `
     transform: translate3d(0, 0, 0) !important;
     visibility: visible !important;
     pointer-events: auto !important;
+  }
+
+  /* ---------------- LANDSCAPE MODE: SIDEBAR COLLAPSED ---------------- */
+  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div,
+  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] [data-testid="drawer-left"] {
+    display: none !important;
+  }
+  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] [data-testid="drawer-middle"] {
+    margin-left: 64px !important;
+    flex: 1 1 auto !important;
+    width: calc(100% - 64px) !important;
+    max-width: none !important;
   }
 
   /* Injected Back Button */
@@ -181,12 +232,18 @@ const RESPONSIVE_CSS = `
     cursor: pointer;
     background: transparent;
     border: none;
-    color: var(--icon-fixed, #aebac1);
+    color: var(--icon, var(--icon-lighter, #aebac1));
     margin-right: 4px;
     padding: 0;
     outline: none;
     flex-shrink: 0;
     transition: background-color 0.15s ease;
+  }
+  .${BACK_BTN_CLASS} svg {
+    display: block;
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
   }
   .${BACK_BTN_CLASS}:hover {
     background-color: var(--background-default-hover, rgba(255, 255, 255, 0.08));
@@ -223,11 +280,22 @@ export function setPortraitViewState(view: PortraitViewState): void {
   currentViewState = view;
   if (isPortraitActive && document.documentElement) {
     document.documentElement.setAttribute('data-portrait-view', view);
+    window.dispatchEvent(new Event('resize'));
   }
 }
 
 export function getPortraitViewState(): PortraitViewState {
   return currentViewState;
+}
+
+function updateLandscapeSidebar(): void {
+  if (!document.documentElement) return;
+  if (!isPortraitActive && isLandscapeSidebarCollapsed) {
+    document.documentElement.setAttribute('data-walinux-sidebar-collapsed', 'true');
+  } else {
+    document.documentElement.removeAttribute('data-walinux-sidebar-collapsed');
+  }
+  window.dispatchEvent(new Event('resize'));
 }
 
 function updatePortraitState(): void {
@@ -257,10 +325,13 @@ function updatePortraitState(): void {
     if (isPortraitActive) {
       document.documentElement.setAttribute('data-walinux-portrait', 'true');
       document.documentElement.setAttribute('data-portrait-view', currentViewState);
+      document.documentElement.removeAttribute('data-walinux-sidebar-collapsed');
     } else {
       document.documentElement.removeAttribute('data-walinux-portrait');
       document.documentElement.removeAttribute('data-portrait-view');
+      updateLandscapeSidebar();
     }
+    window.dispatchEvent(new Event('resize'));
   }
 }
 
@@ -275,7 +346,7 @@ function createBackButton(): HTMLButtonElement {
     <span aria-hidden="true">
       <svg viewBox="0 0 24 24" height="24" width="24" preserveAspectRatio="xMidYMid meet" fill="currentColor">
         <title>ic-arrow-back</title>
-        <path fill="currentColor" d="m7.82 13 4.9 4.9c.2.2.3.43.3.7a1 1 0 0 1-.32.7c-.2.18-.43.28-.7.29a.92.92 0 0 1-.7-.29l-6.6-6.6a.88.88 0 0 1-.21-.32 1.1 1.1 0 0 1-.07-.38c0-.13.03-.26.07-.38a.88.88 0 0 1 .21-.32l6.6-6.6a.93.93 0 0 1 .69-.27.97.97 0 0 1 1.01.99c0 .27-.1.5-.3.7L7.82 11H19c.28 0 .52.1.71.29.2.19.29.43.29.71 0 .28-.1.52-.29.71A.94.94 0 0 1 19 13H7.82Z"></path>
+        <path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path>
       </svg>
     </span>
   `;
@@ -305,6 +376,12 @@ function getActiveTabLabel(): string {
   return activeBtn?.getAttribute('aria-label')?.toLowerCase() || 'chats';
 }
 
+function hasActiveConversationOrMiddle(): boolean {
+  const hasChat = Boolean(document.querySelector('#main header'));
+  const hasMiddle = Boolean(document.querySelector('[data-testid="drawer-middle"]:has(header), [data-testid="drawer-middle"]:has(button)'));
+  return hasChat || hasMiddle;
+}
+
 function setupEventListeners(): void {
   // 1. Navigation rail click interception (capture phase)
   window.addEventListener(
@@ -319,54 +396,70 @@ function setupEventListeners(): void {
       if (railButton) {
         const isCurrentlyActive = railButton.getAttribute('aria-pressed') === 'true';
         if (isCurrentlyActive) {
-          // Toggle between List and Chat view
-          if (currentViewState === 'chat' || currentViewState === 'info') {
-            setPortraitViewState('list');
+          if (isPortraitActive) {
+            // In portrait mode: toggle between List and Chat view
+            if (currentViewState === 'chat' || currentViewState === 'info') {
+              setPortraitViewState('list');
+            } else {
+              // Only toggle to chat if an active conversation or middle drawer actually exists
+              if (hasActiveConversationOrMiddle()) {
+                setPortraitViewState('chat');
+              }
+            }
           } else {
-            setPortraitViewState('chat');
+            // In landscape mode: toggle left sidebar collapse on/off
+            isLandscapeSidebarCollapsed = !isLandscapeSidebarCollapsed;
+            updateLandscapeSidebar();
           }
         } else {
-          // Switching tabs: always start with list view
-          setPortraitViewState('list');
+          // Switching tabs:
+          if (isPortraitActive) {
+            // Always initialize new tab in list view
+            setPortraitViewState('list');
+          } else {
+            // In landscape mode, clicking a new tab restores the sidebar
+            if (isLandscapeSidebarCollapsed) {
+              isLandscapeSidebarCollapsed = false;
+              updateLandscapeSidebar();
+            }
+          }
         }
         return;
       }
 
       // 2. Chat list item click (in Chats tab)
       const chatListItem = target.closest(
-        '#pane-side [role="row"], #pane-side [data-testid^="list-item-"], #pane-side [role="listitem"]'
+        '#side [role="row"], #side [data-testid^="list-item-"], #side [role="listitem"]'
       );
       if (chatListItem) {
-        setPortraitViewState('chat');
-        setTimeout(injectBackButton, 50);
+        if (isPortraitActive) {
+          setPortraitViewState('chat');
+          setTimeout(injectBackButton, 50);
+        }
         return;
       }
 
-      // 3. Drawer-left item clicks (Calls, Channels, Communities)
+      // 3. Drawer-left item clicks (Calls, Channels, Communities, Status)
       const drawerLeftItem = target.closest(
-        '[data-testid="drawer-left"] [role="row"], [data-testid="drawer-left"] [data-testid^="list-item-"], [data-testid="drawer-left"] [role="listitem"]'
+        '[data-testid="drawer-left"] [role="row"], [data-testid="drawer-left"] [data-testid^="list-item-"], [data-testid="drawer-left"] [role="listitem"], [data-testid="drawer-left"] [role="button"]'
       );
       if (drawerLeftItem) {
         const activeTab = getActiveTabLabel();
         if (activeTab.includes('call')) {
           // Clicking a call history item opens Call Info in drawer-middle
-          setPortraitViewState('chat');
+          if (isPortraitActive) {
+            setPortraitViewState('chat');
+          }
         } else if (activeTab.includes('channel')) {
           // Clicking a channel opens chat in #main
-          setPortraitViewState('chat');
-          setTimeout(injectBackButton, 50);
+          if (isPortraitActive) {
+            setPortraitViewState('chat');
+            setTimeout(injectBackButton, 50);
+          }
         } else if (activeTab.includes('communit')) {
-          // Check if this click is a nested sub-chat or a community header
-          // Sub-chat rows have secondary/timestamp details, community headers don't have message timestamps
-          const isAnnouncementOrGroup = (
-            drawerLeftItem.querySelector('[data-testid="cell-frame-primary-detail"]') ||
-            drawerLeftItem.querySelector('[data-testid="last-msg-status"]') ||
-            ((drawerLeftItem as HTMLElement).innerText || drawerLeftItem.textContent || '').includes('\n')
-          );
-          // Wait briefly to see if #main opens a conversation
+          // In communities: sub-groups / announcements open #main, community headers just expand
           setTimeout(() => {
-            const hasActiveChat = Boolean(document.querySelector('#main header'));
-            if (hasActiveChat && isAnnouncementOrGroup) {
+            if (isPortraitActive && document.querySelector('#main header')) {
               setPortraitViewState('chat');
               injectBackButton();
             }
@@ -375,12 +468,12 @@ function setupEventListeners(): void {
         return;
       }
 
-      // 4. Click on chat header title/avatar to open Right Drawer (Contact Info)
+      // 4. Click on chat header title/avatar to open Right Drawer (Contact/Group Info)
       const chatHeaderTitle = target.closest('#main header > div:first-child [role="button"]');
       if (chatHeaderTitle && !chatHeaderTitle.classList.contains(BACK_BTN_CLASS)) {
         setTimeout(() => {
           const drawerRight = document.querySelector('[data-testid="drawer-right"]');
-          if (drawerRight && drawerRight.children.length > 0) {
+          if (isPortraitActive && drawerRight && drawerRight.children.length > 0) {
             setPortraitViewState('info');
           }
         }, 120);
@@ -392,7 +485,9 @@ function setupEventListeners(): void {
         '[data-testid="drawer-right"] button[aria-label="Close"], [data-testid="drawer-right"] [aria-label="Close"]'
       );
       if (drawerRightClose) {
-        setPortraitViewState('chat');
+        if (isPortraitActive) {
+          setPortraitViewState('chat');
+        }
         return;
       }
 
@@ -401,11 +496,13 @@ function setupEventListeners(): void {
         '[data-testid="drawer-middle"] button[aria-label="Close"], [data-testid="drawer-middle"] [aria-label="Close"]'
       );
       if (drawerMiddleClose) {
-        const activeTab = getActiveTabLabel();
-        if (activeTab.includes('call')) {
-          setPortraitViewState('list');
-        } else {
-          setPortraitViewState('chat');
+        if (isPortraitActive) {
+          const activeTab = getActiveTabLabel();
+          if (activeTab.includes('call')) {
+            setPortraitViewState('list');
+          } else {
+            setPortraitViewState('chat');
+          }
         }
         return;
       }
