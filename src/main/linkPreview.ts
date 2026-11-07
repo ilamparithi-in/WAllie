@@ -135,7 +135,7 @@ async function fetchPageHtmlSafe(
 async function fetchAndProcessThumbnail(
   imageUrl: string,
   finalUrl: string
-): Promise<{ thumbnailBase64: string; width: number; height: number } | null> {
+): Promise<{ thumbnailBase64: string; thumbnailHQBase64?: string; width: number; height: number } | null> {
   let imgTimeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const absoluteImageUrl = new URL(imageUrl, finalUrl).toString();
@@ -161,25 +161,47 @@ async function fetchAndProcessThumbnail(
     if (img.isEmpty()) return null;
 
     const origSize = img.getSize();
-    let target = img;
-    const maxDim = 320;
-    if (origSize.width > maxDim || origSize.height > maxDim) {
-      const ratio = Math.min(maxDim / origSize.width, maxDim / origSize.height);
-      target = img.resize({
-        width: Math.max(1, Math.round(origSize.width * ratio)),
-        height: Math.max(1, Math.round(origSize.height * ratio)),
+    if (origSize.width <= 0 || origSize.height <= 0) return null;
+
+    // 1. High-Quality Thumbnail (thumbnailHQ):
+    // Max dimension of 1024px matches native WhatsApp mobile/web clients.
+    // Preserves full crispness on High-DPI/desktop displays without blur or pixelation.
+    // Encoded at JPEG quality 85 for sharp rendering and clean edges.
+    let hqTarget = img;
+    const MAX_HQ_DIM = 1024;
+    if (origSize.width > MAX_HQ_DIM || origSize.height > MAX_HQ_DIM) {
+      const hqRatio = Math.min(MAX_HQ_DIM / origSize.width, MAX_HQ_DIM / origSize.height);
+      hqTarget = img.resize({
+        width: Math.max(1, Math.round(origSize.width * hqRatio)),
+        height: Math.max(1, Math.round(origSize.height * hqRatio)),
         quality: 'better',
       });
     }
-    let jpegBuf = target.toJPEG(75);
-    // Keep inline thumbnail within WhatsApp 32KB budget
-    if (jpegBuf.byteLength > 30 * 1024) {
-      jpegBuf = target.toJPEG(50);
+    const hqJpegBuf = hqTarget.toJPEG(85);
+    const finalSize = hqTarget.getSize();
+
+    // 2. Micro Thumbnail (thumbnail / jpegThumbnail):
+    // WhatsApp requires inline protobuf thumbnails to be small (< 32KB).
+    // Native WhatsApp caps inline micro-thumbnails to ~100-140px, keeping payload size ~3-6KB.
+    let microTarget = hqTarget;
+    const MAX_MICRO_DIM = 140;
+    if (finalSize.width > MAX_MICRO_DIM || finalSize.height > MAX_MICRO_DIM) {
+      const microRatio = Math.min(MAX_MICRO_DIM / finalSize.width, MAX_MICRO_DIM / finalSize.height);
+      microTarget = hqTarget.resize({
+        width: Math.max(1, Math.round(finalSize.width * microRatio)),
+        height: Math.max(1, Math.round(finalSize.height * microRatio)),
+        quality: 'better',
+      });
     }
-    if (jpegBuf.byteLength > 0) {
-      const finalSize = target.getSize();
+    let microJpegBuf = microTarget.toJPEG(70);
+    if (microJpegBuf.byteLength > 25 * 1024) {
+      microJpegBuf = microTarget.toJPEG(50);
+    }
+
+    if (hqJpegBuf.byteLength > 0 && microJpegBuf.byteLength > 0) {
       return {
-        thumbnailBase64: jpegBuf.toString('base64'),
+        thumbnailBase64: microJpegBuf.toString('base64'),
+        thumbnailHQBase64: hqJpegBuf.toString('base64'),
         width: finalSize.width,
         height: finalSize.height,
       };
@@ -299,13 +321,19 @@ export async function fetchLinkPreview(urlStr: string): Promise<LinkPreviewData 
       extractLinkHref(html, 'icon');
 
     let thumbnailBase64: string | undefined;
+    let thumbnailHQBase64: string | undefined;
     let thumbnailWidth: number | undefined;
     let thumbnailHeight: number | undefined;
 
     if (imageUrl) {
         // If media fails to download or process, retry immediately up to 3 times
         const MAX_MEDIA_RETRIES = 3;
-        let thumbnailResult: { thumbnailBase64: string; width: number; height: number } | null = null;
+        let thumbnailResult: {
+          thumbnailBase64: string;
+          thumbnailHQBase64?: string;
+          width: number;
+          height: number;
+        } | null = null;
 
           for (let attempt = 0; attempt <= MAX_MEDIA_RETRIES; attempt++) {
             thumbnailResult = await fetchAndProcessThumbnail(imageUrl, finalUrl);
@@ -316,6 +344,7 @@ export async function fetchLinkPreview(urlStr: string): Promise<LinkPreviewData 
 
           if (thumbnailResult) {
             thumbnailBase64 = thumbnailResult.thumbnailBase64;
+            thumbnailHQBase64 = thumbnailResult.thumbnailHQBase64;
             thumbnailWidth = thumbnailResult.width;
             thumbnailHeight = thumbnailResult.height;
           }
@@ -326,6 +355,7 @@ export async function fetchLinkPreview(urlStr: string): Promise<LinkPreviewData 
           title,
           description,
           thumbnailBase64,
+          thumbnailHQBase64,
           thumbnailWidth,
           thumbnailHeight,
           previewType: isVideo ? 'video' : 'none',
