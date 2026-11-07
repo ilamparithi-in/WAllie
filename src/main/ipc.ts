@@ -7,7 +7,8 @@ import { state } from './state';
 import { saveAccounts, saveSettings, getAccountStorageSizes, invalidateStorageCache, DEFAULT_USER_AGENT } from './config';
 import { importExtension, installWebStoreExtension, toggleExtension, removeExtension, checkForWebStoreUpdates } from './extensions';
 import { createAccountView, getActiveWebContents, resetZoom, changeZoom, injectCustomCssForView, injectAccountStyling, clearPausedMediaState } from './views';
-import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize, unloadAccountLogic, loadAccountLogic, notifyAccountListChanged } from './window';
+import { switchActiveAccount, updateActiveViewBounds, animateSettingsTransition, toggleDevToolsForAccount, removeAccountLogic, initializeAccountsLoad, getInitialWindowSize, unloadAccountLogic, loadAccountLogic, notifyAccountListChanged, enforceWindowMinimumSize } from './window';
+import { saveWindowStateImmediate } from './windowState';
 import { getNotificationHistory, clearNotificationHistoryCache, createNotification, createLogEntry, closeDbusNotificationByTag, closeNotificationByContact, applyRetentionPruning } from './notifications';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS, AccountSettings, GroupInviteDetails, NativePromptOptions, NativePromptResult, NativeConfirmOptions } from '../shared/types';
 import { resolveGoogleFont, resolveGoogleFontUrl } from '../shared/fonts';
@@ -63,6 +64,20 @@ export function registerIpcHandlers() {
     console.log('IPC Handle: window:isMaximized');
     const win = BrowserWindow.fromWebContents(event.sender);
     return win?.isMaximized() ?? false;
+  });
+
+  ipcMain.handle('window:reset-size', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) || state.mainWindow;
+    if (!win || win.isDestroyed()) return false;
+    if (win.isMaximized()) {
+      win.unmaximize();
+    }
+    const { width, height } = getInitialWindowSize(1100, 750, win);
+    win.setSize(width, height);
+    win.center();
+    enforceWindowMinimumSize(win);
+    saveWindowStateImmediate(win);
+    return true;
   });
 
   ipcMain.on('window:toggle-always-on-top', (event) => {
@@ -427,6 +442,10 @@ export function registerIpcHandlers() {
 
     state.globalSettings = newSettings;
     await saveSettings(state.globalSettings);
+
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      enforceWindowMinimumSize(state.mainWindow);
+    }
 
     if (retentionChanged) {
       applyRetentionPruning();

@@ -6,6 +6,7 @@ import { loadSettings, loadAccounts } from './config';
 import { NOTIFICATION_HISTORY_FILE } from './notifications';
 import { registerIpcHandlers } from './ipc';
 import { createMainWindow, createTray } from './window';
+import { saveWindowStateImmediate } from './windowState';
 import { checkForWebStoreUpdates } from './extensions';
 
 // Memory & CPU Optimization flags & Touchpad / Pinch Gestures
@@ -150,6 +151,7 @@ if (gotTheLock) {
   app.on('before-quit', () => {
     (app as any).isQuitting = true;
     state.isQuitting = true;
+    saveWindowStateImmediate(state.mainWindow);
     // Flush notification history immediately before exit
     if (state.notificationHistoryCache && state.historyFlushTimeout) {
       clearTimeout(state.historyFlushTimeout);

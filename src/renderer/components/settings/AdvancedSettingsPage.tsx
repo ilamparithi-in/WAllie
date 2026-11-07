@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sliders, Link, Trash2, Check, ShieldAlert, Cpu, Network, Terminal, Info } from 'lucide-react';
+import { Sliders, Link, Trash2, Check, ShieldAlert, Cpu, Network, Terminal, Info, Maximize2, Monitor, RotateCcw } from 'lucide-react';
 import type { GlobalSettings } from '../../../preload';
 
 interface AdvancedSettingsPageProps {
@@ -12,9 +12,12 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
   handleToggleGlobalSetting,
 }) => {
   const isLinkPreviewEnabled = globalSettings?.standaloneLinkPreviewEnabled !== false;
+  const isUnblockMinSize = !!globalSettings?.unblockMinWindowSize;
   const [cacheCount, setCacheCount] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);
   const [clearedNotice, setClearedNotice] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
 
   useEffect(() => {
     window.electronAPI?.getLinkPreviewCacheSize?.().then((count) => {
@@ -38,6 +41,20 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
     }
   };
 
+  const handleResetWindowSize = async () => {
+    setResetting(true);
+    try {
+      const ok = await window.electronAPI?.resetWindowSize?.();
+      setResetNotice(ok ? 'Size reset' : 'Failed to reset');
+      setTimeout(() => setResetNotice(null), 3000);
+    } catch {
+      setResetNotice('Failed to reset');
+      setTimeout(() => setResetNotice(null), 3000);
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="space-y-5 subpage-animate max-w-full">
       {/* Page Header */}
@@ -51,7 +68,7 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
         </p>
       </div>
 
-      {/* Main Feature Container */}
+      {/* Main Feature Container - Desktop Link Previews */}
       <div className="bg-[#182229] border border-[#222d34] rounded-xl overflow-hidden shadow-sm">
         {/* Top Feature Header & Toggle */}
         <div className="p-4 flex items-start justify-between gap-4">
@@ -139,6 +156,94 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
             >
               <Trash2 className="w-3.5 h-3.5 text-[#f15c6d]" />
               <span>{clearing ? 'Clearing...' : 'Clear Cache'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Window Sizing Limits Container */}
+      <div className="bg-[#182229] border border-[#222d34] rounded-xl overflow-hidden shadow-sm">
+        {/* Top Feature Header & Toggle */}
+        <div className="p-4 flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-[#00a884]/10 text-[#00a884] border border-[#00a884]/20 shrink-0 mt-0.5">
+              <Maximize2 className="w-4 h-4" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-[#e9edef] text-[13px] tracking-tight">
+                  Unblock Minimum Window Size
+                </span>
+                <span
+                  className={`text-[9px] font-semibold px-2 py-0.5 rounded-full transition-colors ${
+                    isUnblockMinSize
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      : 'bg-[#00a884]/20 text-[#00a884] border border-[#00a884]/30'
+                  }`}
+                >
+                  {isUnblockMinSize ? 'Unrestricted Size' : 'Enforced (480×540)'}
+                </span>
+              </div>
+              <p className="text-[11px] text-[#8696a0] leading-relaxed pr-2">
+                Allows shrinking the application window below the standard 480×540px limit. Useful for tiling window managers (i3, Sway, bspwm) or narrow portrait screens. When disabled, undersized windows automatically expand to 480×540px to recover from layout softlocks.
+              </p>
+            </div>
+          </div>
+
+          <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={isUnblockMinSize}
+              onChange={(e) => handleToggleGlobalSetting('unblockMinWindowSize', e.target.checked)}
+            />
+            <div className="w-9 h-5 bg-[#2a3942] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#e9edef] after:border-[#2a3942] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#00a884]"></div>
+          </label>
+        </div>
+
+        {/* Feature Spec Badges */}
+        <div className="px-4 py-2.5 bg-[#141d22] border-t border-b border-[#222d34]/70 flex flex-wrap items-center gap-2 text-[10px] text-[#8696a0]">
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#182229] border border-[#222d34] text-[#cfd9df]">
+            <Monitor className="w-3 h-3 text-[#00a884]" />
+            Baseline Limit: 480 × 540 px
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#182229] border border-[#222d34] text-[#cfd9df]">
+            <RotateCcw className="w-3 h-3 text-[#00a884]" />
+            Automatic Softlock Recovery
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#182229] border border-[#222d34] text-[#cfd9df]">
+            <Sliders className="w-3 h-3 text-[#00a884]" />
+            Live WM Hints Sync
+          </span>
+        </div>
+
+        {/* Recovery Action Row */}
+        <div className="px-4 py-3 bg-[#182229] flex items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <div className="text-[12px] font-medium text-[#e9edef] flex items-center gap-2">
+              <span>Window Geometry Recovery</span>
+            </div>
+            <p className="text-[11px] text-[#8696a0]">
+              Restore window to recommended default dimensions (1100×750px) if your window manager restored a clipped or trapped state.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            {resetNotice && (
+              <span className="text-[11px] text-[#00a884] flex items-center gap-1 font-medium">
+                <Check className="w-3.5 h-3.5" />
+                {resetNotice}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleResetWindowSize}
+              disabled={resetting}
+              className="px-3 py-1.5 rounded-lg bg-[#222d34] hover:bg-[#2a3942] active:bg-[#32424b] text-[#e9edef] text-[11px] font-medium border border-[#2a3942] hover:border-[#00a884]/40 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
+              title="Reset window size to default dimensions"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-[#00a884]" />
+              <span>{resetting ? 'Resetting...' : 'Reset Window Size'}</span>
             </button>
           </div>
         </div>

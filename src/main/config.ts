@@ -80,6 +80,7 @@ export function loadSettings(): GlobalSettings {
         defaultProtocolAccountId: typeof parsed.defaultProtocolAccountId === 'string' ? parsed.defaultProtocolAccountId : 'ask',
         standaloneLinkPreviewEnabled: parsed.standaloneLinkPreviewEnabled !== false,
         responsiveLayoutMode: (parsed.responsiveLayoutMode === 'disabled' || parsed.responsiveLayoutMode === 'portrait') ? parsed.responsiveLayoutMode : 'auto',
+        unblockMinWindowSize: !!parsed.unblockMinWindowSize,
       };
     }
   } catch (error) {
@@ -112,6 +113,7 @@ export function loadSettings(): GlobalSettings {
     defaultProtocolAccountId: 'ask',
     standaloneLinkPreviewEnabled: true,
     responsiveLayoutMode: 'auto',
+    unblockMinWindowSize: false,
   };
 }
 
