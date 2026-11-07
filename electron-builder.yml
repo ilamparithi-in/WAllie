@@ -21,7 +21,7 @@ linux:
     - target: flatpak
       arch: [x64, arm64]
     - target: snap
-      arch: [x64, arm64]
+      arch: [x64]
 snapcraft:
   base: "core24"
   core24:
