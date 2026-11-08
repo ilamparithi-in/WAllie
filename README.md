@@ -10,6 +10,7 @@ othneildrew/Best-README-Template
 [![Issues][issues-shield]][issues-url]
 [![project_license][license-shield]][license-url]
 [![CI Build][ci-shield]][ci-url]
+[![Snap Store][snap-shield]][snap-url]
 
 <!-- PROJECT LOGO -->
 <br />
@@ -18,7 +19,7 @@ othneildrew/Best-README-Template
     <img src="public/icon.png" alt="Logo" width="80" height="80">
   </a>
 
-<h3 align="center">WAllie</h3>
+<h1 align="center">WAllie</h1>
 
   <p align="center">
     Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
@@ -85,20 +86,59 @@ I was tired of finding Linux clients for WhatsApp which did not do everything I 
 <!-- FEATURES -->
 ## Features
 
-- 👤 **Multi-Account Session Isolation**: Run multiple WhatsApp accounts concurrently. Each tab runs inside an isolated, persisted session partition (`session.fromPartition('persist:account_<id>')`), preventing cookies, storage, and cache overlap.
-- 🧩 **Chrome Extensions Support**: Install Chrome Extensions (e.g. Privacy Extension, WA Web Plus) directly from the Chrome Web Store, or load unpacked extensions from local folders.
-- 🔔 **Smart Notifications with Linux Integration**: Receive native desktop notifications tagged with account-specific emojis (in case of multiple accounts). Logs notification history locally with full search capabilities.
-- 🔗 **Handle WhatsApp URIs**: Open WhatsApp chat directly by passing the phone number or `wa://` links to the app. Choose which account to use to open the chat.
-- 📌 **PIP for Video Calls**: Pin the call pop-out window to the top, so it stays on top of all other windows while you work or chat.
+- 👤 **Multi-Account Session Isolation**: Run multiple WhatsApp accounts concurrently. Each account operates inside an isolated, persisted session partition (`persist:account_<id>`), preventing cookie, storage, and cache collisions.
+- 🧩 **Chrome Extensions Support**: Install extensions directly from the Chrome Web Store (e.g. WA Web Plus, Privacy Extension) or load unpacked local extensions per account.
+- 📱 **Responsive UI & Collapsible Sidebar**: Optimized for tiling window managers, vertical/portrait monitors, and narrow splits. Includes a collapsible chat sidebar in landscape and a full-width single-pane navigation flow in portrait mode, with an unblocked minimum window size toggle.
+- 🔗 **Standalone Link Preview Generator**: Reverse-engineered client-side link preview engine that generates rich metadata cards with full-sized preview images directly from your desktop — eliminating WhatsApp Web's requirement for your primary phone to be online.
+- 💾 **Built-in Chat Exporter**: Export complete individual or group chats with automated backward history scrolling, live progress tracking, media streaming (photos, voice notes, videos, albums), and export cancellation support.
+- 🔔 **Smart Notifications & History**: Native desktop notifications tagged with account emojis. Stores searchable notification history locally with time-based pruning and export capabilities.
+- 🚀 **Deep Linking & URI Protocol**: Direct support for `whatsapp://` and phone number URLs, with an interactive prompt to select which account handles the incoming chat.
+- 📌 **Picture-in-Picture (PIP) for Video Calls**: Pop out video calls into a dedicated, floating always-on-top window while you multitask.
+- 🐧 **Linux-First Polish**: Tray minimization, Wayland and X11 native window decorations, hardware acceleration toggle, and smooth touchpad pinch-to-zoom gestures.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- GETTING STARTED -->
 ## Installing WAllie
 
-WAllie can be compiled and installed on most popular Linux distributions. Since it is an Electron app, you can even build it for macOS and Windows. Grab the latest release from the [releases](https://github.com/ilamparithi-in/WAllie/releases) page, or build it from source:
+### 1. Snap Store (Ubuntu & all Snap-enabled distros)
+Install WAllie directly from the Snap Store:
+```bash
+sudo snap install wallie
+```
+Or find it in the Ubuntu App Center / Snap Store at [snapcraft.io/wallie](https://snapcraft.io/wallie).
 
-### Prerequisites
+---
+
+### 2. Universal AppImage (AppImageHub)
+Download the standalone AppImage for instant portable execution on any Linux distribution (x86_64 and arm64). Cataloged on [AppImageHub](https://appimage.github.io/WAllie).
+
+1. Download the latest `.AppImage` from [GitHub Releases](https://github.com/ilamparithi-in/WAllie/releases/latest).
+2. Make it executable and run:
+```bash
+chmod +x WAllie-*.AppImage
+./WAllie-*.AppImage
+```
+
+> [!TIP]
+> Compatible with AppImage desktop integration tools like **Gear Lever** and **AppImageLauncher** for automatic desktop entries and differential updates.
+
+---
+
+### 3. Prebuilt Packages & Binaries
+Prebuilt binaries for every release are available on the [Releases page](https://github.com/ilamparithi-in/WAllie/releases/latest):
+* **Debian / Ubuntu**: `.deb` (x86_64 & arm64)
+* **Fedora / RHEL**: `.rpm` (x86_64 & arm64)
+* **Universal Flatpak**: `.flatpak` (x86_64 & arm64)
+* **Windows**: `.exe` (NSIS installer & portable)
+* **macOS**: `.dmg` (Universal, Apple Silicon, & Intel)
+
+---
+
+### 4. Building from Source
+WAllie can be compiled and installed on most popular Linux distributions. Since it is an Electron app, you can even build it for macOS and Windows:
+
+#### Prerequisites
 
 Ensure you have Node.js (v18+) and npm installed:
 ```bash
@@ -249,3 +289,5 @@ Like my work? Consider buying me a Biriyani! [Donate](https://pseudosmp.github.i
 [Node.js]: https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white
 [Node-url]: https://nodejs.org/
 [ci-shield]: https://img.shields.io/github/actions/workflow/status/ilamparithi-in/WAllie/build.yml?style=for-the-badge
+[snap-shield]: https://img.shields.io/snapcraft/v/wallie/latest/stable?style=for-the-badge&logo=snapcraft&logoColor=white
+[snap-url]: https://snapcraft.io/wallie

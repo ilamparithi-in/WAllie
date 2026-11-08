@@ -7,7 +7,7 @@ pkgdesc="Electron-based WhatsApp Client for Linux with Multi-account and Extensi
 arch=('any')
 url="https://github.com/ilamparithi-in/WAllie"
 license=('MIT')
-depends=('electron44')
+depends=('electron45')
 makedepends=('npm' 'nodejs')
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
 sha256sums=('COMPUTE_WITH_updpkgsums_OR_sha256sum')
@@ -34,7 +34,7 @@ package() {
   install -d "${pkgdir}/usr/bin"
   cat <<EOF > "${pkgdir}/usr/bin/${pkgname}"
 #!/bin/sh
-exec electron44 /usr/lib/${pkgname}/dist/main/index.js "\$@"
+exec electron45 /usr/lib/${pkgname}/dist/main/index.js "\$@"
 EOF
   chmod 755 "${pkgdir}/usr/bin/${pkgname}"
 
