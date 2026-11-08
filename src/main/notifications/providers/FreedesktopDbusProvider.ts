@@ -42,6 +42,7 @@ export class FreedesktopDbusProvider implements NotificationProvider {
   private bus: dbus.MessageBus | null = null;
   private iface: FreedesktopNotificationsInterface | null = null;
   private isConnected = false;
+  private initPromise: Promise<FreedesktopNotificationsInterface | null> | null = null;
   private availabilityChecked: boolean | null = null;
   private serverCapabilities = new Set<string>();
   private activeNotifications = new Map<number, TrackedNotification>();
@@ -103,82 +104,92 @@ export class FreedesktopDbusProvider implements NotificationProvider {
     if (this.iface && this.isConnected) {
       return this.iface;
     }
-
-    try {
-      if (!this.bus) {
-        this.bus = dbus.sessionBus();
-        this.bus.connection.on('error', (err: any) => {
-          console.warn('[FreedesktopDbusProvider] D-Bus session bus error:', err);
-          this.cleanupBus();
-        });
-      }
-
-      const iface = await this.bus.getInterface<FreedesktopNotificationsInterface>(
-        'org.freedesktop.Notifications',
-        '/org/freedesktop/Notifications',
-        'org.freedesktop.Notifications'
-      );
-
-      // Bind signals
-      iface.on('ActionInvoked', (id: number, actionKey: string) => {
-        const tracked = this.activeNotifications.get(id);
-        if (!tracked) return;
-
-        this.cleanupTracked(id);
-        try {
-          tracked.payload.onAction?.(actionKey);
-        } catch (err) {
-          console.error('[FreedesktopDbusProvider] Error in onAction callback:', err);
-        }
-      });
-
-      iface.on('NotificationReplied', (id: number, replyText: string) => {
-        const tracked = this.activeNotifications.get(id);
-        if (!tracked) return;
-
-        this.cleanupTracked(id);
-        try {
-          tracked.payload.onReply?.(replyText);
-        } catch (err) {
-          console.error('[FreedesktopDbusProvider] Error in onReply callback:', err);
-        }
-      });
-
-      iface.on('NotificationClosed', (id: number, reason: number) => {
-        const tracked = this.activeNotifications.get(id);
-        if (!tracked) return;
-
-        this.cleanupTracked(id);
-        try {
-          tracked.payload.onClose?.(reason);
-        } catch (err) {
-          console.error('[FreedesktopDbusProvider] Error in onClose callback:', err);
-        }
-      });
-
-      this.iface = iface;
-      this.isConnected = true;
-
-      try {
-        const caps = await iface.GetCapabilities();
-        if (Array.isArray(caps)) {
-          this.serverCapabilities = new Set(caps.map((c) => String(c).toLowerCase()));
-        }
-      } catch (e) {
-        console.warn('[FreedesktopDbusProvider] Could not retrieve server capabilities:', e);
-      }
-
-      return this.iface;
-    } catch (err) {
-      console.warn('[FreedesktopDbusProvider] Could not connect to org.freedesktop.Notifications:', err);
-      this.cleanupBus();
-      return null;
+    if (this.initPromise) {
+      return this.initPromise;
     }
+
+    this.initPromise = (async () => {
+      try {
+        if (!this.bus) {
+          this.bus = dbus.sessionBus();
+          this.bus.connection.on('error', (err: any) => {
+            console.warn('[FreedesktopDbusProvider] D-Bus session bus error:', err);
+            this.cleanupBus();
+          });
+        }
+
+        const iface = await this.bus.getInterface<FreedesktopNotificationsInterface>(
+          'org.freedesktop.Notifications',
+          '/org/freedesktop/Notifications',
+          'org.freedesktop.Notifications'
+        );
+
+        // Bind signals
+        iface.on('ActionInvoked', (id: number, actionKey: string) => {
+          const tracked = this.activeNotifications.get(id);
+          if (!tracked) return;
+
+          this.cleanupTracked(id);
+          try {
+            tracked.payload.onAction?.(actionKey);
+          } catch (err) {
+            console.error('[FreedesktopDbusProvider] Error in onAction callback:', err);
+          }
+        });
+
+        iface.on('NotificationReplied', (id: number, replyText: string) => {
+          const tracked = this.activeNotifications.get(id);
+          if (!tracked) return;
+
+          this.cleanupTracked(id);
+          try {
+            tracked.payload.onReply?.(replyText);
+          } catch (err) {
+            console.error('[FreedesktopDbusProvider] Error in onReply callback:', err);
+          }
+        });
+
+        iface.on('NotificationClosed', (id: number, reason: number) => {
+          const tracked = this.activeNotifications.get(id);
+          if (!tracked) return;
+
+          this.cleanupTracked(id);
+          try {
+            tracked.payload.onClose?.(reason);
+          } catch (err) {
+            console.error('[FreedesktopDbusProvider] Error in onClose callback:', err);
+          }
+        });
+
+        this.iface = iface;
+        this.isConnected = true;
+
+        try {
+          const caps = await iface.GetCapabilities();
+          if (Array.isArray(caps)) {
+            this.serverCapabilities = new Set(caps.map((c) => String(c).toLowerCase()));
+          }
+        } catch (e) {
+          console.warn('[FreedesktopDbusProvider] Could not retrieve server capabilities:', e);
+        }
+
+        return this.iface;
+      } catch (err) {
+        console.warn('[FreedesktopDbusProvider] Could not connect to org.freedesktop.Notifications:', err);
+        this.cleanupBus();
+        return null;
+      } finally {
+        this.initPromise = null;
+      }
+    })();
+
+    return this.initPromise;
   }
 
   private cleanupBus(): void {
     this.isConnected = false;
     this.iface = null;
+    this.initPromise = null;
     if (this.bus) {
       try {
         this.bus.connection.end();

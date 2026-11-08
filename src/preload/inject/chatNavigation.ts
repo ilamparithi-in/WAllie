@@ -10,9 +10,23 @@ export function norm(s: string | null | undefined): string {
 }
 
 export function vis(e: Element | null): boolean {
-  if (!e) return false;
+  if (!e || !e.isConnected) return false;
   const r = e.getBoundingClientRect();
-  return r.width > 0 && r.height > 0;
+  if (r.width > 0 && r.height > 0) return true;
+
+  // When a view is loaded in the background or unrendered (e.g. setVisible(false)),
+  // getBoundingClientRect returns 0x0 for all elements even when the DOM is intact.
+  // In that case, verify element is not explicitly hidden via CSS or attributes.
+  if (e instanceof HTMLElement) {
+    if (e.hidden || e.style.display === 'none' || e.style.visibility === 'hidden') return false;
+    try {
+      const style = window.getComputedStyle(e);
+      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+        return false;
+      }
+    } catch {}
+  }
+  return !e.closest('[style*="display: none"], [style*="display:none"], [hidden]');
 }
 
 export function triggerEvents(el: Element | null, types: string[]): void {
@@ -392,6 +406,7 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
 
     window.__walinux_ipc.onSendInlineReply((data: { contactName: string; text: string; tag: string }) => {
       const { contactName, text, tag } = data;
+      let sendTriggered = false;
 
       function getComposer(): HTMLElement | null {
         const candidates = Array.from(document.querySelectorAll(
@@ -423,20 +438,35 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
       }
 
       function doSendText(comp: HTMLElement) {
+        if (sendTriggered) return;
+        sendTriggered = true;
+
         comp.focus();
         try {
           document.execCommand('selectAll', false, undefined);
           document.execCommand('insertText', false, text);
         } catch (e) {}
+
+        if (!comp.textContent || !comp.textContent.includes(text)) {
+          try {
+            comp.textContent = text;
+          } catch (e) {}
+        }
         comp.dispatchEvent(new InputEvent('input', { bubbles: true }));
 
         setTimeout(() => {
           const btn = getSendButton();
           if (btn) {
             triggerEvents(btn, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
-            if (typeof (btn as any).click === 'function') {
-              try { (btn as any).click(); } catch (e) {}
-            }
+          } else {
+            // Fallback: send via Enter key event on composer
+            comp.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'Enter',
+              code: 'Enter',
+              keyCode: 13,
+              which: 13,
+              bubbles: true,
+            }));
           }
         }, 150);
       }
