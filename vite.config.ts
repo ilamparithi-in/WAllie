@@ -43,9 +43,6 @@ export default defineConfig({
             emptyOutDir: true,
             sourcemap: true,
             minify: false,
-            rollupOptions: {
-              external: ['x11'],
-            },
           },
         },
       },
