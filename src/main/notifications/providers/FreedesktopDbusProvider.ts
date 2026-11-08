@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import dbus from 'dbus-next';
+import dbus from 'dbus-native';
 import path from 'node:path';
 import fs from 'node:fs';
 import {
@@ -14,6 +14,22 @@ import {
 } from '../../../shared/notificationFormatting';
 import { getDesktopEntryName } from '../../utils';
 
+interface FreedesktopNotificationsInterface {
+  GetCapabilities(): Promise<string[]>;
+  Notify(
+    appName: string,
+    replacesId: number,
+    appIcon: string,
+    summary: string,
+    body: string,
+    actions: string[],
+    hints: Record<string, dbus.Variant | [string, unknown]>,
+    expireTimeout: number
+  ): Promise<number>;
+  CloseNotification(id: number): Promise<void>;
+  on(event: string, callback: (...args: any[]) => void): this;
+}
+
 interface TrackedNotification {
   payload: NotificationPayload;
   tempAvatarPath?: string;
@@ -24,7 +40,7 @@ export class FreedesktopDbusProvider implements NotificationProvider {
   public readonly name = 'freedesktop-dbus';
 
   private bus: dbus.MessageBus | null = null;
-  private iface: dbus.ClientInterface | null = null;
+  private iface: FreedesktopNotificationsInterface | null = null;
   private isConnected = false;
   private availabilityChecked: boolean | null = null;
   private serverCapabilities = new Set<string>();
@@ -83,7 +99,7 @@ export class FreedesktopDbusProvider implements NotificationProvider {
     };
   }
 
-  private async ensureInterface(): Promise<dbus.ClientInterface | null> {
+  private async ensureInterface(): Promise<FreedesktopNotificationsInterface | null> {
     if (this.iface && this.isConnected) {
       return this.iface;
     }
@@ -91,14 +107,17 @@ export class FreedesktopDbusProvider implements NotificationProvider {
     try {
       if (!this.bus) {
         this.bus = dbus.sessionBus();
-        this.bus.on('error', (err) => {
+        this.bus.connection.on('error', (err: any) => {
           console.warn('[FreedesktopDbusProvider] D-Bus session bus error:', err);
           this.cleanupBus();
         });
       }
 
-      const proxyObj = await this.bus.getProxyObject('org.freedesktop.Notifications', '/org/freedesktop/Notifications');
-      const iface = proxyObj.getInterface('org.freedesktop.Notifications');
+      const iface = await this.bus.getInterface<FreedesktopNotificationsInterface>(
+        'org.freedesktop.Notifications',
+        '/org/freedesktop/Notifications',
+        'org.freedesktop.Notifications'
+      );
 
       // Bind signals
       iface.on('ActionInvoked', (id: number, actionKey: string) => {
@@ -162,7 +181,7 @@ export class FreedesktopDbusProvider implements NotificationProvider {
     this.iface = null;
     if (this.bus) {
       try {
-        this.bus.disconnect();
+        this.bus.connection.end();
       } catch { }
       this.bus = null;
     }
