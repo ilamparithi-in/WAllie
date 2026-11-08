@@ -1,8 +1,14 @@
 appId: dev.ilamparithi.wallie
 productName: WAllie
+publish:
+  provider: github
+  owner: ilamparithi-in
+  repo: WAllie
 directories:
   output: dist-pack
   buildResources: build
+toolsets:
+  appimage: "1.0.3"
 files:
   - dist/**/*
   - package.json
@@ -37,7 +43,8 @@ snapcraft:
       - home
       - removable-media
 flatpak:
-  runtimeVersion: "23.08"
+  runtimeVersion: "26.08"
+  baseVersion: "26.08"
   finishArgs:
     - "--share=ipc"
     - "--socket=x11"
