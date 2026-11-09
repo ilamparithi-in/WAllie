@@ -310,6 +310,13 @@ export function setPortraitViewState(view: PortraitViewState): void {
   currentViewState = view;
   if (isPortraitActive && document.documentElement) {
     document.documentElement.setAttribute('data-portrait-view', view);
+    if (view === 'chat') {
+      lockMainScreenScroll();
+      injectBackButton();
+      setTimeout(injectBackButton, 50);
+      setTimeout(injectBackButton, 150);
+      setTimeout(injectBackButton, 300);
+    }
     window.dispatchEvent(new Event('resize'));
   }
 }
@@ -655,6 +662,13 @@ function setupEventListeners(): void {
     startObserving();
   } else {
     document.addEventListener('DOMContentLoaded', startObserving, { once: true });
+  }
+
+  // Ensure chat view is activated whenever a notification click is processed
+  if (window.__walinux_ipc?.onNotificationClicked) {
+    window.__walinux_ipc.onNotificationClicked(() => {
+      setPortraitViewState('chat');
+    });
   }
 }
 
