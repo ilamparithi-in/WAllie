@@ -187,7 +187,7 @@ export async function createNotification(
     const now = new Date();
     logNotificationToHistory({
       type: 'message',
-      id: data.tag || `notif_${now.getTime()}_${Math.random().toString(36).substring(2, 9)}`,
+      id: `notif_${now.getTime()}_${Math.random().toString(36).substring(2, 9)}`,
       timestamp: now.toISOString(),
       displayTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       direction: 'incoming',

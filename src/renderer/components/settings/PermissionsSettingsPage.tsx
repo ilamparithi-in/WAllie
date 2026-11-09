@@ -1,6 +1,7 @@
 import React from 'react';
 import { Shield } from 'lucide-react';
 import type { AccountInfo } from '../../../preload';
+import { SettingsToggle, SettingsSelect } from './common';
 
 interface PermissionsSettingsPageProps {
   accounts: AccountInfo[];
@@ -20,6 +21,11 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
   selectedAccount,
   handleToggleAccountPermission,
 }) => {
+  const accountOptions = accounts.map((acc) => ({
+    value: acc.id,
+    label: `${acc.emoji ? `${acc.emoji} ` : ''}${acc.name}`,
+  }));
+
   return (
     <div className="space-y-4 subpage-animate">
       <div>
@@ -35,86 +41,76 @@ export const PermissionsSettingsPage: React.FC<PermissionsSettingsPageProps> = (
       {/* Unified Account Selector Banner */}
       <div className="flex items-center justify-between p-3 bg-[#182229] border border-[#222d34] rounded-lg">
         <span className="font-semibold text-xs text-[#e9edef]">Target Account:</span>
-        <select
+        <SettingsSelect
           value={selectedAccountId}
-          onChange={(e) => setSelectedAccountId(e.target.value)}
-          className="bg-[#202c33] text-[#e9edef] px-3 py-1.5 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] cursor-pointer font-medium"
-        >
-          {accounts.map((acc) => (
-            <option key={acc.id} value={acc.id}>
-              {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
-            </option>
-          ))}
-        </select>
+          onChange={(val) => setSelectedAccountId(val)}
+          options={accountOptions}
+          ariaLabel="Target Account"
+        />
       </div>
 
       {selectedAccount && (
         <div className="p-3 bg-[#182229] border border-[#222d34] rounded-lg space-y-3">
           <div className="space-y-3">
-            <label className="flex items-center justify-between gap-4 cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-              <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-4 p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+              <div className="flex-1 min-w-0 pr-2">
                 <div className="font-medium text-[#e9edef] text-[11px]">Push Notifications</div>
                 <div className="text-[10px] text-[#8696a0] mt-0.5">Allow WhatsApp to show desktop notifications</div>
               </div>
-              <input
-                type="checkbox"
+              <SettingsToggle
                 checked={selectedAccount.settings?.notificationsEnabled ?? true}
-                onChange={(e) => handleToggleAccountPermission('notificationsEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+                onChange={(checked) => handleToggleAccountPermission('notificationsEnabled', checked)}
+                ariaLabel="Toggle push notifications"
               />
-            </label>
+            </div>
 
-            <label className="flex items-center justify-between gap-4 cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-              <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-4 p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+              <div className="flex-1 min-w-0 pr-2">
                 <div className="font-medium text-[#e9edef] text-[11px]">Camera Access</div>
                 <div className="text-[10px] text-[#8696a0] mt-0.5">Allow video capture for video calls</div>
               </div>
-              <input
-                type="checkbox"
+              <SettingsToggle
                 checked={selectedAccount.settings?.cameraEnabled ?? true}
-                onChange={(e) => handleToggleAccountPermission('cameraEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+                onChange={(checked) => handleToggleAccountPermission('cameraEnabled', checked)}
+                ariaLabel="Toggle camera access"
               />
-            </label>
+            </div>
 
-            <label className="flex items-center justify-between gap-4 cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-              <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-4 p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+              <div className="flex-1 min-w-0 pr-2">
                 <div className="font-medium text-[#e9edef] text-[11px]">Microphone Access</div>
                 <div className="text-[10px] text-[#8696a0] mt-0.5">Allow audio capture for voice calls</div>
               </div>
-              <input
-                type="checkbox"
+              <SettingsToggle
                 checked={selectedAccount.settings?.micEnabled ?? true}
-                onChange={(e) => handleToggleAccountPermission('micEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+                onChange={(checked) => handleToggleAccountPermission('micEnabled', checked)}
+                ariaLabel="Toggle microphone access"
               />
-            </label>
+            </div>
 
-            <label className="flex items-center justify-between gap-4 cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-              <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-4 p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+              <div className="flex-1 min-w-0 pr-2">
                 <div className="font-medium text-[#e9edef] text-[11px]">Geolocation Access</div>
                 <div className="text-[10px] text-[#8696a0] mt-0.5">Allow sharing current location inside chats</div>
               </div>
-              <input
-                type="checkbox"
+              <SettingsToggle
                 checked={selectedAccount.settings?.geolocationEnabled ?? false}
-                onChange={(e) => handleToggleAccountPermission('geolocationEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+                onChange={(checked) => handleToggleAccountPermission('geolocationEnabled', checked)}
+                ariaLabel="Toggle geolocation access"
               />
-            </label>
+            </div>
 
-            <label className="flex items-center justify-between gap-4 cursor-pointer p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
-              <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-4 p-1.5 rounded hover:bg-[#202c33]/40 transition-colors">
+              <div className="flex-1 min-w-0 pr-2">
                 <div className="font-medium text-[#e9edef] text-[11px]">Clipboard Access (Read)</div>
                 <div className="text-[10px] text-[#8696a0] mt-0.5">Allow pages to read text and files from your system clipboard</div>
               </div>
-              <input
-                type="checkbox"
+              <SettingsToggle
                 checked={selectedAccount.settings?.clipboardReadEnabled ?? false}
-                onChange={(e) => handleToggleAccountPermission('clipboardReadEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+                onChange={(checked) => handleToggleAccountPermission('clipboardReadEnabled', checked)}
+                ariaLabel="Toggle clipboard access"
               />
-            </label>
+            </div>
 
             <div className="text-[10px] text-[#8696a0] italic text-center pt-2 border-t border-[#222d34]/60">
               * Toggling browser permissions reloads the account webview to apply changes.

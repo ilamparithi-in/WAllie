@@ -76,16 +76,34 @@ export function getAvailableChats(): Array<{
     if (!ChatCollection) return [];
 
     const models = ChatCollection.getModelsArray ? ChatCollection.getModelsArray() : [];
-    return models.map((c: any) => ({
-      jid: String(c.id?._serialized || c.id || ''),
-      title: String(c.formattedTitle || c.name || c.contact?.formattedName || 'Unknown'),
-      isGroup: Boolean(c.isGroup || c.id?.server === 'g.us' || c.groupMetadata),
-      isCommunity: Boolean(c.isParentGroup || c.isCommunity || c.parentGroup),
-      isBroadcast: Boolean(c.isBroadcast || c.id?.server === 'broadcast'),
-      unreadCount: Number(c.unreadCount || 0),
-      timestamp: Number(c.t || 0),
-      avatarUrl: c.contact?.profilePicThumb?.img || undefined,
-    }));
+    const seen = new Set<string>();
+    const chats: Array<{
+      jid: string;
+      title: string;
+      isGroup: boolean;
+      isCommunity: boolean;
+      isBroadcast: boolean;
+      unreadCount: number;
+      timestamp: number;
+      avatarUrl?: string;
+    }> = [];
+
+    for (const c of models) {
+      const jid = String(c.id?._serialized || c.id || '');
+      if (!jid || seen.has(jid)) continue;
+      seen.add(jid);
+      chats.push({
+        jid,
+        title: String(c.formattedTitle || c.name || c.contact?.formattedName || 'Unknown'),
+        isGroup: Boolean(c.isGroup || c.id?.server === 'g.us' || c.groupMetadata),
+        isCommunity: Boolean(c.isParentGroup || c.isCommunity || c.parentGroup),
+        isBroadcast: Boolean(c.isBroadcast || c.id?.server === 'broadcast'),
+        unreadCount: Number(c.unreadCount || 0),
+        timestamp: Number(c.t || 0),
+        avatarUrl: c.contact?.profilePicThumb?.img || undefined,
+      });
+    }
+    return chats;
   } catch (err) {
     console.error('[wallie-exporter] Failed to get available chats:', err);
     return [];

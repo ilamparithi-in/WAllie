@@ -531,6 +531,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   return (
     <div
       ref={modalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-dialog-title"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       className={`fixed top-[28px] right-0 bottom-0 z-50 w-[450px] bg-[#111b21] border-l border-[#222d34] shadow-2xl flex flex-col transform transition-transform duration-300 ease-[cubic-bezier(0.1,0.9,0.2,1)] select-text settings-modal-drawer ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
         }`}
@@ -538,7 +541,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#222d34] bg-[#202c33] flex-shrink-0 settings-modal-header">
         {activePage === 'main' ? (
-          <div className="flex items-center gap-2 text-[#e9edef] font-medium text-sm">
+          <div id="settings-dialog-title" className="flex items-center gap-2 text-[#e9edef] font-medium text-sm">
             <SettingsIcon className="w-4 h-4 text-[#00a884]" />
             <span>Application Settings</span>
           </div>
@@ -552,7 +555,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             className="flex items-center gap-2 text-[#00a884] font-medium text-sm hover:text-[#00c298] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="text-[#e9edef] font-semibold text-xs">
+            <span id="settings-dialog-title" className="text-[#e9edef] font-semibold text-xs">
               {activePage === 'general' && 'General Settings'}
               {activePage === 'downloads' && 'Downloads'}
               {activePage === 'preload' && 'Accounts to load on launch'}

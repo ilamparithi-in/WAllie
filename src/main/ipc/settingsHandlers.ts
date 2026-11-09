@@ -8,7 +8,7 @@ import {
   enforceWindowMinimumSize,
   initializeAccountsLoad,
 } from '../window';
-import { applyRetentionPruning } from '../notifications';
+import { applyRetentionPruning } from '../notificationHistory';
 import { applyThemeMode, getThemeInfo } from '../theme';
 import { GlobalSettings } from '../../shared/types';
 import { validate, globalSettingsSchema } from './schemas';

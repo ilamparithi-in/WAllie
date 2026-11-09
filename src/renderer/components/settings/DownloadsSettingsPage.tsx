@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SettingsToggle } from './common';
 import {
   Download,
   Folder,
@@ -170,36 +171,34 @@ export const DownloadsSettingsPage: React.FC<DownloadsSettingsPageProps> = ({
 
         <div className="space-y-2">
           {/* Ask every time toggle */}
-          <label className="flex items-center justify-between gap-4 cursor-pointer p-3 bg-[#111b21] border border-[#222d34] rounded-lg hover:bg-[#182229] transition-colors">
-            <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-4 p-3 bg-[#111b21] border border-[#222d34] rounded-lg">
+            <div className="flex-1 min-w-0 pr-2">
               <div className="font-medium text-[#e9edef] text-xs">Ask where to save each file before downloading</div>
               <div className="text-[10px] text-[#8696a0] mt-0.5">
                 Always show a "Save As" dialog to choose custom filename and destination. (Message context menu "Download" always prompts Save As).
               </div>
             </div>
-            <input
-              type="checkbox"
+            <SettingsToggle
               checked={askEveryTime}
-              onChange={(e) => handleToggleGlobalSetting('askWhereToSaveEveryTime', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+              onChange={(checked) => handleToggleGlobalSetting('askWhereToSaveEveryTime', checked)}
+              ariaLabel="Ask where to save each file before downloading"
             />
-          </label>
+          </div>
 
           {/* Download notifications toggle */}
-          <label className="flex items-center justify-between gap-4 cursor-pointer p-3 bg-[#111b21] border border-[#222d34] rounded-lg hover:bg-[#182229] transition-colors">
-            <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-4 p-3 bg-[#111b21] border border-[#222d34] rounded-lg">
+            <div className="flex-1 min-w-0 pr-2">
               <div className="font-medium text-[#e9edef] text-xs">Show desktop notification when download completes</div>
               <div className="text-[10px] text-[#8696a0] mt-0.5">
                 Displays a system alert upon successful download. Clicking the alert opens the file.
               </div>
             </div>
-            <input
-              type="checkbox"
+            <SettingsToggle
               checked={notifEnabled}
-              onChange={(e) => handleToggleGlobalSetting('downloadNotificationsEnabled', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+              onChange={(checked) => handleToggleGlobalSetting('downloadNotificationsEnabled', checked)}
+              ariaLabel="Show desktop notification when download completes"
             />
-          </label>
+          </div>
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Database } from 'lucide-react';
 import type { AccountInfo } from '../../../preload';
+import { SettingsSelect } from './common';
 
 interface StorageSettingsPageProps {
   accounts: AccountInfo[];
@@ -109,17 +110,15 @@ export const StorageSettingsPage: React.FC<StorageSettingsPageProps> = ({
       {/* Unified Account Selector Banner */}
       <div className="flex items-center justify-between p-3 bg-[#182229] border border-[#222d34] rounded-lg mb-4 flex-shrink-0">
         <span className="font-semibold text-xs text-[#e9edef]">Target Account:</span>
-        <select
+        <SettingsSelect
           value={selectedAccountId}
-          onChange={(e) => setSelectedAccountId(e.target.value)}
-          className="bg-[#202c33] text-[#e9edef] px-3 py-1.5 rounded border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] cursor-pointer font-medium"
-        >
-          {accounts.map((acc) => (
-            <option key={acc.id} value={acc.id}>
-              {acc.emoji ? `${acc.emoji} ` : ''}{acc.name}
-            </option>
-          ))}
-        </select>
+          onChange={(val) => setSelectedAccountId(val)}
+          options={accounts.map((acc) => ({
+            value: acc.id,
+            label: `${acc.emoji ? `${acc.emoji} ` : ''}${acc.name}`,
+          }))}
+          ariaLabel="Target Account"
+        />
       </div>
 
       {isLoadingStorage ? (

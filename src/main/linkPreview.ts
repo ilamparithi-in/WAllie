@@ -1,6 +1,7 @@
 import { nativeImage } from 'electron';
 import { state } from './state';
 import type { LinkPreviewData } from '../shared/types';
+import { isSafeHttpUrl, resolveAndValidateHost } from './urlUtils';
 
 const PREVIEW_CACHE = new Map<string, { data: LinkPreviewData; timestamp: number; ttl: number }>();
 const CACHE_MAX_SIZE = 200;
@@ -11,17 +12,6 @@ const CRAWLER_USER_AGENT = 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://di
 const FALLBACK_CRAWLER_USER_AGENT = 'WhatsApp/2.24.6.77 A';
 const BROWSER_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36';
-
-function isPrivateIpOrHost(hostname: string): boolean {
-  const lower = hostname.toLowerCase();
-  if (lower === 'localhost' || lower.endsWith('.local') || lower === '0.0.0.0') return true;
-  if (/^127\.\d+\.\d+\.\d+$/.test(lower)) return true;
-  if (/^10\.\d+\.\d+\.\d+$/.test(lower)) return true;
-  if (/^192\.168\.\d+\.\d+$/.test(lower)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(lower)) return true;
-  if (lower === '::1' || lower === 'fe80::') return true;
-  return false;
-}
 
 function decodeHtmlEntities(str: string): string {
   if (!str) return '';
@@ -78,7 +68,7 @@ function extractTitle(html: string): string | null {
 
 /**
  * Universal safe multi-hop redirect follower.
- * Prevents hanging or crashing on infinite redirect loops (e.g. Google abuse /sorry/ walls).
+ * Prevents hanging or crashing on infinite redirect loops, abuse walls, or SSRF attacks.
  */
 async function fetchPageHtmlSafe(
   initialUrl: string,
@@ -88,6 +78,20 @@ async function fetchPageHtmlSafe(
   let currentUrl = initialUrl;
 
   for (let hop = 0; hop < maxHops; hop++) {
+    if (!isSafeHttpUrl(currentUrl)) {
+      return null;
+    }
+
+    try {
+      const parsed = new URL(currentUrl);
+      const isSafe = await resolveAndValidateHost(parsed.hostname);
+      if (!isSafe) {
+        return null;
+      }
+    } catch {
+      return null;
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3500);
 
@@ -113,15 +117,56 @@ async function fetchPageHtmlSafe(
         if (nextUrl.includes('/sorry/') || nextUrl.includes('captcha')) {
           break;
         }
+
+        // SSRF protection: validate redirect target scheme and destination IP
+        if (!isSafeHttpUrl(nextUrl)) {
+          break;
+        }
+        const nextParsed = new URL(nextUrl);
+        const isNextSafe = await resolveAndValidateHost(nextParsed.hostname);
+        if (!isNextSafe) {
+          break;
+        }
+
         currentUrl = nextUrl;
         continue;
       }
 
       if (!res.ok) return null;
 
-      const textBuffer = await res.arrayBuffer();
-      const decoder = new TextDecoder('utf-8', { fatal: false });
-      const html = decoder.decode(textBuffer.slice(0, 1024 * 1024));
+      // Limit response body reading to max 2MB
+      const MAX_HTML_BYTES = 2 * 1024 * 1024;
+      let html = '';
+      if (res.body) {
+        const reader = res.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let totalBytes = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            totalBytes += value.byteLength;
+            if (totalBytes >= MAX_HTML_BYTES) {
+              reader.cancel().catch(() => {});
+              break;
+            }
+          }
+        }
+        const combined = new Uint8Array(totalBytes);
+        let offset = 0;
+        for (const chunk of chunks) {
+          combined.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        const decoder = new TextDecoder('utf-8', { fatal: false });
+        html = decoder.decode(combined.slice(0, MAX_HTML_BYTES));
+      } else {
+        const textBuffer = await res.arrayBuffer();
+        const decoder = new TextDecoder('utf-8', { fatal: false });
+        html = decoder.decode(textBuffer.slice(0, MAX_HTML_BYTES));
+      }
+
       return { finalUrl: currentUrl, html };
     } catch {
       clearTimeout(timeout);
@@ -139,6 +184,13 @@ async function fetchAndProcessThumbnail(
   let imgTimeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const absoluteImageUrl = new URL(imageUrl, finalUrl).toString();
+    if (!isSafeHttpUrl(absoluteImageUrl)) {
+      return null;
+    }
+    const isImageHostSafe = await resolveAndValidateHost(new URL(absoluteImageUrl).hostname);
+    if (!isImageHostSafe) {
+      return null;
+    }
     const imgController = new AbortController();
     imgTimeout = setTimeout(() => imgController.abort(), 3500);
 
@@ -221,12 +273,13 @@ export async function fetchLinkPreview(urlStr: string): Promise<LinkPreviewData 
   }
 
   try {
-    const parsedUrl = new URL(urlStr);
-    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    if (!isSafeHttpUrl(urlStr)) {
       return null;
     }
 
-    if (isPrivateIpOrHost(parsedUrl.hostname)) {
+    const parsedUrl = new URL(urlStr);
+    const isHostSafe = await resolveAndValidateHost(parsedUrl.hostname);
+    if (!isHostSafe) {
       return null;
     }
 

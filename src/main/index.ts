@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { state } from './state';
 import { loadSettings, loadAccounts } from './config';
-import { NOTIFICATION_HISTORY_FILE } from './notifications';
+import { NOTIFICATION_HISTORY_FILE } from './notificationHistory';
 import { registerIpcHandlers } from './ipc';
 import { createMainWindow, createTray } from './window';
 import { saveWindowStateImmediate } from './windowState';
