@@ -1,6 +1,7 @@
 import React from 'react';
 import { Users } from 'lucide-react';
 import type { AccountInfo, GlobalSettings } from '../../../preload';
+import { SettingsToggle } from './common';
 
 interface PreloadSettingsPageProps {
   accounts: AccountInfo[];
@@ -37,9 +38,9 @@ export const PreloadSettingsPage: React.FC<PreloadSettingsPageProps> = ({
                 : acc.id === 'acc_default';
               const isLoaded = acc.isLoaded !== false;
               return (
-                <label
+                <div
                   key={acc.id}
-                  className="flex items-center justify-between gap-4 cursor-pointer p-3 hover:bg-[#202c33]/50 transition-colors"
+                  className="flex items-center justify-between gap-4 p-3 hover:bg-[#202c33]/50 transition-colors"
                 >
                   <div className="flex flex-col min-w-0 pr-4 flex-1">
                     <div className="flex items-center gap-2">
@@ -60,20 +61,19 @@ export const PreloadSettingsPage: React.FC<PreloadSettingsPageProps> = ({
                       {acc.id}
                     </span>
                   </div>
-                  <input
-                    type="checkbox"
+                  <SettingsToggle
                     checked={isPreloaded}
-                    onChange={(e) => {
+                    onChange={(checked) => {
                       if (!globalSettings) return;
                       const currentIds = globalSettings.preloadAccountIds || ['acc_default'];
-                      const updatedIds = e.target.checked
+                      const updatedIds = checked
                         ? [...currentIds, acc.id]
                         : currentIds.filter((id) => id !== acc.id);
                       handleToggleGlobalSetting('preloadAccountIds', updatedIds);
                     }}
-                    className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0"
+                    ariaLabel={`Preload ${acc.name} on launch`}
                   />
-                </label>
+                </div>
               );
             })}
           </div>

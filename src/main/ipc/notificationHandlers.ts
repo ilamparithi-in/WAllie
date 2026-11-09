@@ -7,7 +7,7 @@ import {
   closeNotificationByContact,
   getNotificationHistory,
   clearNotificationHistoryCache,
-} from '../notifications';
+} from '../notificationHistory';
 import { getAccountForWebContents, showAppToast } from '../utils';
 import {
   validate,

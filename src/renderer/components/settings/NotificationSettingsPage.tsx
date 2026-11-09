@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { AccountInfo, GlobalSettings, HistoricalNotification, TimelineEntry, WhatsAppChatExport } from '../../../preload';
 import { decodeHtmlEntities, tokenizeFormattedText } from '../../../shared/notificationFormatting';
+import { SettingsSelect } from './common';
 
 interface NotificationSettingsPageProps {
   accounts: AccountInfo[];
@@ -380,19 +381,19 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
         </div>
 
         {/* Account Selector */}
-        <select
+        <SettingsSelect
           value={notifAccountFilter}
-          onChange={(e) => setNotifAccountFilter(e.target.value)}
-          className="w-36 bg-[#202c33] text-[#e9edef] px-2 py-1.5 rounded-lg border border-[#222d34] text-[11px] outline-none focus:border-[#00a884] flex-shrink-0 cursor-pointer"
-        >
-          <option value="all">All Accounts</option>
-          {accounts.map((acc) => (
-            <option key={acc.id} value={acc.id}>
-              {acc.emoji ? `${acc.emoji} ` : ''}
-              {acc.name}
-            </option>
-          ))}
-        </select>
+          onChange={(val) => setNotifAccountFilter(val)}
+          options={[
+            { value: 'all', label: 'All Accounts' },
+            ...accounts.map((acc) => ({
+              value: acc.id,
+              label: `${acc.emoji ? `${acc.emoji} ` : ''}${acc.name}`,
+            })),
+          ]}
+          ariaLabel="Filter notifications by account"
+          className="w-36 flex-shrink-0"
+        />
       </div>
 
       {/* Date Filter & Action Toolbar */}
@@ -758,7 +759,7 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
                 {/* Date Section Items */}
                 {!isCollapsed && (
                   <div className="space-y-1.5 pl-1">
-                    {displayedItems.map((notif: any) => {
+                    {displayedItems.map((notif: any, idx: number) => {
                       const ms = getEntryTimestampMs(notif);
                       const date = new Date(ms || Date.now());
                       const timeStr = notif.displayTime || date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -798,7 +799,7 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
 
                       return (
                         <div
-                          key={notif.id}
+                          key={`${notif.id || 'notif'}-${ms || idx}-${idx}`}
                           style={{ contentVisibility: 'auto', containIntrinsicSize: '0 64px' }}
                           className="flex items-start gap-2.5 p-2.5 bg-[#182229] border border-[#222d34] rounded-xl hover:border-[#374248] transition-all text-[11px] shadow-xs"
                         >

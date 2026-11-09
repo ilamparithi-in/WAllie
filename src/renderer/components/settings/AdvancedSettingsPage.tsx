@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sliders, Link, Trash2, Check, ShieldAlert, Cpu, Network, Terminal, Info, Maximize2, Monitor, RotateCcw } from 'lucide-react';
 import type { GlobalSettings } from '../../../preload';
+import { SettingsToggle } from './common';
 
 interface AdvancedSettingsPageProps {
   globalSettings: GlobalSettings | null;
@@ -97,15 +98,12 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
             </div>
           </div>
 
-          <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={isLinkPreviewEnabled}
-              onChange={(e) => handleToggleGlobalSetting('standaloneLinkPreviewEnabled', e.target.checked)}
-            />
-            <div className="w-9 h-5 bg-[#2a3942] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#e9edef] after:border-[#2a3942] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#00a884]"></div>
-          </label>
+          <SettingsToggle
+            checked={isLinkPreviewEnabled}
+            onChange={(checked) => handleToggleGlobalSetting('standaloneLinkPreviewEnabled', checked)}
+            ariaLabel="Toggle standalone desktop link previews"
+            className="mt-1"
+          />
         </div>
 
         {/* Feature Spec Badges */}
@@ -190,15 +188,12 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
             </div>
           </div>
 
-          <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={isUnblockMinSize}
-              onChange={(e) => handleToggleGlobalSetting('unblockMinWindowSize', e.target.checked)}
-            />
-            <div className="w-9 h-5 bg-[#2a3942] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#e9edef] after:border-[#2a3942] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#00a884]"></div>
-          </label>
+          <SettingsToggle
+            checked={isUnblockMinSize}
+            onChange={(checked) => handleToggleGlobalSetting('unblockMinWindowSize', checked)}
+            ariaLabel="Toggle unblock minimum window size"
+            className="mt-1"
+          />
         </div>
 
         {/* Feature Spec Badges */}

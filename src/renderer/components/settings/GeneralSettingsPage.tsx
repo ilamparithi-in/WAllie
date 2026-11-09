@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell, History } from 'lucide-react';
 import type { GlobalSettings, AccountInfo } from '../../../preload';
+import { SettingsToggle } from './common';
 
 interface GeneralSettingsPageProps {
   globalSettings: GlobalSettings | null;
@@ -178,50 +179,47 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
           Configure global behavior, system tray preferences, and hardware acceleration.
         </p>
         <div className="mt-2 space-y-2">
-          <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-            <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+            <div className="flex-1 min-w-0 pr-2">
               <div className="font-medium text-[#e9edef] text-[11px]">Close to System Tray</div>
               <div className="text-[10px] text-[#8696a0]">
                 Keep app running in background tray icon mode on close
               </div>
             </div>
-            <input
-              type="checkbox"
+            <SettingsToggle
               checked={globalSettings?.closeToTray ?? true}
-              onChange={(e) => handleToggleGlobalSetting('closeToTray', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+              onChange={(checked) => handleToggleGlobalSetting('closeToTray', checked)}
+              ariaLabel="Close to System Tray"
             />
-          </label>
+          </div>
 
-          <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-            <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+            <div className="flex-1 min-w-0 pr-2">
               <div className="font-medium text-[#e9edef] text-[11px]">Start Minimized</div>
               <div className="text-[10px] text-[#8696a0]">
                 Start application minimized to the system tray on launch
               </div>
             </div>
-            <input
-              type="checkbox"
+            <SettingsToggle
               checked={globalSettings?.startMinimized ?? false}
-              onChange={(e) => handleToggleGlobalSetting('startMinimized', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+              onChange={(checked) => handleToggleGlobalSetting('startMinimized', checked)}
+              ariaLabel="Start Minimized"
             />
-          </label>
+          </div>
 
-          <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-            <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+            <div className="flex-1 min-w-0 pr-2">
               <div className="font-medium text-[#e9edef] text-[11px]">Hardware Acceleration</div>
               <div className="text-[10px] text-[#8696a0]">
                 Use GPU acceleration (requires restart to apply)
               </div>
             </div>
-            <input
-              type="checkbox"
+            <SettingsToggle
               checked={globalSettings?.hardwareAcceleration ?? true}
-              onChange={(e) => handleToggleGlobalSetting('hardwareAcceleration', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+              onChange={(checked) => handleToggleGlobalSetting('hardwareAcceleration', checked)}
+              ariaLabel="Hardware Acceleration"
             />
-          </label>
+          </div>
 
           <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
             <div className="flex-1 min-w-0">
@@ -305,20 +303,19 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
             )}
           </div>
 
-          <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-            <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+            <div className="flex-1 min-w-0 pr-2">
               <div className="font-medium text-[#e9edef] text-[11px]">Ctrl + Scroll to Zoom Scale</div>
               <div className="text-[10px] text-[#8696a0]">
                 Use Ctrl + Mouse Wheel to change the app and view zoom scale (touchpad pinch-to-zoom is preserved)
               </div>
             </div>
-            <input
-              type="checkbox"
+            <SettingsToggle
               checked={globalSettings?.ctrlScrollZoomEnabled ?? true}
-              onChange={(e) => handleToggleGlobalSetting('ctrlScrollZoomEnabled', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+              onChange={(checked) => handleToggleGlobalSetting('ctrlScrollZoomEnabled', checked)}
+              ariaLabel="Ctrl + Scroll to Zoom Scale"
             />
-          </label>
+          </div>
 
           <div className="p-2 rounded hover:bg-[#182229] transition-colors space-y-2">
             <div className="flex items-center justify-between gap-4">
@@ -354,20 +351,19 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
           </p>
 
           <div className="space-y-2">
-            <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-              <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+              <div className="flex-1 min-w-0 pr-2">
                 <div className="font-medium text-[#e9edef] text-[11px]">Inline Reply Notifications (KDE / Freedesktop)</div>
                 <div className="text-[10px] text-[#8696a0]">
                   Allow replying directly from notification popups when supported by your desktop environment
                 </div>
               </div>
-              <input
-                type="checkbox"
+              <SettingsToggle
                 checked={globalSettings?.inlineReplyEnabled ?? true}
-                onChange={(e) => handleToggleGlobalSetting('inlineReplyEnabled', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+                onChange={(checked) => handleToggleGlobalSetting('inlineReplyEnabled', checked)}
+                ariaLabel="Inline Reply Notifications"
               />
-            </label>
+            </div>
 
             <div className="p-2 rounded hover:bg-[#182229] transition-colors space-y-2">
               <div>
@@ -445,27 +441,21 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
           </p>
 
           <div className="space-y-2">
-            <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-              <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+              <div className="flex-1 min-w-0 pr-2">
                 <div className="font-medium text-[#e9edef] text-[11px]">Enable Notification Logging</div>
                 <div className="text-[10px] text-[#8696a0]">
                   Log desktop notifications, message edits, and deletions to history (stored unencrypted, disabled by default)
                 </div>
               </div>
-              <input
-                type="checkbox"
+              <SettingsToggle
                 checked={globalSettings?.notificationLoggingEnabled ?? false}
-                onChange={async (e) => {
-                  const target = e.target;
-                  const willEnable = target.checked;
-                  const success = await handleToggleGlobalSetting('notificationLoggingEnabled', willEnable);
-                  if (success === false) {
-                    target.checked = globalSettings?.notificationLoggingEnabled ?? false;
-                  }
+                onChange={async (checked) => {
+                  await handleToggleGlobalSetting('notificationLoggingEnabled', checked);
                 }}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+                ariaLabel="Enable Notification Logging"
               />
-            </label>
+            </div>
 
             {/* Display the retention setting ONLY when notification logging is enabled */}
             {globalSettings?.notificationLoggingEnabled && (
@@ -545,20 +535,19 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
             Configure safety prompts and trusted domains for opening external links.
           </p>
 
-          <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-            <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+            <div className="flex-1 min-w-0 pr-2">
               <div className="font-medium text-[#e9edef] text-[11px]">Warn Before Opening External Links</div>
               <div className="text-[10px] text-[#8696a0] leading-normal">
                 Show system prompt before visiting untrusted links. When disabled, links open with a toast notification.
               </div>
             </div>
-            <input
-              type="checkbox"
+            <SettingsToggle
               checked={globalSettings?.externalLinkWarningEnabled ?? true}
-              onChange={(e) => handleToggleGlobalSetting('externalLinkWarningEnabled', e.target.checked)}
-              className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+              onChange={(checked) => handleToggleGlobalSetting('externalLinkWarningEnabled', checked)}
+              ariaLabel="Warn Before Opening External Links"
             />
-          </label>
+          </div>
 
           {accounts.length > 0 && (
             <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors mt-2">
@@ -712,50 +701,47 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
             Show or hide action buttons in the top toolbar (settings button is always shown).
           </p>
           <div className="space-y-2">
-            <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-              <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+              <div className="flex-1 min-w-0 pr-2">
                 <div className="font-medium text-[#e9edef] text-[11px]">Refresh Button</div>
                 <div className="text-[10px] text-[#8696a0]">
                   Show refresh icon to reload the active WhatsApp Web view
                 </div>
               </div>
-              <input
-                type="checkbox"
+              <SettingsToggle
                 checked={globalSettings?.showRefreshButton ?? true}
-                onChange={(e) => handleToggleGlobalSetting('showRefreshButton', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+                onChange={(checked) => handleToggleGlobalSetting('showRefreshButton', checked)}
+                ariaLabel="Refresh Button"
               />
-            </label>
+            </div>
 
-            <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-              <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+              <div className="flex-1 min-w-0 pr-2">
                 <div className="font-medium text-[#e9edef] text-[11px]">Developer Tools Button</div>
                 <div className="text-[10px] text-[#8696a0]">
                   Show code icon in the titlebar to toggle developer tools
                 </div>
               </div>
-              <input
-                type="checkbox"
+              <SettingsToggle
                 checked={globalSettings?.showDevToolsToggle ?? false}
-                onChange={(e) => handleToggleGlobalSetting('showDevToolsToggle', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+                onChange={(checked) => handleToggleGlobalSetting('showDevToolsToggle', checked)}
+                ariaLabel="Developer Tools Button"
               />
-            </label>
+            </div>
 
-            <label className="flex items-center justify-between gap-4 cursor-pointer p-2 rounded hover:bg-[#182229] transition-colors">
-              <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+              <div className="flex-1 min-w-0 pr-2">
                 <div className="font-medium text-[#e9edef] text-[11px]">Notification History Button</div>
                 <div className="text-[10px] text-[#8696a0]">
                   Show bell icon in the titlebar to open notification history
                 </div>
               </div>
-              <input
-                type="checkbox"
+              <SettingsToggle
                 checked={globalSettings?.showNotificationHistoryButton ?? true}
-                onChange={(e) => handleToggleGlobalSetting('showNotificationHistoryButton', e.target.checked)}
-                className="accent-[#00a884] w-4 h-4 cursor-pointer flex-shrink-0 ml-2"
+                onChange={(checked) => handleToggleGlobalSetting('showNotificationHistoryButton', checked)}
+                ariaLabel="Notification History Button"
               />
-            </label>
+            </div>
           </div>
         </div>
       </div>
