@@ -1,4 +1,4 @@
-import { app, BrowserWindow, WebContentsView, Menu, session, desktopCapturer, shell, Notification, dialog, clipboard } from 'electron';
+import { app, BrowserWindow, WebContentsView, Menu, session, desktopCapturer, shell, Notification, dialog, clipboard, nativeTheme } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -793,6 +793,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   }
 
   const baseScale = (state.globalSettings?.appScale || 100) / 100;
+  const isDark = nativeTheme.shouldUseDarkColors;
   const view = new WebContentsView({
     webPreferences: {
       preload: getPreloadPath(),
@@ -808,10 +809,23 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
     } as any,
   });
 
+  try {
+    view.setBackgroundColor(isDark ? '#111b21' : '#f0f2f5');
+  } catch (e) {}
+
   view.webContents.setUserAgent(DEFAULT_USER_AGENT);
   view.webContents.setZoomFactor(baseScale);
   view.webContents.setVisualZoomLevelLimits(1, 5);
   view.webContents.loadURL('https://web.whatsapp.com');
+
+  view.webContents.on('dom-ready', () => {
+    try {
+      view.webContents.send('theme:changed', {
+        themeMode: state.globalSettings?.themeMode || 'system',
+        shouldUseDarkColors: nativeTheme.shouldUseDarkColors,
+      });
+    } catch (e) {}
+  });
 
   view.webContents.on('did-finish-load', () => {
     if (view.webContents.navigationHistory) {
@@ -868,7 +882,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
         minHeight: 400,
         frame: false,
         titleBarStyle: 'hidden',
-        backgroundColor: '#111b21',
+        backgroundColor: nativeTheme.shouldUseDarkColors ? '#111b21' : '#f0f2f5',
         autoHideMenuBar: true,
         webPreferences: {
           preload: getPreloadPath(),

@@ -122,6 +122,9 @@ export interface ElectronAPI {
   clearLinkPreviewCache: () => Promise<{ clearedCount: number }>;
   getLinkPreviewCacheSize: () => Promise<number>;
 
+  getThemeInfo: () => Promise<{ themeMode: 'system' | 'light' | 'dark'; shouldUseDarkColors: boolean }>;
+  onThemeChanged: (callback: (info: { themeMode: 'system' | 'light' | 'dark'; shouldUseDarkColors: boolean }) => void) => () => void;
+
   // Chat Exporter Controls
   promptExportDirectory: (defaultName?: string) => Promise<string | null>;
   promptOpenExportFile: () => Promise<string | null>;
@@ -201,6 +204,12 @@ const api: ElectronAPI = {
   getSystemFontsMeta: () => ipcRenderer.invoke('system:get-fonts-meta'),
   resolveGoogleFont: (family, cachedUrl) => ipcRenderer.invoke('system:resolve-google-font', family, cachedUrl),
   relaunchApp: () => ipcRenderer.send('app:relaunch'),
+  getThemeInfo: () => ipcRenderer.invoke('theme:get-current'),
+  onThemeChanged: (callback) => {
+    const subscription = (_event: unknown, info: { themeMode: 'system' | 'light' | 'dark'; shouldUseDarkColors: boolean }) => callback(info);
+    ipcRenderer.on('theme:changed', subscription);
+    return () => ipcRenderer.removeListener('theme:changed', subscription);
+  },
 
   onProtocolReceived: (callback) => {
     const subscription = (_event: unknown, url: string) => callback(url);
@@ -810,6 +819,57 @@ function showGuestToast(msg: string, url?: string) {
 function setupWhatsAppIntegration() {
   setupCallDetection();
 
+  // Synchronize theme with host system / app settings
+  function applyThemeToWhatsApp(shouldUseDarkColors: boolean) {
+    try {
+      const isDark = shouldUseDarkColors;
+      const body = document.body;
+      if (!body) return;
+
+      let localTheme: string | null = null;
+      try {
+        const raw = localStorage.getItem('theme');
+        if (raw) {
+          localTheme = JSON.parse(raw);
+        }
+      } catch {
+        localTheme = localStorage.getItem('theme');
+      }
+
+      // If user hasn't chosen explicit light or dark inside WhatsApp Web settings,
+      // align the document class with the system / application mode
+      if (!localTheme || localTheme === 'system') {
+        if (isDark) {
+          body.classList.add('dark');
+        } else {
+          body.classList.remove('dark');
+        }
+      }
+    } catch (e) {
+      console.error('[walinux] Failed to apply theme to WhatsApp Web:', e);
+    }
+  }
+
+  ipcRenderer.on('theme:changed', (_event: any, data: { shouldUseDarkColors: boolean }) => {
+    if (data && typeof data.shouldUseDarkColors === 'boolean') {
+      applyThemeToWhatsApp(data.shouldUseDarkColors);
+    }
+  });
+
+  const handleInitialTheme = () => {
+    ipcRenderer.invoke('theme:get-current').then((info: any) => {
+      if (info && typeof info.shouldUseDarkColors === 'boolean') {
+        applyThemeToWhatsApp(info.shouldUseDarkColors);
+      }
+    }).catch(() => {});
+  };
+
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', handleInitialTheme, { once: true });
+  } else {
+    handleInitialTheme();
+  }
+
   // In-app toast notification listener
   ipcRenderer.on('toast:show', (_event: any, data: { message: string; url?: string }) => {
     if (data && data.message) {
@@ -1292,6 +1352,10 @@ const TITLEBAR_CSS = `
     background-color: #ea4335 !important;
     color: #ffffff !important;
   }
+  .titlebar-btn-close:hover svg {
+    stroke: #ffffff !important;
+    color: #ffffff !important;
+  }
   .titlebar-btn svg {
     width: 13px;
     height: 13px;
@@ -1301,6 +1365,23 @@ const TITLEBAR_CSS = `
     width: 1px;
     background-color: #222d34;
     margin: 0 4px;
+  }
+  @media (prefers-color-scheme: light) {
+    #custom-titlebar {
+      background-color: #f0f2f5 !important;
+      border-bottom: 1px solid #d1d7db !important;
+      color: #54656f !important;
+    }
+    .titlebar-left-title {
+      color: #111b21 !important;
+    }
+    .titlebar-btn:hover {
+      background-color: #e9edef !important;
+      color: #111b21 !important;
+    }
+    .titlebar-divider {
+      background-color: #d1d7db !important;
+    }
   }
 `;
 

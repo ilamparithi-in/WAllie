@@ -1,4 +1,4 @@
-import { app, BrowserWindow, WebContentsView, Tray, Menu, nativeImage, Notification, session, dialog, shell, screen } from 'electron';
+import { app, BrowserWindow, WebContentsView, Tray, Menu, nativeImage, Notification, session, dialog, shell, screen, nativeTheme } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -191,7 +191,7 @@ export function createMainWindow() {
     minHeight: unblocked ? 0 : DEFAULT_MIN_WINDOW_HEIGHT,
     frame: false,
     titleBarStyle: 'hidden',
-    backgroundColor: '#111b21',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#111b21' : '#f0f2f5',
     show: false,
     webPreferences: {
       preload: getPreloadPath(),

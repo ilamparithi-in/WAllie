@@ -183,7 +183,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
   };
 
   return (
-    <header className="h-[28px] w-full bg-[#111b21] border-b border-[#222d34] flex items-center justify-between select-none text-[#aebac1] text-xs font-sans">
+    <header className="h-[28px] w-full bg-[#111b21] border-b border-[#222d34] flex items-center justify-between select-none text-[#aebac1] text-xs font-sans app-titlebar">
       {/* Left: App Logo & Account Tabs */}
       <div
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
@@ -397,7 +397,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
           tabIndex={-1}
           title={closeToTray ? 'Minimize to Tray' : 'Close'}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="flex items-center justify-center w-8 h-[28px] hover:bg-[#ea4335] text-[#8696a0] hover:text-white transition-colors focus:outline-none"
+          className="titlebar-close-btn flex items-center justify-center w-8 h-[28px] hover:bg-[#ea4335] text-[#8696a0] hover:text-white transition-colors focus:outline-none"
         >
           <X className="w-3.5 h-3.5" />
         </button>

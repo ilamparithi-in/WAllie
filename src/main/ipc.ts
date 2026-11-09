@@ -16,6 +16,7 @@ import { getAccountById, focusActiveView, getPreloadPath, getAccountsWithLoadedS
 import { downloadManager } from './downloads';
 import { fetchLinkPreview, clearLinkPreviewCache, getLinkPreviewCacheSize } from './linkPreview';
 import { chatExporterManager } from './chatExporter';
+import { applyThemeMode, getThemeInfo } from './theme';
 import AdmZip from 'adm-zip';
 import type { WhatsAppChatExport, ChatExportOptions } from '../shared/chatExportTypes';
 
@@ -431,17 +432,24 @@ export function registerIpcHandlers() {
 
   // Settings Handlers
   ipcMain.handle('settings:get-global', () => state.globalSettings);
+  ipcMain.handle('theme:get-current', () => getThemeInfo());
 
   ipcMain.handle('settings:save-global', async (_event, newSettings: GlobalSettings) => {
     if (!state.globalSettings) return false;
     const oldScale = state.globalSettings.appScale || 100;
     const oldRetention = state.globalSettings.notificationRetentionDays;
+    const oldThemeMode = state.globalSettings.themeMode || 'system';
     const disclaimerJustAccepted = newSettings.disclaimerAccepted && !state.globalSettings.disclaimerAccepted;
     const scaleChanged = newSettings.appScale !== undefined && newSettings.appScale !== oldScale;
     const retentionChanged = newSettings.notificationRetentionDays !== undefined && newSettings.notificationRetentionDays !== oldRetention;
+    const themeChanged = newSettings.themeMode !== undefined && newSettings.themeMode !== oldThemeMode;
 
     state.globalSettings = newSettings;
     await saveSettings(state.globalSettings);
+
+    if (themeChanged) {
+      applyThemeMode(newSettings.themeMode || 'system');
+    }
 
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       enforceWindowMinimumSize(state.mainWindow);

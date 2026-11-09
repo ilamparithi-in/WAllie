@@ -532,11 +532,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     <div
       ref={modalRef}
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      className={`fixed top-[28px] right-0 bottom-0 z-50 w-[450px] bg-[#111b21] border-l border-[#222d34] shadow-2xl flex flex-col transform transition-transform duration-300 ease-[cubic-bezier(0.1,0.9,0.2,1)] select-text ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+      className={`fixed top-[28px] right-0 bottom-0 z-50 w-[450px] bg-[#111b21] border-l border-[#222d34] shadow-2xl flex flex-col transform transition-transform duration-300 ease-[cubic-bezier(0.1,0.9,0.2,1)] select-text settings-modal-drawer ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
         }`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#222d34] bg-[#202c33] flex-shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#222d34] bg-[#202c33] flex-shrink-0 settings-modal-header">
         {activePage === 'main' ? (
           <div className="flex items-center gap-2 text-[#e9edef] font-medium text-sm">
             <SettingsIcon className="w-4 h-4 text-[#00a884]" />
@@ -581,7 +581,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
       </div>
 
       {/* Modal Body / Drawer Content */}
-      <div className="flex-grow relative overflow-hidden bg-[#111b21]">
+      <div className="flex-grow relative overflow-hidden bg-[#111b21] settings-modal-body">
         {/* Main Menu Page */}
         <div className={`absolute inset-0 p-4 overflow-y-auto transition-transform duration-300 ease-in-out flex flex-col ${activePage === 'main' ? 'translate-x-0' : '-translate-x-full pointer-events-none invisible'
           }`}>
@@ -593,9 +593,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                   key={item.page}
                   onClick={() => setActivePage(item.page)}
                   onMouseDown={(e) => e.preventDefault()}
-                  className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
+                  className="flex items-center gap-3.5 p-3 rounded-lg bg-[#182229] border border-[#222d34] hover:bg-[#202c33] hover:border-[#374248] text-left transition-all settings-menu-card focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
                 >
-                  <div className="w-8 h-8 rounded-full bg-[#202c33] flex items-center justify-center text-[#00a884] flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-[#202c33] settings-icon-bubble flex items-center justify-center text-[#00a884] flex-shrink-0">
                     <IconComponent className="w-4 h-4" />
                   </div>
                   <div className="flex-grow min-w-0">
@@ -699,7 +699,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
         </div>
 
         {/* Details Sub-pages Container */}
-        <div className={`absolute inset-0 p-4 overflow-y-auto transition-transform duration-300 ease-in-out bg-[#111b21] ${activePage !== 'main' ? 'translate-x-0' : 'translate-x-full pointer-events-none invisible'
+        <div className={`absolute inset-0 p-4 overflow-y-auto transition-transform duration-300 ease-in-out bg-[#111b21] settings-subpage-container ${activePage !== 'main' ? 'translate-x-0' : 'translate-x-full pointer-events-none invisible'
           }`}>
           {(() => {
             const subPage = activePage !== 'main' ? activePage : lastSubPage;
@@ -775,6 +775,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
                 {subPage === 'css' && (
                   <ThemeSettingsPage
+                    themeMode={globalSettings?.themeMode || 'system'}
+                    onChangeThemeMode={(mode) => handleToggleGlobalSetting('themeMode', mode)}
                     accounts={accounts}
                     selectedAccountId={selectedAccountId}
                     setSelectedAccountId={setSelectedAccountId}

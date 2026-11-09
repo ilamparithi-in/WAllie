@@ -368,6 +368,26 @@ export class ChatExporterManager {
       --reply-border: #00a884;
       --reply-bg: rgba(0, 0, 0, 0.2);
     }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg-app: #efeae2;
+        --bg-panel: #ffffff;
+        --bg-header: #f0f2f5;
+        --bubble-in: #ffffff;
+        --bubble-out: #d9fdd3;
+        --text-primary: #111b21;
+        --text-secondary: #54656f;
+        --text-meta: #667781;
+        --text-meta-out: #667781;
+        --accent: #008069;
+        --accent-rgb: 0, 128, 105;
+        --border-subtle: #e2e8f0;
+        --system-pill-bg: #ffffff;
+        --date-pill-bg: #ffffff;
+        --reply-border: #008069;
+        --reply-bg: rgba(0, 0, 0, 0.05);
+      }
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body, button, input, select, textarea {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

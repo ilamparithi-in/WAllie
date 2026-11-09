@@ -56,6 +56,7 @@ export function loadSettings(): GlobalSettings {
       return {
         closeToTray: parsed.closeToTray !== false,
         hardwareAcceleration: parsed.hardwareAcceleration !== false,
+        themeMode: (['system', 'light', 'dark'].includes(parsed.themeMode) ? parsed.themeMode : 'system'),
         appScale: typeof parsed.appScale === 'number' ? parsed.appScale : 100,
         ctrlScrollZoomEnabled: parsed.ctrlScrollZoomEnabled !== false,
         preloadAccountIds,
@@ -90,6 +91,7 @@ export function loadSettings(): GlobalSettings {
   return {
     closeToTray: true,
     hardwareAcceleration: true,
+    themeMode: 'system',
     appScale: 100,
     ctrlScrollZoomEnabled: true,
     preloadAccountIds: ['acc_default'],
