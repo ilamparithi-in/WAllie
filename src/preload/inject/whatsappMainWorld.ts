@@ -7,10 +7,10 @@ import { initChatExporter } from './chatExporter';
 import { initResponsiveLayout } from './responsiveLayout';
 
 (() => {
-  if ((window as any).__walinux_main_world_initialized) {
+  if ((window as any).__wallie_main_world_initialized) {
     return;
   }
-  (window as any).__walinux_main_world_initialized = true;
+  (window as any).__wallie_main_world_initialized = true;
 
   initCustomNotification();
   initAnchorDownloadHandler();

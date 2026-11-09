@@ -35,7 +35,7 @@ function dispatchDroppedFilesToChat(dt: DataTransfer): boolean {
       return true;
     }
   } catch (err) {
-    console.warn('[walinux] Failed to dispatch drop event to chat:', err);
+    console.warn('[wallie] Failed to dispatch drop event to chat:', err);
   }
 
   // 2. Try pasting into the composer (WhatsApp Web natively supports pasting image/file files)
@@ -59,7 +59,7 @@ function dispatchDroppedFilesToChat(dt: DataTransfer): boolean {
         return true;
       }
     } catch (err) {
-      console.warn('[walinux] Failed to dispatch paste event to composer:', err);
+      console.warn('[wallie] Failed to dispatch paste event to composer:', err);
     }
   }
 
@@ -80,7 +80,7 @@ function dispatchDroppedFilesToChat(dt: DataTransfer): boolean {
       }
     }
   } catch (err) {
-    console.warn('[walinux] Failed to populate file input:', err);
+    console.warn('[wallie] Failed to populate file input:', err);
   }
 
   return false;
@@ -90,11 +90,11 @@ export function initDragDropStabilizer(): void {
   // Inject a stylesheet to stabilize WhatsApp's drag overlay so child elements (icons, text)
   // don't trigger dragleave and cause the overlay to flicker or disappear.
   const dragStyle = document.createElement('style');
-  dragStyle.id = 'walinux-drag-stabilizer';
+  dragStyle.id = 'wallie-drag-stabilizer';
   dragStyle.textContent = `
-    body.walinux-file-dragging [data-testid*="drag"] *,
-    body.walinux-file-dragging [data-testid*="drop"] *,
-    body.walinux-file-dragging [data-testid*="overlay"] * {
+    body.wallie-file-dragging [data-testid*="drag"] *,
+    body.wallie-file-dragging [data-testid*="drop"] *,
+    body.wallie-file-dragging [data-testid*="overlay"] * {
       pointer-events: none !important;
     }
   `;
@@ -102,7 +102,7 @@ export function initDragDropStabilizer(): void {
     document.head.appendChild(dragStyle);
   } else {
     document.addEventListener('DOMContentLoaded', () => {
-      if (document.head && !document.getElementById('walinux-drag-stabilizer')) {
+      if (document.head && !document.getElementById('wallie-drag-stabilizer')) {
         document.head.appendChild(dragStyle);
       }
     });
@@ -112,7 +112,7 @@ export function initDragDropStabilizer(): void {
     if (!e.isTrusted) return;
     if (isFileDragEvent(e)) {
       fileDragCounter++;
-      document.body.classList.add('walinux-file-dragging');
+      document.body.classList.add('wallie-file-dragging');
     }
   }, true);
 
@@ -121,7 +121,7 @@ export function initDragDropStabilizer(): void {
     if (isFileDragEvent(e)) {
       fileDragCounter = Math.max(0, fileDragCounter - 1);
       if (fileDragCounter === 0) {
-        document.body.classList.remove('walinux-file-dragging');
+        document.body.classList.remove('wallie-file-dragging');
       }
     }
   }, true);
@@ -139,7 +139,7 @@ export function initDragDropStabilizer(): void {
 
   window.addEventListener('drop', (e: DragEvent) => {
     fileDragCounter = 0;
-    document.body.classList.remove('walinux-file-dragging');
+    document.body.classList.remove('wallie-file-dragging');
 
     if (!e.isTrusted || !isFileDragEvent(e)) return;
 

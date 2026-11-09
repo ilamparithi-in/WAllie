@@ -109,8 +109,8 @@ export class CustomNotification extends EventTarget {
     const isReadOnly = isReadOnlyChat(this.tag, this.title, options);
     const canReply = !isReadOnly;
 
-    if (window.__walinux_ipc) {
-      window.__walinux_ipc.createNotification({
+    if (window.__wallie_ipc) {
+      window.__wallie_ipc.createNotification({
         title: this.title,
         body: this.body,
         icon: this.icon,
@@ -126,9 +126,9 @@ export class CustomNotification extends EventTarget {
   }
 
   close() {
-    if (this.title && window.__walinux_ipc && window.__walinux_ipc.dismissChat) {
+    if (this.title && window.__wallie_ipc && window.__wallie_ipc.dismissChat) {
       if (isChatOpen(norm(this.title))) {
-        window.__walinux_ipc.dismissChat({ tag: this.tag, contactName: this.title });
+        window.__wallie_ipc.dismissChat({ tag: this.tag, contactName: this.title });
       }
     }
     setTimeout(() => {
@@ -178,7 +178,7 @@ export function initAnchorDownloadHandler(): void {
   if ((window as any).HTMLAnchorElement && (window as any).HTMLAnchorElement.prototype) {
     const originalAnchorClick = (window as any).HTMLAnchorElement.prototype.click;
     (window as any).HTMLAnchorElement.prototype.click = function (this: any) {
-      if (this.download && window.__walinux_ipc && window.__walinux_ipc.onAnchorDownload) {
+      if (this.download && window.__wallie_ipc && window.__wallie_ipc.onAnchorDownload) {
         const filename = this.download;
         const href = this.href;
 
@@ -198,13 +198,13 @@ export function initAnchorDownloadHandler(): void {
                     .join('');
                 } catch (e) { }
               }
-              window.__walinux_ipc?.onAnchorDownload?.(filename, size, hash);
+              window.__wallie_ipc?.onAnchorDownload?.(filename, size, hash);
             })
             .catch(() => {
-              window.__walinux_ipc?.onAnchorDownload?.(filename);
+              window.__wallie_ipc?.onAnchorDownload?.(filename);
             });
         } else {
-          window.__walinux_ipc.onAnchorDownload(filename);
+          window.__wallie_ipc.onAnchorDownload(filename);
         }
       }
       return originalAnchorClick.apply(this, arguments);

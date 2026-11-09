@@ -87,7 +87,7 @@ export function getAvailableChats(): Array<{
       avatarUrl: c.contact?.profilePicThumb?.img || undefined,
     }));
   } catch (err) {
-    console.error('[walinux-exporter] Failed to get available chats:', err);
+    console.error('[wallie-exporter] Failed to get available chats:', err);
     return [];
   }
 }
@@ -237,10 +237,10 @@ async function ensureChatOpen(chatJid: string, chatTitle?: string): Promise<bool
     if (current && current.jid === chatJid) {
       return true;
     }
-    console.log(`[walinux-exporter] Target chat ${chatJid} is not open (current: ${current?.jid}). Re-opening...`);
+    console.log(`[wallie-exporter] Target chat ${chatJid} is not open (current: ${current?.jid}). Re-opening...`);
     return await openChatByJid(chatJid, chatTitle);
   } catch (err) {
-    console.warn('[walinux-exporter] Failed to ensure chat open:', err);
+    console.warn('[wallie-exporter] Failed to ensure chat open:', err);
     return false;
   }
 }
@@ -259,13 +259,13 @@ async function clickElementThoroughly(el: HTMLElement): Promise<void> {
     const cy = Math.floor(rect.top + rect.height / 2);
 
     if (
-      window.__walinux_ipc?.dispatchMouse &&
+      window.__wallie_ipc?.dispatchMouse &&
       cx > 0 &&
       cy > 0 &&
       cx < window.innerWidth &&
       cy < window.innerHeight
     ) {
-      const ok = await window.__walinux_ipc.dispatchMouse('click', cx, cy);
+      const ok = await window.__wallie_ipc.dispatchMouse('click', cx, cy);
       if (ok) return; // Native click successfully delivered to Chromium; do not dispatch duplicate synthetic clicks!
     }
 
@@ -866,7 +866,7 @@ let isCurrentJobAborted: boolean = false;
         isCurrentJobAborted = true;
         cancelBtn.textContent = 'Aborting...';
         cancelBtn.disabled = true;
-        window.__walinux_ipc?.stopChatExport?.(state.exportId);
+        window.__wallie_ipc?.stopChatExport?.(state.exportId);
       };
     }
   }
@@ -974,14 +974,14 @@ let isCurrentJobAborted: boolean = false;
     const folderBtn = document.getElementById('wallie-modal-open-folder-btn');
     if (folderBtn) {
       folderBtn.onclick = () => {
-        window.__walinux_ipc?.showInFolder?.(summary.outputDirectory);
+        window.__wallie_ipc?.showInFolder?.(summary.outputDirectory);
       };
     }
 
     const viewerBtn = document.getElementById('wallie-modal-open-viewer-btn');
     if (viewerBtn && summary.htmlPath) {
       viewerBtn.onclick = () => {
-        window.__walinux_ipc?.openPath?.(summary.htmlPath!);
+        window.__wallie_ipc?.openPath?.(summary.htmlPath!);
       };
     }
 
@@ -1125,7 +1125,7 @@ let isCurrentJobAborted: boolean = false;
           }
         }
       } catch (e) {
-        console.warn('[walinux-exporter] MsgCollection secondary harvest error:', e);
+        console.warn('[wallie-exporter] MsgCollection secondary harvest error:', e);
       }
 
       // Source D: DOM-rendered system notices (e.g. group description changes, security codes)
@@ -1217,7 +1217,7 @@ let isCurrentJobAborted: boolean = false;
     let previousCount = entriesMap.size;
 
     while (true) {
-      const isAborted = isCurrentJobAborted || (await window.__walinux_ipc?.isChatExportAborted?.(exportId));
+      const isAborted = isCurrentJobAborted || (await window.__wallie_ipc?.isChatExportAborted?.(exportId));
       if (isAborted) {
         break;
       }
@@ -1249,7 +1249,7 @@ let isCurrentJobAborted: boolean = false;
       });
 
       if (timeframeBoundary && oldestEpoch <= new Date(timeframeBoundary).getTime()) {
-        console.log('[walinux-exporter] Reached requested timeframe boundary:', timeframeBoundary);
+        console.log('[wallie-exporter] Reached requested timeframe boundary:', timeframeBoundary);
         break;
       }
 
@@ -1296,7 +1296,7 @@ let isCurrentJobAborted: boolean = false;
         const handleSkipPhoneSync = () => {
           skipSyncRequested = true;
           phoneSyncExhausted = true;
-          console.log('[walinux-exporter] User skipped phone sync; continuing with harvested messages.');
+          console.log('[wallie-exporter] User skipped phone sync; continuing with harvested messages.');
         };
 
         // If WhatsApp view shows the error / retry button
@@ -1308,7 +1308,7 @@ let isCurrentJobAborted: boolean = false;
           // 2. The view shows "couldn't load older messages",
           // 3. AND no new (old) message loaded into view at all (entriesMap.size === previousCount)
           if (phoneSyncRetryCount >= 3 && hasCouldNotLoadOlderMessages() && entriesMap.size === previousCount) {
-            console.warn('[walinux-exporter] Retried 3 times, view shows error and no new messages loaded; concluding phone sync.');
+            console.warn('[wallie-exporter] Retried 3 times, view shows error and no new messages loaded; concluding phone sync.');
             phoneSyncExhausted = true;
             continue;
           }
@@ -1329,7 +1329,7 @@ let isCurrentJobAborted: boolean = false;
           });
 
           for (let s = 0; s < 5 && !skipSyncRequested; s++) {
-            const aborted = await window.__walinux_ipc?.isChatExportAborted?.(exportId);
+            const aborted = await window.__wallie_ipc?.isChatExportAborted?.(exportId);
             if (aborted) break;
             await sleep(1000);
           }
@@ -1366,7 +1366,7 @@ let isCurrentJobAborted: boolean = false;
         let waitElapsedSec = 0;
         while (!phoneSyncExhausted && !skipSyncRequested) {
           waitElapsedSec++;
-          const aborted = await window.__walinux_ipc?.isChatExportAborted?.(exportId);
+          const aborted = await window.__wallie_ipc?.isChatExportAborted?.(exportId);
           if (aborted) break;
 
           showOrUpdateExportHUD({
@@ -1389,7 +1389,7 @@ let isCurrentJobAborted: boolean = false;
           // Check if new messages arrived
           if (entriesMap.size > previousCount) {
             const delta = entriesMap.size - previousCount;
-            console.log(`[walinux-exporter] Received ${delta} new messages from phone sync! Total: ${entriesMap.size}`);
+            console.log(`[wallie-exporter] Received ${delta} new messages from phone sync! Total: ${entriesMap.size}`);
             previousCount = entriesMap.size;
             consecutiveNoNewMessages = 0;
             phoneSyncRetryCount = 0; // RESET retry count on successful load!
@@ -1471,17 +1471,17 @@ let isCurrentJobAborted: boolean = false;
 
         const noEarlier = Boolean(activeChat.msgs?.msgLoadState?.noEarlierMsgs);
         if (noEarlier && !currentBtn) {
-          console.log('[walinux-exporter] WhatsApp reports no earlier messages and no phone sync button; concluding harvest.');
+          console.log('[wallie-exporter] WhatsApp reports no earlier messages and no phone sync button; concluding harvest.');
           break;
         }
 
         if (phoneSyncExhausted && consecutiveNoNewMessages >= 25) {
-          console.log('[walinux-exporter] Phone sync exhausted and no new messages; concluding history harvest.');
+          console.log('[wallie-exporter] Phone sync exhausted and no new messages; concluding history harvest.');
           break;
         }
 
         if (consecutiveNoNewMessages >= 40) {
-          console.log('[walinux-exporter] Reached top of conversation history; concluding harvest.');
+          console.log('[wallie-exporter] Reached top of conversation history; concluding harvest.');
           break;
         }
       }
@@ -1631,7 +1631,7 @@ let isCurrentJobAborted: boolean = false;
     };
 
     for (let mediaIdx = 0; mediaIdx < mediaEntries.length; mediaIdx++) {
-      const isAborted = isCurrentJobAborted || (await window.__walinux_ipc?.isChatExportAborted?.(exportId));
+      const isAborted = isCurrentJobAborted || (await window.__wallie_ipc?.isChatExportAborted?.(exportId));
       if (isAborted) break;
 
       // Ensure active chat remains open
@@ -1687,7 +1687,7 @@ let isCurrentJobAborted: boolean = false;
           }
         }
       } catch (err) {
-        console.warn('[walinux-exporter] Dynamic message accommodation error:', err);
+        console.warn('[wallie-exporter] Dynamic message accommodation error:', err);
       }
 
       const entry = mediaEntries[mediaIdx];
@@ -1742,9 +1742,9 @@ let isCurrentJobAborted: boolean = false;
       // --- STEP 1: FAST PATH (Memory Buffers & Existing Files on Disk) ---
       // A. Check memory buffer captured during scroll
       const captured = capturedBuffers.get(stanzaId) || capturedBuffers.get(serializedId);
-      if (captured && captured.buffer.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
+      if (captured && captured.buffer.byteLength > 0 && window.__wallie_ipc?.saveChatMedia) {
         try {
-          const relativeSavedRef = await window.__walinux_ipc.saveChatMedia(
+          const relativeSavedRef = await window.__wallie_ipc.saveChatMedia(
             outputDirectory,
             filesDirName,
             subPath,
@@ -1770,19 +1770,19 @@ let isCurrentJobAborted: boolean = false;
           });
           continue;
         } catch (err) {
-          console.warn(`[walinux-exporter] Failed to save captured buffer for ${stanzaId}:`, err);
+          console.warn(`[wallie-exporter] Failed to save captured buffer for ${stanzaId}:`, err);
         }
       }
 
       // B. Check if file was already downloaded to disk previously
-      if (targetFileName && window.__walinux_ipc?.findExistingDownload) {
+      if (targetFileName && window.__wallie_ipc?.findExistingDownload) {
         try {
-          const existing = await window.__walinux_ipc.findExistingDownload(
+          const existing = await window.__wallie_ipc.findExistingDownload(
             targetFileName,
             (content as any).fileSize
           );
-          if (existing && existing.found && existing.path && window.__walinux_ipc?.copyFileToExport) {
-            const relativeSavedRef = await window.__walinux_ipc.copyFileToExport(
+          if (existing && existing.found && existing.path && window.__wallie_ipc?.copyFileToExport) {
+            const relativeSavedRef = await window.__wallie_ipc.copyFileToExport(
               outputDirectory,
               filesDirName,
               subPath,
@@ -1809,7 +1809,7 @@ let isCurrentJobAborted: boolean = false;
             continue;
           }
         } catch (err) {
-          console.warn(`[walinux-exporter] Existing file check failed for ${targetFileName}:`, err);
+          console.warn(`[wallie-exporter] Existing file check failed for ${targetFileName}:`, err);
         }
       }
 
@@ -1954,11 +1954,11 @@ let isCurrentJobAborted: boolean = false;
           const cx = Math.floor(rect.left + Math.min(80, rect.width / 2));
           const cy = Math.floor(rect.top + Math.min(80, rect.height / 2));
 
-          await window.__walinux_ipc?.prepareExportDownload?.('.zip', 0);
-          const dlPromise = window.__walinux_ipc?.waitForDownload?.('.zip', 8000);
+          await window.__wallie_ipc?.prepareExportDownload?.('.zip', 0);
+          const dlPromise = window.__wallie_ipc?.waitForDownload?.('.zip', 8000);
 
-          if (window.__walinux_ipc?.dispatchMouse) {
-            await window.__walinux_ipc.dispatchMouse('contextmenu', cx, cy);
+          if (window.__wallie_ipc?.dispatchMouse) {
+            await window.__wallie_ipc.dispatchMouse('contextmenu', cx, cy);
           } else {
             rowEl.dispatchEvent(
               new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: cx, clientY: cy })
@@ -1976,8 +1976,8 @@ let isCurrentJobAborted: boolean = false;
           if (dlAllOption) {
             dlAllOption.click();
             const dlRes = await dlPromise;
-            if (dlRes && dlRes.success && dlRes.savePath && window.__walinux_ipc?.unzipAlbumDownload) {
-              const unzipRes = await window.__walinux_ipc.unzipAlbumDownload(
+            if (dlRes && dlRes.success && dlRes.savePath && window.__wallie_ipc?.unzipAlbumDownload) {
+              const unzipRes = await window.__wallie_ipc.unzipAlbumDownload(
                 outputDirectory,
                 filesDirName,
                 dlRes.savePath,
@@ -2005,7 +2005,7 @@ let isCurrentJobAborted: boolean = false;
             dismissContextMenuSafely();
           }
         } catch (err) {
-          console.warn('[walinux-exporter] Grouped media album zip download error:', err);
+          console.warn('[wallie-exporter] Grouped media album zip download error:', err);
         }
 
         // 2. Fallback: harvest visible decrypted blobs from album tiles
@@ -2020,9 +2020,9 @@ let isCurrentJobAborted: boolean = false;
             try {
               const resp = await fetch(tileImgs[ti].src);
               const buf = await resp.arrayBuffer();
-              if (buf.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
+              if (buf.byteLength > 0 && window.__wallie_ipc?.saveChatMedia) {
                 const aSubPath = `media/${ae.id}_${ae.id}.jpeg`;
-                const savedRef = await window.__walinux_ipc.saveChatMedia(
+                const savedRef = await window.__wallie_ipc.saveChatMedia(
                   outputDirectory,
                   filesDirName,
                   aSubPath,
@@ -2088,9 +2088,9 @@ let isCurrentJobAborted: boolean = false;
         const mediaEls = Array.from(rowEl.querySelectorAll<HTMLImageElement | HTMLMediaElement>('img, video, audio'));
         for (const m of mediaEls) {
           const buf = await extractBufferFromMediaElement(m);
-          if (buf && buf.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
+          if (buf && buf.byteLength > 0 && window.__wallie_ipc?.saveChatMedia) {
             try {
-              const relativeSavedRef = await window.__walinux_ipc.saveChatMedia(
+              const relativeSavedRef = await window.__wallie_ipc.saveChatMedia(
                 outputDirectory,
                 filesDirName,
                 subPath,
@@ -2131,8 +2131,8 @@ let isCurrentJobAborted: boolean = false;
         let dlPromise: Promise<{ success: boolean; savePath?: string; filename?: string } | null> | undefined;
 
         if (!isSticker && expectedName) {
-          await window.__walinux_ipc?.prepareExportDownload?.(expectedName, (content as any).fileSize);
-          dlPromise = window.__walinux_ipc?.waitForDownload?.(expectedName, 8000);
+          await window.__wallie_ipc?.prepareExportDownload?.(expectedName, (content as any).fileSize);
+          dlPromise = window.__wallie_ipc?.waitForDownload?.(expectedName, 8000);
         }
 
         let triggered = false;
@@ -2199,8 +2199,8 @@ let isCurrentJobAborted: boolean = false;
 
             // Method B: If chevron did not open menu, trigger right-click contextmenu event directly
             if (!menuOpened) {
-              if (window.__walinux_ipc?.dispatchMouse && cx > 0 && cy > 0 && cx < window.innerWidth && cy < window.innerHeight) {
-                await window.__walinux_ipc.dispatchMouse('contextmenu', cx, cy);
+              if (window.__wallie_ipc?.dispatchMouse && cx > 0 && cy > 0 && cx < window.innerWidth && cy < window.innerHeight) {
+                await window.__wallie_ipc.dispatchMouse('contextmenu', cx, cy);
               } else {
                 docTarget.dispatchEvent(
                   new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: cx, clientY: cy })
@@ -2253,8 +2253,8 @@ let isCurrentJobAborted: boolean = false;
               if (chevron) {
                 await clickElementThoroughly(chevron);
               } else {
-                if (window.__walinux_ipc?.dispatchMouse && cx > 0 && cy > 0) {
-                  await window.__walinux_ipc.dispatchMouse('contextmenu', cx, cy);
+                if (window.__wallie_ipc?.dispatchMouse && cx > 0 && cy > 0) {
+                  await window.__wallie_ipc.dispatchMouse('contextmenu', cx, cy);
                 } else {
                   mediaTarget.dispatchEvent(
                     new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: cx, clientY: cy })
@@ -2303,9 +2303,9 @@ let isCurrentJobAborted: boolean = false;
             const mediaEls = Array.from(rowEl.querySelectorAll<HTMLImageElement | HTMLMediaElement>('img, video, audio'));
             for (const m of mediaEls) {
               const buf = await extractBufferFromMediaElement(m);
-              if (buf && buf.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
+              if (buf && buf.byteLength > 0 && window.__wallie_ipc?.saveChatMedia) {
                 try {
-                  const relativeSavedRef = await window.__walinux_ipc.saveChatMedia(
+                  const relativeSavedRef = await window.__wallie_ipc.saveChatMedia(
                     outputDirectory,
                     filesDirName,
                     subPath,
@@ -2330,10 +2330,10 @@ let isCurrentJobAborted: boolean = false;
               curResult &&
               curResult.success &&
               curResult.savePath &&
-              window.__walinux_ipc?.copyFileToExport
+              window.__wallie_ipc?.copyFileToExport
             ) {
               try {
-                const relativeSavedRef = await window.__walinux_ipc.copyFileToExport(
+                const relativeSavedRef = await window.__wallie_ipc.copyFileToExport(
                   outputDirectory,
                   filesDirName,
                   subPath,
@@ -2349,14 +2349,14 @@ let isCurrentJobAborted: boolean = false;
             }
 
             // 3. Check if file landed on disk directly
-            if (targetFileName && window.__walinux_ipc?.findExistingDownload) {
+            if (targetFileName && window.__wallie_ipc?.findExistingDownload) {
               try {
-                const existing = await window.__walinux_ipc.findExistingDownload(
+                const existing = await window.__wallie_ipc.findExistingDownload(
                   targetFileName,
                   (content as any).fileSize
                 );
-                if (existing && existing.found && existing.path && window.__walinux_ipc?.copyFileToExport) {
-                  const relativeSavedRef = await window.__walinux_ipc.copyFileToExport(
+                if (existing && existing.found && existing.path && window.__wallie_ipc?.copyFileToExport) {
+                  const relativeSavedRef = await window.__wallie_ipc.copyFileToExport(
                     outputDirectory,
                     filesDirName,
                     subPath,
@@ -2390,16 +2390,16 @@ let isCurrentJobAborted: boolean = false;
           });
         }
       } catch (err) {
-        console.warn(`[walinux-exporter] Download error for ${stanzaId}:`, err);
+        console.warn(`[wallie-exporter] Download error for ${stanzaId}:`, err);
       }
 
       // C. Thumbnail fallback if binary not saved
       if (!entrySaved) {
         handledStanzaIds.add(stanzaId);
-        if ((content as any).thumbnailDataUri && window.__walinux_ipc?.saveChatMedia) {
+        if ((content as any).thumbnailDataUri && window.__wallie_ipc?.saveChatMedia) {
           try {
             const thumbSubPath = `media/${stanzaId}.jpeg`;
-            const relativeSavedRef = await window.__walinux_ipc.saveChatMedia(
+            const relativeSavedRef = await window.__wallie_ipc.saveChatMedia(
               outputDirectory,
               filesDirName,
               thumbSubPath,
@@ -2453,14 +2453,14 @@ let isCurrentJobAborted: boolean = false;
         const subPath = `media/${stanzaId}_${safeFileBase}`;
 
         // 1. Check if user manually downloaded or Chromium saved to disk
-        if (targetFileName && window.__walinux_ipc?.findExistingDownload) {
+        if (targetFileName && window.__wallie_ipc?.findExistingDownload) {
           try {
-            const existing = await window.__walinux_ipc.findExistingDownload(
+            const existing = await window.__wallie_ipc.findExistingDownload(
               targetFileName,
               (content as any).fileSize
             );
-            if (existing && existing.found && existing.path && window.__walinux_ipc?.copyFileToExport) {
-              const relativeSavedRef = await window.__walinux_ipc.copyFileToExport(
+            if (existing && existing.found && existing.path && window.__wallie_ipc?.copyFileToExport) {
+              const relativeSavedRef = await window.__wallie_ipc.copyFileToExport(
                 outputDirectory,
                 filesDirName,
                 subPath,
@@ -2478,9 +2478,9 @@ let isCurrentJobAborted: boolean = false;
 
         // 2. Check memory buffer captured during scroll
         const captured = capturedBuffers.get(stanzaId) || capturedBuffers.get(entry.serializedId || stanzaId);
-        if (captured && captured.buffer.byteLength > 0 && window.__walinux_ipc?.saveChatMedia) {
+        if (captured && captured.buffer.byteLength > 0 && window.__wallie_ipc?.saveChatMedia) {
           try {
-            const relativeSavedRef = await window.__walinux_ipc.saveChatMedia(
+            const relativeSavedRef = await window.__wallie_ipc.saveChatMedia(
               outputDirectory,
               filesDirName,
               subPath,
@@ -2561,7 +2561,7 @@ let isCurrentJobAborted: boolean = false;
           });
 
           // 1. Register job
-          await window.__walinux_ipc?.registerChatExportJob?.(exportId, options, totalChats, chatIndex);
+          await window.__wallie_ipc?.registerChatExportJob?.(exportId, options, totalChats, chatIndex);
 
           // 2. Open chat
           const opened = await openChatByJid(options.chatJid, options.chatTitle);
@@ -2581,7 +2581,7 @@ let isCurrentJobAborted: boolean = false;
           const filesDirName = `${safeTitle}_files`;
 
           // 3. Harvest messages
-          await window.__walinux_ipc?.updateChatExportProgress?.(exportId, {
+          await window.__wallie_ipc?.updateChatExportProgress?.(exportId, {
             status: 'scrolling',
           });
 
@@ -2593,7 +2593,7 @@ let isCurrentJobAborted: boolean = false;
             chatIndex,
             totalChats,
             (count, oldestIso) => {
-              window.__walinux_ipc?.updateChatExportProgress?.(exportId, {
+              window.__wallie_ipc?.updateChatExportProgress?.(exportId, {
                 messagesExported: count,
                 oldestMessageDate: oldestIso,
               });
@@ -2601,7 +2601,7 @@ let isCurrentJobAborted: boolean = false;
           );
 
           // 4. Download media attachments
-          await window.__walinux_ipc?.updateChatExportProgress?.(exportId, {
+          await window.__wallie_ipc?.updateChatExportProgress?.(exportId, {
             status: 'downloading_media',
           });
 
@@ -2619,7 +2619,7 @@ let isCurrentJobAborted: boolean = false;
             totalChats,
             (count) => {
               mediaSavedCount = count;
-              window.__walinux_ipc?.updateChatExportProgress?.(exportId, {
+              window.__wallie_ipc?.updateChatExportProgress?.(exportId, {
                 mediaFilesSaved: count,
               });
             }
@@ -2663,8 +2663,8 @@ let isCurrentJobAborted: boolean = false;
                 } catch { }
               }
             }
-            if (chatAvatarData && window.__walinux_ipc?.saveChatMedia) {
-              chatAvatarUrl = await window.__walinux_ipc.saveChatMedia(
+            if (chatAvatarData && window.__wallie_ipc?.saveChatMedia) {
+              chatAvatarUrl = await window.__wallie_ipc.saveChatMedia(
                 options.outputDirectory,
                 filesDirName,
                 'avatars/chat_avatar.jpg',
@@ -2672,7 +2672,7 @@ let isCurrentJobAborted: boolean = false;
               );
             }
           } catch (e) {
-            console.warn('[walinux-exporter] Failed to save chat avatar:', e);
+            console.warn('[wallie-exporter] Failed to save chat avatar:', e);
           }
 
           // Save participant avatars for group chats
@@ -2751,9 +2751,9 @@ let isCurrentJobAborted: boolean = false;
                 }
               }
 
-              if (avatarData && window.__walinux_ipc?.saveChatMedia) {
+              if (avatarData && window.__wallie_ipc?.saveChatMedia) {
                 const safeJid = senderJid.replace(/[^a-zA-Z0-9_-]/g, '_');
-                const savedAvatarPath = await window.__walinux_ipc.saveChatMedia(
+                const savedAvatarPath = await window.__wallie_ipc.saveChatMedia(
                   options.outputDirectory,
                   filesDirName,
                   `avatars/${safeJid}.jpg`,
@@ -2763,7 +2763,7 @@ let isCurrentJobAborted: boolean = false;
                 msg.sender.avatarUrl = savedAvatarPath;
               }
             } catch (e) {
-              console.warn(`[walinux-exporter] Failed to save participant avatar for ${senderJid}:`, e);
+              console.warn(`[wallie-exporter] Failed to save participant avatar for ${senderJid}:`, e);
             }
           }
 
@@ -2812,7 +2812,7 @@ let isCurrentJobAborted: boolean = false;
           const timeline = interleaveDateDividers(messages);
 
           // 7. Check abort status
-          const isAborted = Boolean(isCurrentJobAborted || (await window.__walinux_ipc?.isChatExportAborted?.(exportId)));
+          const isAborted = Boolean(isCurrentJobAborted || (await window.__wallie_ipc?.isChatExportAborted?.(exportId)));
 
           // 8. Build envelope
           const envelope: WhatsAppChatExport = {
@@ -2850,17 +2850,17 @@ let isCurrentJobAborted: boolean = false;
             exportId,
           });
 
-          await window.__walinux_ipc?.updateChatExportProgress?.(exportId, {
+          await window.__wallie_ipc?.updateChatExportProgress?.(exportId, {
             status: 'saving',
           });
 
-          const finalizeRes = await window.__walinux_ipc?.finalizeChatExport?.(
+          const finalizeRes = await window.__wallie_ipc?.finalizeChatExport?.(
             options.outputDirectory,
             envelope,
             options.includeViewer ?? true
           );
 
-          await window.__walinux_ipc?.updateChatExportProgress?.(exportId, {
+          await window.__wallie_ipc?.updateChatExportProgress?.(exportId, {
             status: 'completed',
             outputDirectory: options.outputDirectory,
             jsonPath: finalizeRes?.jsonPath,
@@ -2869,7 +2869,7 @@ let isCurrentJobAborted: boolean = false;
             mediaFilesSaved: mediaSavedCount,
           });
 
-          await window.__walinux_ipc?.completeChatExportJob?.(exportId);
+          await window.__wallie_ipc?.completeChatExportJob?.(exportId);
 
           // If single chat export, display in-viewport completion modal
           if (totalChats <= 1) {
@@ -2890,12 +2890,12 @@ let isCurrentJobAborted: boolean = false;
             htmlPath: finalizeRes?.htmlPath,
           };
         } catch (err) {
-          console.error('[walinux-exporter] Export failed:', err);
-          await window.__walinux_ipc?.updateChatExportProgress?.(exportId, {
+          console.error('[wallie-exporter] Export failed:', err);
+          await window.__wallie_ipc?.updateChatExportProgress?.(exportId, {
             status: 'failed',
             error: (err as Error).message,
           });
-          await window.__walinux_ipc?.completeChatExportJob?.(exportId);
+          await window.__wallie_ipc?.completeChatExportJob?.(exportId);
 
           if (totalChats <= 1) {
             showExportCompletionModal({
@@ -2951,7 +2951,7 @@ let isCurrentJobAborted: boolean = false;
             let firstHtmlPath: string | undefined;
 
             for (let i = 0; i < chats.length; i++) {
-              const isAborted = isCurrentJobAborted || (await window.__walinux_ipc?.isChatExportAborted?.(exportId));
+              const isAborted = isCurrentJobAborted || (await window.__wallie_ipc?.isChatExportAborted?.(exportId));
               if (isAborted) break;
 
               const chat = chats[i];
@@ -2975,12 +2975,12 @@ let isCurrentJobAborted: boolean = false;
                 firstHtmlPath = res.htmlPath;
               }
 
-              if (isCurrentJobAborted || (await window.__walinux_ipc?.isChatExportAborted?.(exportId))) {
+              if (isCurrentJobAborted || (await window.__wallie_ipc?.isChatExportAborted?.(exportId))) {
                 break;
               }
             }
 
-            const isAborted = isCurrentJobAborted || (await window.__walinux_ipc?.isChatExportAborted?.(exportId));
+            const isAborted = isCurrentJobAborted || (await window.__wallie_ipc?.isChatExportAborted?.(exportId));
             showExportCompletionModal({
               status: isAborted ? 'aborted' : 'completed',
               chatTitle: `${chats.length} Chats`,

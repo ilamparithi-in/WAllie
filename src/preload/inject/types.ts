@@ -1,4 +1,4 @@
-export interface WalinuxIpcBridge {
+export interface WallieIpcBridge {
   onNotificationClicked: (callback: (data: any) => void) => (() => void) | void;
   onSendInlineReply: (callback: (data: { contactName: string; text: string; tag: string }) => void) => void;
   onAnchorDownload?: (filename: string, size?: number, hash?: string) => void;
@@ -33,6 +33,6 @@ declare global {
     HTMLAnchorElement: any;
     Store?: any;
     require?: (module: string) => any;
-    __walinux_ipc?: WalinuxIpcBridge;
+    __wallie_ipc?: WallieIpcBridge;
   }
 }

@@ -162,9 +162,9 @@ When `WAWebLinkPreviewChatAction.getLinkPreview` is invoked by WhatsApp Web's co
 
 ```typescript
 const hooked = async function (this: any, e: any, _q: any) {
-  if (window.__walinux_ipc?.fetchLinkPreview && e && e.url) {
+  if (window.__wallie_ipc?.fetchLinkPreview && e && e.url) {
     try {
-      const preview = await window.__walinux_ipc.fetchLinkPreview(e.url);
+      const preview = await window.__wallie_ipc.fetchLinkPreview(e.url);
       if (preview && (preview.title || preview.description)) {
         let mmsData: Record<string, any> = {};
         const hqBase64 = preview.thumbnailHQBase64 || preview.thumbnailBase64;
@@ -209,7 +209,7 @@ const hooked = async function (this: any, e: any, _q: any) {
               }
             }
           } catch (mmsErr) {
-            console.warn('[walinux] MMS upload failed, falling back to inline thumbnail:', mmsErr);
+            console.warn('[wallie] MMS upload failed, falling back to inline thumbnail:', mmsErr);
           }
         }
 
@@ -231,7 +231,7 @@ const hooked = async function (this: any, e: any, _q: any) {
         };
       }
     } catch (err) {
-      console.warn('[walinux] Standalone link preview error, falling back:', err);
+      console.warn('[wallie] Standalone link preview error, falling back:', err);
     }
   }
   return originalGetLinkPreview.apply(this, arguments);

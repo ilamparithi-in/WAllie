@@ -846,7 +846,7 @@ function setupWhatsAppIntegration() {
         }
       }
     } catch (e) {
-      console.error('[walinux] Failed to apply theme to WhatsApp Web:', e);
+      console.error('[wallie] Failed to apply theme to WhatsApp Web:', e);
     }
   }
 
@@ -969,7 +969,7 @@ function setupWhatsAppIntegration() {
       const isInsideMediaViewer = !!target.closest('[data-testid="media-viewer-modal"], [data-animate-media-viewer="true"], [data-testid="drawer-fullscreen"]');
 
       if ((isDownloadText || hasDownloadIcon) && (isInsideMenu || isInsideMediaViewer)) {
-        console.log(`[walinux] Explicit download button clicked (${isInsideMediaViewer ? 'media viewer' : 'context menu'}) -> intent: context-menu-download`);
+        console.log(`[wallie] Explicit download button clicked (${isInsideMediaViewer ? 'media viewer' : 'context menu'}) -> intent: context-menu-download`);
         ipcRenderer.send('download:set-intent', { intent: 'context-menu-download' });
         return;
       }
@@ -1010,21 +1010,21 @@ function setupWhatsAppIntegration() {
         const cleanName = filename.trim();
         const extractedSize = extractFileSizeFromMessage(msgContainer);
 
-        console.log(`[walinux] Document card clicked: "${cleanName}", approx size: ${extractedSize}`);
+        console.log(`[wallie] Document card clicked: "${cleanName}", approx size: ${extractedSize}`);
 
         ipcRenderer.invoke('downloads:file-card-clicked', {
           filename: cleanName,
           size: extractedSize,
         }).then((result: { handled: boolean; isExisting: boolean }) => {
           if (result && result.isExisting) {
-            console.log('[walinux] Matched existing downloaded file on disk -> handled:', result.handled);
+            console.log('[wallie] Matched existing downloaded file on disk -> handled:', result.handled);
             ipcRenderer.send('download:set-intent', { intent: 'second-click', filename: cleanName, size: extractedSize });
           } else {
-            console.log('[walinux] No existing matching file found -> intent: first-download (autoOpen: true)');
+            console.log('[wallie] No existing matching file found -> intent: first-download (autoOpen: true)');
             ipcRenderer.send('download:set-intent', { intent: 'first-download', filename: cleanName, size: extractedSize, autoOpen: true });
           }
         }).catch((err: any) => {
-          console.error('[walinux] Failed to handle file card click:', err);
+          console.error('[wallie] Failed to handle file card click:', err);
           ipcRenderer.send('download:set-intent', { intent: 'first-download', filename: cleanName, size: extractedSize, autoOpen: true });
         });
       }
@@ -1046,7 +1046,7 @@ function setupWhatsAppIntegration() {
             text.includes('cannot download') ||
             (text.includes('resend') && text.includes('ask'));
           if (isPhoneError) {
-            console.log('[walinux] Detected WhatsApp download failure modal:', text.slice(0, 80));
+            console.log('[wallie] Detected WhatsApp download failure modal:', text.slice(0, 80));
             ipcRenderer.send('download:failure-detected', { text });
           }
         }
@@ -1130,7 +1130,7 @@ function setupWhatsAppIntegration() {
     }
   }, false);
 
-  contextBridge.exposeInMainWorld('__walinux_ipc', {
+  contextBridge.exposeInMainWorld('__wallie_ipc', {
     createNotification: (data: { title: string; body: string; icon: string; tag: string; canReply?: boolean }) => {
       resolveIconToBase64(data.icon).then((base64Icon) => {
         ipcRenderer.send('notification:create', {
@@ -1637,7 +1637,7 @@ function monitorCallBlankScreen() {
       if (!hasSurveyKeywords) {
         blankCounter++;
         if (blankCounter >= 3) { // 3 consecutive checks (~600ms) of blank screen
-          console.log('[walinux] Call ended and screen is blank, closing window immediately.');
+          console.log('[wallie] Call ended and screen is blank, closing window immediately.');
           clearInterval(interval);
           window.close();
         }
@@ -1650,7 +1650,7 @@ function monitorCallBlankScreen() {
       if (initialBlankTicks >= 50) { // 50 * 200ms = 10 seconds
         const bodyText = (document.body.innerText || '').trim();
         if (bodyText.length < 10 && document.querySelectorAll('button').length === 0) {
-          console.log('[walinux] Call failed to load (remained blank for 10s), closing window.');
+          console.log('[wallie] Call failed to load (remained blank for 10s), closing window.');
           clearInterval(interval);
           window.close();
         }
@@ -1818,7 +1818,7 @@ async function setupWebStoreInjection() {
       window.addEventListener('DOMContentLoaded', init, { once: true });
     }
   } catch (err) {
-    console.error('[walinux] Failed to setup webstore injection:', err);
+    console.error('[wallie] Failed to setup webstore injection:', err);
   }
 }
 

@@ -310,7 +310,7 @@ stateDiagram-v2
 - **Container**: `#main header > div:first-child`
 - **Insertion Index**: Prepend before first child (`div[role="button"]:first-child`)
 - **Attributes**:
-  - `class`: `walinux-portrait-back-btn`
+  - `class`: `wallie-portrait-back-btn`
   - `aria-label`: `"Back to chats"`
   - `role`: `"button"`
   - `tabindex`: `"0"`
@@ -348,7 +348,7 @@ All responsive layout enhancements are implemented in [`src/preload/inject/respo
 
 ### 7.1 Three-Mode Responsiveness Setting
 Configurable at runtime and synchronized across IPC:
-1. **`disabled` (Always Landscape)**: Preserves WhatsApp Web's desktop multi-pane layout. Rail toggle collapses/expands the left sidebar (`data-walinux-sidebar-collapsed="true"`).
+1. **`disabled` (Always Landscape)**: Preserves WhatsApp Web's desktop multi-pane layout. Rail toggle collapses/expands the left sidebar (`data-wallie-sidebar-collapsed="true"`).
 2. **`auto` (Automatic)**: Activates portrait single-pane mode when `window.innerWidth <= 900px` or `window.innerWidth < window.innerHeight` (portrait aspect ratio).
 3. **`portrait` (Always Portrait)**: Forces single-pane portrait mode regardless of window dimensions.
 
