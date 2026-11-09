@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Palette, Type, Image as ImageIcon, Trash2, Upload, Monitor, Code, ChevronDown, Check, Loader2, AlertCircle, X, Info } from 'lucide-react';
+import { Palette, Type, Image as ImageIcon, Trash2, Upload, Monitor, Code, ChevronDown, Check, Loader2, AlertCircle, X, Info, Sun, Moon } from 'lucide-react';
 import type { AccountInfo, SystemFontInfo } from '../../../preload';
 import { resolveGoogleFont, resolveGoogleFontUrl } from '../../../shared/fonts';
 
 interface ThemeSettingsPageProps {
+  themeMode?: 'system' | 'light' | 'dark';
+  onChangeThemeMode?: (mode: 'system' | 'light' | 'dark') => Promise<boolean | void> | boolean | void;
   accounts: AccountInfo[];
   selectedAccountId: string;
   setSelectedAccountId: (id: string) => void;
@@ -395,6 +397,8 @@ const FontCombobox: React.FC<FontComboboxProps> = ({
 };
 
 export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
+  themeMode = 'system',
+  onChangeThemeMode,
   accounts,
   selectedAccountId,
   setSelectedAccountId,
@@ -483,6 +487,68 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
         <p className="text-[11px] text-[#8696a0] mt-2 leading-relaxed">
           Customize typography, wallpapers, and custom CSS per account.
         </p>
+      </div>
+
+      {/* App-wide Theme Selection */}
+      <div className="p-3.5 bg-[#182229] border border-[#222d34] rounded-lg space-y-3 flex-shrink-0">
+        <div>
+          <div className="text-xs font-semibold text-[#e9edef] flex items-center gap-1.5">
+            <Palette className="w-3.5 h-3.5 text-[#00a884]" />
+            <span>Application Theme</span>
+          </div>
+          <div className="text-[10px] text-[#8696a0] mt-0.5">
+            Choose light mode, dark mode, or follow your operating system theme.
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2.5">
+          <button
+            type="button"
+            onClick={() => onChangeThemeMode?.('system')}
+            className={`flex flex-col items-center justify-center p-3 rounded-lg border text-center transition-all cursor-pointer ${
+              themeMode === 'system'
+                ? 'bg-[#00a884]/15 border-[#00a884] text-[#00a884] shadow-sm ring-1 ring-[#00a884]'
+                : 'bg-[#202c33] border-[#222d34] text-[#8696a0] hover:bg-[#2a3942] hover:text-[#e9edef]'
+            }`}
+          >
+            <Monitor className="w-5 h-5 mb-1.5 shrink-0" />
+            <span className="text-xs font-semibold">Follow System</span>
+            <span className="text-[9px] opacity-75 mt-0.5">Auto detect</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onChangeThemeMode?.('light')}
+            className={`flex flex-col items-center justify-center p-3 rounded-lg border text-center transition-all cursor-pointer ${
+              themeMode === 'light'
+                ? 'bg-[#00a884]/15 border-[#00a884] text-[#00a884] shadow-sm ring-1 ring-[#00a884]'
+                : 'bg-[#202c33] border-[#222d34] text-[#8696a0] hover:bg-[#2a3942] hover:text-[#e9edef]'
+            }`}
+          >
+            <Sun className="w-5 h-5 mb-1.5 shrink-0" />
+            <span className="text-xs font-semibold">Light Mode</span>
+            <span className="text-[9px] opacity-75 mt-0.5">App-wide bright</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onChangeThemeMode?.('dark')}
+            className={`flex flex-col items-center justify-center p-3 rounded-lg border text-center transition-all cursor-pointer ${
+              themeMode === 'dark'
+                ? 'bg-[#00a884]/15 border-[#00a884] text-[#00a884] shadow-sm ring-1 ring-[#00a884]'
+                : 'bg-[#202c33] border-[#222d34] text-[#8696a0] hover:bg-[#2a3942] hover:text-[#e9edef]'
+            }`}
+          >
+            <Moon className="w-5 h-5 mb-1.5 shrink-0" />
+            <span className="text-xs font-semibold">Dark Mode</span>
+            <span className="text-[9px] opacity-75 mt-0.5">App-wide dark</span>
+          </button>
+        </div>
+
+        <div className="text-[10px] text-[#8696a0] bg-[#111b21] p-2 rounded border border-[#222d34] flex items-center gap-1.5">
+          <Info className="w-3.5 h-3.5 text-[#00a884] shrink-0" />
+          <span>Per-account dark/light mode can also be customized independently in WhatsApp Web settings (Settings &gt; Chats &gt; Theme).</span>
+        </div>
       </div>
 
       {/* Target Account Selector Banner */}
@@ -644,7 +710,7 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
         )}
 
         {/* Authentic WhatsApp Chat Conversation Preview */}
-        <div className="rounded-lg border border-[#222d34] bg-[#0b141a] p-3 space-y-2.5 overflow-hidden shadow-sm">
+        <div className="chat-conversation-preview rounded-lg border border-[#222d34] bg-[#0b141a] p-3 space-y-2.5 overflow-hidden shadow-sm">
           <div className="flex items-center justify-between text-[11px] text-[#8696a0] pb-1 border-b border-[#182229]">
             <span className="font-medium text-[#c2c5d1]">Conversation Preview</span>
             <span className="text-[10px] text-[#8696a0] font-mono truncate max-w-[240px]">

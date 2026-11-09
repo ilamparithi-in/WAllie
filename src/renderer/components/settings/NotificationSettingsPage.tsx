@@ -470,7 +470,7 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
                   setDateQuickFilter('all');
                 }
               }}
-              className="bg-transparent text-[#e9edef] text-[10px] outline-none cursor-pointer [color-scheme:dark]"
+              className="bg-transparent text-[#e9edef] text-[10px] outline-none cursor-pointer"
             />
           </div>
           <button
@@ -611,7 +611,7 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
                       type="date"
                       value={clearStartDate}
                       onChange={(e) => setClearStartDate(e.target.value)}
-                      className="w-full bg-[#202c33] text-[#e9edef] text-[11px] p-1.5 rounded border border-[#222d34] outline-none focus:border-[#ea4335] [color-scheme:dark]"
+                      className="w-full bg-[#202c33] text-[#e9edef] text-[11px] p-1.5 rounded border border-[#222d34] outline-none focus:border-[#ea4335]"
                     />
                   </div>
                   <div>
@@ -620,7 +620,7 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
                       type="date"
                       value={clearEndDate}
                       onChange={(e) => setClearEndDate(e.target.value)}
-                      className="w-full bg-[#202c33] text-[#e9edef] text-[11px] p-1.5 rounded border border-[#222d34] outline-none focus:border-[#ea4335] [color-scheme:dark]"
+                      className="w-full bg-[#202c33] text-[#e9edef] text-[11px] p-1.5 rounded border border-[#222d34] outline-none focus:border-[#ea4335]"
                     />
                   </div>
                 </div>
@@ -633,7 +633,7 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
                     type="date"
                     value={clearStartDate}
                     onChange={(e) => setClearStartDate(e.target.value)}
-                    className="w-full bg-[#202c33] text-[#e9edef] text-[11px] p-1.5 rounded border border-[#222d34] outline-none focus:border-[#ea4335] [color-scheme:dark]"
+                    className="w-full bg-[#202c33] text-[#e9edef] text-[11px] p-1.5 rounded border border-[#222d34] outline-none focus:border-[#ea4335]"
                   />
                 </div>
               )}

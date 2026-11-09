@@ -223,6 +223,24 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
             />
           </label>
 
+          <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-[#e9edef] text-[11px]">Application Theme</div>
+              <div className="text-[10px] text-[#8696a0]">
+                Choose between system auto-detection, light mode, or dark mode
+              </div>
+            </div>
+            <select
+              value={globalSettings?.themeMode || 'system'}
+              onChange={(e) => handleToggleGlobalSetting('themeMode', e.target.value)}
+              className="bg-[#202c33] text-[#e9edef] text-xs px-2 py-1 rounded border border-[#2c3943] focus:border-[#00a884] focus:outline-none cursor-pointer"
+            >
+              <option value="system">Follow System (Auto)</option>
+              <option value="light">Light Mode</option>
+              <option value="dark">Dark Mode</option>
+            </select>
+          </div>
+
           <div className="p-2 rounded hover:bg-[#182229] transition-colors space-y-2">
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1 min-w-0">

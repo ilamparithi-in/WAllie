@@ -8,6 +8,7 @@ import { registerIpcHandlers } from './ipc';
 import { createMainWindow, createTray } from './window';
 import { saveWindowStateImmediate } from './windowState';
 import { checkForWebStoreUpdates } from './extensions';
+import { initTheme } from './theme';
 
 // Memory & CPU Optimization flags & Touchpad / Pinch Gestures
 app.commandLine.appendSwitch('enable-pinch');
@@ -105,6 +106,8 @@ registerIpcHandlers();
 
 if (gotTheLock) {
   app.whenReady().then(() => {
+    initTheme();
+
     // Register custom protocol clients
     if (process.defaultApp) {
       if (process.argv.length >= 2) {

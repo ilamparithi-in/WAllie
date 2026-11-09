@@ -91,6 +91,7 @@ export interface GlobalSettings {
   hardwareAcceleration: boolean;
   appScale?: number;
   ctrlScrollZoomEnabled?: boolean;
+  themeMode?: 'system' | 'light' | 'dark';
   preloadAccountIds?: string[];
   showDevToolsToggle?: boolean;
   showRefreshButton?: boolean;

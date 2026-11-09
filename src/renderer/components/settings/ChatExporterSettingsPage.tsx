@@ -322,7 +322,7 @@ export const ChatExporterSettingsPage: React.FC<ChatExporterSettingsPageProps> =
                   key={chat.jid}
                   onClick={() => handleToggleSelectChat(chat.jid)}
                   className={`flex items-center gap-3 p-2.5 hover:bg-[#202c33]/60 cursor-pointer transition-colors ${
-                    isSelected ? 'bg-[#202c33]/90' : ''
+                    isSelected ? 'bg-[#202c33]/90 chat-row-selected' : ''
                   }`}
                 >
                   <div className="flex-shrink-0 text-[#00a884]">

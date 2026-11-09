@@ -371,6 +371,26 @@ export const App: React.FC = () => {
       setGlobalSettings(settings);
     });
 
+    const applyDomTheme = (isDark: boolean) => {
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    };
+
+    window.electronAPI.getThemeInfo?.().then((info) => {
+      if (info) applyDomTheme(info.shouldUseDarkColors);
+    }).catch(() => {});
+
+    const unsubscribeTheme = window.electronAPI.onThemeChanged?.((info) => {
+      if (info) applyDomTheme(info.shouldUseDarkColors);
+    });
+
     let wheelZoomTimeout: NodeJS.Timeout | null = null;
     let accumulatedDeltaY = 0;
 
@@ -487,6 +507,7 @@ export const App: React.FC = () => {
       window.removeEventListener('wheel', handleWheelZoom);
       unsubscribeAccount?.();
       unsubscribeGlobalSettings?.();
+      unsubscribeTheme?.();
       unsubscribeDownload?.();
       unsubscribeCloseRequest?.();
       unsubscribeProtocol?.();
