@@ -1,5 +1,5 @@
 export interface WalinuxIpcBridge {
-  onNotificationClicked: (callback: (data: any) => void) => void;
+  onNotificationClicked: (callback: (data: any) => void) => (() => void) | void;
   onSendInlineReply: (callback: (data: { contactName: string; text: string; tag: string }) => void) => void;
   onAnchorDownload?: (filename: string, size?: number, hash?: string) => void;
   createNotification: (data: any) => void;

@@ -1,6 +1,7 @@
 import './types';
 import { norm, isChatOpen } from './chatNavigation';
 import { decodeHtmlEntities } from '../../shared/notificationFormatting';
+import { setPortraitViewState } from './responsiveLayout';
 
 export const activeNotificationCallbacks = new Map<string, () => void>();
 
@@ -99,6 +100,7 @@ export class CustomNotification extends EventTarget {
 
     if (this.tag) {
       activeNotificationCallbacks.set(this.tag, () => {
+        setPortraitViewState('chat');
         if (this.onclick) this.onclick();
         this.dispatchEvent(new Event('click'));
       });

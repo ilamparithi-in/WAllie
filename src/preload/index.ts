@@ -381,7 +381,7 @@ async function resolveIconToBase64(url: string): Promise<string | null> {
   }
 }
 
-let onClickCallback: ((tag: string) => void) | null = null;
+const onClickCallbacks = new Set<(data: any) => void>();
 let onInlineReplyCallback: ((data: { contactName: string; text: string; tag: string }) => void) | null = null;
 
 let callStatusReported: 'answered' | 'declined' | null = null;
@@ -1149,7 +1149,8 @@ function setupWhatsAppIntegration() {
       ipcRenderer.send('notification:dismiss-chat', data);
     },
     onNotificationClicked: (callback: (data: any) => void) => {
-      onClickCallback = callback;
+      onClickCallbacks.add(callback);
+      return () => onClickCallbacks.delete(callback);
     },
     onSendInlineReply: (callback: (data: { contactName: string; text: string; tag: string }) => void) => {
       onInlineReplyCallback = callback;
@@ -1219,9 +1220,13 @@ function setupWhatsAppIntegration() {
   });
 
   ipcRenderer.on('notification:clicked-reply', (_event: any, data: any) => {
-    if (onClickCallback) {
-      onClickCallback(data);
-    }
+    onClickCallbacks.forEach((callback) => {
+      try {
+        callback(data);
+      } catch (e) {
+        console.error('Error in onNotificationClicked callback:', e);
+      }
+    });
   });
 
   ipcRenderer.on('notification:send-inline-reply', (_event: any, data: { contactName: string; text: string; tag: string }) => {
