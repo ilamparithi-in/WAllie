@@ -16,8 +16,8 @@ When running Electron with `contextIsolation: true` and `sandbox: true`, the pre
 We implemented the following solutions:
 
 1. **Main-World API Interception**:
-   - Exposed a secure `__walinux_ipc` proxy object via `contextBridge.exposeInMainWorld` in `src/preload/index.ts`.
-   - Injected the custom `Notification` constructor override directly into `worldId: 0` (the Main World) using `webFrame.executeJavaScriptInIsolatedWorld`. This allows the WhatsApp Web page to interact with our custom constructor, forwarding notifications to the main process via the secure `__walinux_ipc` proxy.
+   - Exposed a secure `__wallie_ipc` proxy object via `contextBridge.exposeInMainWorld` in `src/preload/index.ts`.
+   - Injected the custom `Notification` constructor override directly into `worldId: 0` (the Main World) using `webFrame.executeJavaScriptInIsolatedWorld`. This allows the WhatsApp Web page to interact with our custom constructor, forwarding notifications to the main process via the secure `__wallie_ipc` proxy.
 
 2. **DOM-Based Event Auditing (Edits & Deletions)**:
    - Injected a `MutationObserver` script into the Main World of WhatsApp Web.

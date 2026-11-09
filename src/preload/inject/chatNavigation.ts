@@ -272,8 +272,8 @@ export function findMatchingRow(query: string): Element | null {
 export function dismissActiveChat(): void {
   try {
     const currentTitle = getActiveChatTitle();
-    if (currentTitle && window.__walinux_ipc && window.__walinux_ipc.dismissChat) {
-      window.__walinux_ipc.dismissChat({ contactName: currentTitle });
+    if (currentTitle && window.__wallie_ipc && window.__wallie_ipc.dismissChat) {
+      window.__wallie_ipc.dismissChat({ contactName: currentTitle });
     }
   } catch (e) {}
 }
@@ -314,16 +314,16 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
     chatHeaderObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
   } catch (e) {}
 
-  if (window.__walinux_ipc) {
-    window.__walinux_ipc.onNotificationClicked((arg: any) => {
+  if (window.__wallie_ipc) {
+    window.__wallie_ipc.onNotificationClicked((arg: any) => {
       const tag = typeof arg === 'string' ? arg : arg?.tag;
       const contactName = typeof arg === 'object' ? arg?.contactName : '';
 
       // Activate portrait chat view immediately upon notification click
       setPortraitViewState('chat');
 
-      if (window.__walinux_ipc && window.__walinux_ipc.dismissChat) {
-        window.__walinux_ipc.dismissChat({ tag, contactName });
+      if (window.__wallie_ipc && window.__wallie_ipc.dismissChat) {
+        window.__wallie_ipc.dismissChat({ tag, contactName });
       }
 
       const callback = activeNotificationCallbacks.get(tag);
@@ -417,7 +417,7 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
       }, 50);
     });
 
-    window.__walinux_ipc.onSendInlineReply((data: { contactName: string; text: string; tag: string }) => {
+    window.__wallie_ipc.onSendInlineReply((data: { contactName: string; text: string; tag: string }) => {
       const { contactName, text, tag } = data;
       let sendTriggered = false;
 

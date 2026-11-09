@@ -1150,13 +1150,13 @@ export function registerIpcHandlers() {
   ipcMain.on('call:status-changed', (_event, data: { status: 'answered' | 'declined' }) => {
     if (data.status === 'answered') {
       if (state.callWindows.size > 0 && !state.callWasAnswered) {
-        console.log(`[walinux] Call status changed: ${data.status}`);
+        console.log(`[wallie] Call status changed: ${data.status}`);
         state.callWasAnswered = true;
         clearPausedMediaState();
       }
     } else if (data.status === 'declined') {
       if (state.callWindows.size > 0 && state.callWasAnswered) {
-        console.log(`[walinux] Call status changed: ${data.status}`);
+        console.log(`[wallie] Call status changed: ${data.status}`);
         state.callWasAnswered = false;
       }
     }
@@ -1165,13 +1165,13 @@ export function registerIpcHandlers() {
   ipcMain.on('call:status-sync', (event, data: { status: 'answered' | 'declined' }) => {
     if (data.status === 'answered') {
       if (state.callWindows.size > 0 && !state.callWasAnswered) {
-        console.log(`[walinux] Call status sync: ${data.status}`);
+        console.log(`[wallie] Call status sync: ${data.status}`);
         state.callWasAnswered = true;
         clearPausedMediaState();
       }
     } else if (data.status === 'declined') {
       if (state.callWindows.size > 0 && state.callWasAnswered) {
-        console.log(`[walinux] Call status sync: ${data.status}`);
+        console.log(`[wallie] Call status sync: ${data.status}`);
         state.callWasAnswered = false;
       }
     }

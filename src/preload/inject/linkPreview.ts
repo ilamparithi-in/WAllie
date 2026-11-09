@@ -15,9 +15,9 @@ export function initStandaloneLinkPreview(): void {
 
       const originalGetLinkPreview = linkAction.getLinkPreview;
       const hooked = async function (this: any, e: any, _q: any) {
-        if (window.__walinux_ipc?.fetchLinkPreview && e && e.url) {
+        if (window.__wallie_ipc?.fetchLinkPreview && e && e.url) {
           try {
-            const preview = await window.__walinux_ipc.fetchLinkPreview(e.url);
+            const preview = await window.__wallie_ipc.fetchLinkPreview(e.url);
             if (preview && (preview.title || preview.description)) {
               let mmsData: Record<string, any> = {};
               const hqBase64 = preview.thumbnailHQBase64 || preview.thumbnailBase64;
@@ -69,7 +69,7 @@ export function initStandaloneLinkPreview(): void {
                   }
                 } catch (mmsErr) {
                   console.warn(
-                    '[walinux] Standalone MMS thumbnail upload failed, falling back to inline thumbnail:',
+                    '[wallie] Standalone MMS thumbnail upload failed, falling back to inline thumbnail:',
                     mmsErr
                   );
                 }
@@ -93,7 +93,7 @@ export function initStandaloneLinkPreview(): void {
               };
             }
           } catch (err) {
-            console.warn('[walinux] Standalone link preview error, falling back:', err);
+            console.warn('[wallie] Standalone link preview error, falling back:', err);
           }
         }
         return originalGetLinkPreview.apply(this, arguments);

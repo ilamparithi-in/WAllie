@@ -914,10 +914,10 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
       state.callWindows.delete(childWindow);
       if (state.callWindows.size === 0) {
         if (!state.callWasAnswered) {
-          console.log('[walinux] Call was declined or dismissed; resuming paused media.');
+          console.log('[wallie] Call was declined or dismissed; resuming paused media.');
           resumeMediaAfterCall();
         } else {
-          console.log('[walinux] Call was answered; keeping media paused.');
+          console.log('[wallie] Call was answered; keeping media paused.');
           clearPausedMediaState();
           setTimeout(() => {
             if (state.callWindows.size === 0) {

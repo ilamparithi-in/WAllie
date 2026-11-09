@@ -3,8 +3,8 @@ import './types';
 export type ResponsiveLayoutMode = 'disabled' | 'auto' | 'portrait';
 export type PortraitViewState = 'list' | 'chat' | 'info';
 
-const STYLE_ID = 'walinux-responsive-layout-style';
-const BACK_BTN_CLASS = 'walinux-back-button';
+const STYLE_ID = 'wallie-responsive-layout-style';
+const BACK_BTN_CLASS = 'wallie-back-button';
 
 let currentMode: ResponsiveLayoutMode = 'auto';
 let isPortraitActive = false;
@@ -13,8 +13,8 @@ let currentViewState: PortraitViewState = 'list';
 
 const RESPONSIVE_CSS = `
   /* Hard minimum-width override for WhatsApp Web containers */
-  html[data-walinux-portrait="true"] [data-testid="wa-web-main-screen"] > div.two,
-  html[data-walinux-portrait="true"] [data-testid="wa-web-main-screen"] > div.three {
+  html[data-wallie-portrait="true"] [data-testid="wa-web-main-screen"] > div.two,
+  html[data-wallie-portrait="true"] [data-testid="wa-web-main-screen"] > div.three {
     min-width: 0 !important;
     width: 100% !important;
     overflow: hidden !important;
@@ -22,7 +22,7 @@ const RESPONSIVE_CSS = `
   }
 
   /* Pinned Left Navigation Rail */
-  html[data-walinux-portrait="true"] [data-testid="wa-web-main-screen"] > div > header[data-testid="chatlist-header"] {
+  html[data-wallie-portrait="true"] [data-testid="wa-web-main-screen"] > div > header[data-testid="chatlist-header"] {
     width: 64px !important;
     min-width: 64px !important;
     max-width: 64px !important;
@@ -32,7 +32,7 @@ const RESPONSIVE_CSS = `
   }
 
   /* Fullscreen Drawer (Status / Media Viewer) */
-  html[data-walinux-portrait="true"] [data-testid="drawer-fullscreen"] {
+  html[data-wallie-portrait="true"] [data-testid="drawer-fullscreen"] {
     left: 64px !important;
     width: calc(100% - 64px) !important;
     max-width: calc(100% - 64px) !important;
@@ -40,7 +40,7 @@ const RESPONSIVE_CSS = `
   }
 
   /* Drawer Container c2 (Houses drawer-left and drawer-middle) */
-  html[data-walinux-portrait="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) {
+  html[data-wallie-portrait="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
@@ -51,7 +51,7 @@ const RESPONSIVE_CSS = `
   }
 
   /* Left Drawer (Calls, Status, Channels, Communities, Settings, Profile) */
-  html[data-walinux-portrait="true"] [data-testid="drawer-left"] {
+  html[data-wallie-portrait="true"] [data-testid="drawer-left"] {
     pointer-events: auto !important;
     position: absolute !important;
     left: 64px !important;
@@ -65,17 +65,17 @@ const RESPONSIVE_CSS = `
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     will-change: transform;
   }
-  html[data-walinux-portrait="true"] [data-testid="drawer-left"]:not(:has(header)) {
+  html[data-wallie-portrait="true"] [data-testid="drawer-left"]:not(:has(header)) {
     display: none !important;
     pointer-events: none !important;
   }
-  html[data-walinux-portrait="true"] [data-testid="drawer-left"] > * {
+  html[data-wallie-portrait="true"] [data-testid="drawer-left"] > * {
     width: 100% !important;
     max-width: 100% !important;
   }
 
   /* Middle Drawer (Call Info, Camera Capture, Attachment Preview) */
-  html[data-walinux-portrait="true"] [data-testid="drawer-middle"] {
+  html[data-wallie-portrait="true"] [data-testid="drawer-middle"] {
     pointer-events: auto !important;
     position: absolute !important;
     left: 64px !important;
@@ -90,17 +90,17 @@ const RESPONSIVE_CSS = `
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     will-change: transform;
   }
-  html[data-walinux-portrait="true"] [data-testid="drawer-middle"]:not(:has(header)):not(:has(button)) {
+  html[data-wallie-portrait="true"] [data-testid="drawer-middle"]:not(:has(header)):not(:has(button)) {
     display: none !important;
     pointer-events: none !important;
   }
-  html[data-walinux-portrait="true"] [data-testid="drawer-middle"] > * {
+  html[data-wallie-portrait="true"] [data-testid="drawer-middle"] > * {
     width: 100% !important;
     max-width: 100% !important;
   }
 
   /* c3: Chats List Pane (#pane-side container) */
-  html[data-walinux-portrait="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div {
+  html[data-wallie-portrait="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div {
     position: absolute !important;
     left: 64px !important;
     top: 0 !important;
@@ -115,7 +115,7 @@ const RESPONSIVE_CSS = `
   }
 
   /* c4: Active Conversation Pane (#main container) */
-  html[data-walinux-portrait="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div {
+  html[data-wallie-portrait="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div {
     position: absolute !important;
     left: 64px !important;
     top: 0 !important;
@@ -128,14 +128,14 @@ const RESPONSIVE_CSS = `
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     will-change: transform;
   }
-  html[data-walinux-portrait="true"] #main {
+  html[data-wallie-portrait="true"] #main {
     width: 100% !important;
     max-width: 100% !important;
     min-width: 100% !important;
   }
 
   /* c6: Right Drawer (Contact/Group/Channel Info) */
-  html[data-walinux-portrait="true"] [data-testid="drawer-right"] {
+  html[data-wallie-portrait="true"] [data-testid="drawer-right"] {
     position: absolute !important;
     left: 64px !important;
     top: 0 !important;
@@ -149,71 +149,71 @@ const RESPONSIVE_CSS = `
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     will-change: transform;
   }
-  html[data-walinux-portrait="true"] [data-testid="drawer-right"] > * {
+  html[data-wallie-portrait="true"] [data-testid="drawer-right"] > * {
     width: 100% !important;
     max-width: 100% !important;
   }
 
   /* ---------------- STATE 1: LIST VIEW ---------------- */
-  html[data-walinux-portrait="true"][data-portrait-view="list"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div,
-  html[data-walinux-portrait="true"][data-portrait-view="list"] [data-testid="drawer-left"] {
+  html[data-wallie-portrait="true"][data-portrait-view="list"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div,
+  html[data-wallie-portrait="true"][data-portrait-view="list"] [data-testid="drawer-left"] {
     transform: translate3d(0, 0, 0) !important;
     visibility: visible !important;
     pointer-events: auto !important;
   }
-  html[data-walinux-portrait="true"][data-portrait-view="list"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div,
-  html[data-walinux-portrait="true"][data-portrait-view="list"] [data-testid="drawer-middle"],
-  html[data-walinux-portrait="true"][data-portrait-view="list"] [data-testid="drawer-right"] {
+  html[data-wallie-portrait="true"][data-portrait-view="list"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div,
+  html[data-wallie-portrait="true"][data-portrait-view="list"] [data-testid="drawer-middle"],
+  html[data-wallie-portrait="true"][data-portrait-view="list"] [data-testid="drawer-right"] {
     transform: translate3d(100%, 0, 0) !important;
     visibility: hidden !important;
     pointer-events: none !important;
   }
 
   /* ---------------- STATE 2: CHAT VIEW ---------------- */
-  html[data-walinux-portrait="true"][data-portrait-view="chat"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div,
-  html[data-walinux-portrait="true"][data-portrait-view="chat"] [data-testid="drawer-left"] {
+  html[data-wallie-portrait="true"][data-portrait-view="chat"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div,
+  html[data-wallie-portrait="true"][data-portrait-view="chat"] [data-testid="drawer-left"] {
     transform: translate3d(-100%, 0, 0) !important;
     visibility: hidden !important;
     pointer-events: none !important;
   }
-  html[data-walinux-portrait="true"][data-portrait-view="chat"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div,
-  html[data-walinux-portrait="true"][data-portrait-view="chat"] [data-testid="drawer-middle"] {
+  html[data-wallie-portrait="true"][data-portrait-view="chat"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div,
+  html[data-wallie-portrait="true"][data-portrait-view="chat"] [data-testid="drawer-middle"] {
     transform: translate3d(0, 0, 0) !important;
     visibility: visible !important;
     pointer-events: auto !important;
   }
-  html[data-walinux-portrait="true"][data-portrait-view="chat"] [data-testid="drawer-right"] {
+  html[data-wallie-portrait="true"][data-portrait-view="chat"] [data-testid="drawer-right"] {
     transform: translate3d(100%, 0, 0) !important;
     visibility: hidden !important;
     pointer-events: none !important;
   }
 
   /* ---------------- STATE 3: INFO VIEW ---------------- */
-  html[data-walinux-portrait="true"][data-portrait-view="info"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div,
-  html[data-walinux-portrait="true"][data-portrait-view="info"] [data-testid="drawer-left"],
-  html[data-walinux-portrait="true"][data-portrait-view="info"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div,
-  html[data-walinux-portrait="true"][data-portrait-view="info"] [data-testid="drawer-middle"] {
+  html[data-wallie-portrait="true"][data-portrait-view="info"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div,
+  html[data-wallie-portrait="true"][data-portrait-view="info"] [data-testid="drawer-left"],
+  html[data-wallie-portrait="true"][data-portrait-view="info"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div,
+  html[data-wallie-portrait="true"][data-portrait-view="info"] [data-testid="drawer-middle"] {
     transform: translate3d(-100%, 0, 0) !important;
     visibility: hidden !important;
     pointer-events: none !important;
   }
-  html[data-walinux-portrait="true"][data-portrait-view="info"] [data-testid="drawer-right"] {
+  html[data-wallie-portrait="true"][data-portrait-view="info"] [data-testid="drawer-right"] {
     transform: translate3d(0, 0, 0) !important;
     visibility: visible !important;
     pointer-events: auto !important;
   }
 
   /* ---------------- LANDSCAPE MODE: SIDEBAR COLLAPSED ---------------- */
-  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div,
-  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] [data-testid="drawer-left"] {
+  html:not([data-wallie-portrait="true"])[data-wallie-sidebar-collapsed="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div,
+  html:not([data-wallie-portrait="true"])[data-wallie-sidebar-collapsed="true"] [data-testid="drawer-left"] {
     display: none !important;
   }
-  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div {
+  html:not([data-wallie-portrait="true"])[data-wallie-sidebar-collapsed="true"] [data-testid="wa-web-main-screen"] > div > div:has(> [data-testid="drawer-left"]) + div + div {
     flex: 1 1 auto !important;
     width: auto !important;
     max-width: none !important;
   }
-  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] [data-testid="drawer-middle"] {
+  html:not([data-wallie-portrait="true"])[data-wallie-sidebar-collapsed="true"] [data-testid="drawer-middle"] {
     margin-left: 64px !important;
     flex: 1 1 auto !important;
     width: calc(100% - 64px) !important;
@@ -221,22 +221,22 @@ const RESPONSIVE_CSS = `
   }
 
   /* Emoji / GIFs / Stickers Flyout Panel Positioning & Width Constraint */
-  html[data-walinux-portrait="true"] #expressions-panel-container div:has(> [data-testid="expressions-panel"]),
-  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] #expressions-panel-container div:has(> [data-testid="expressions-panel"]) {
+  html[data-wallie-portrait="true"] #expressions-panel-container div:has(> [data-testid="expressions-panel"]),
+  html:not([data-wallie-portrait="true"])[data-wallie-sidebar-collapsed="true"] #expressions-panel-container div:has(> [data-testid="expressions-panel"]) {
     left: 68px !important;
     right: auto !important;
     max-width: calc(100vw - 76px) !important;
     width: min(560px, calc(100vw - 76px)) !important;
   }
-  html[data-walinux-portrait="true"] #expressions-panel-container [data-testid="expressions-panel"],
-  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] #expressions-panel-container [data-testid="expressions-panel"] {
+  html[data-wallie-portrait="true"] #expressions-panel-container [data-testid="expressions-panel"],
+  html:not([data-wallie-portrait="true"])[data-wallie-sidebar-collapsed="true"] #expressions-panel-container [data-testid="expressions-panel"] {
     max-width: 100% !important;
     width: 100% !important;
   }
 
   /* Attachment Popup Menu Positioning */
-  html[data-walinux-portrait="true"] div.xu96u03[style*="-50%, -100%)"],
-  html:not([data-walinux-portrait="true"])[data-walinux-sidebar-collapsed="true"] div.xu96u03[style*="-50%, -100%)"] {
+  html[data-wallie-portrait="true"] div.xu96u03[style*="-50%, -100%)"],
+  html:not([data-wallie-portrait="true"])[data-wallie-sidebar-collapsed="true"] div.xu96u03[style*="-50%, -100%)"] {
     left: 52px !important;
   }
 
@@ -255,6 +255,8 @@ const RESPONSIVE_CSS = `
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    position: relative !important;
+    z-index: 100 !important;
     width: 40px;
     height: 40px;
     min-width: 40px;
@@ -282,7 +284,7 @@ const RESPONSIVE_CSS = `
   .${BACK_BTN_CLASS}:active {
     background-color: var(--background-default-active, rgba(255, 255, 255, 0.12));
   }
-  html:not([data-walinux-portrait="true"]) .${BACK_BTN_CLASS} {
+  html:not([data-wallie-portrait="true"]) .${BACK_BTN_CLASS} {
     display: none !important;
   }
 `;
@@ -328,9 +330,9 @@ export function getPortraitViewState(): PortraitViewState {
 function updateLandscapeSidebar(): void {
   if (!document.documentElement) return;
   if (!isPortraitActive && isLandscapeSidebarCollapsed) {
-    document.documentElement.setAttribute('data-walinux-sidebar-collapsed', 'true');
+    document.documentElement.setAttribute('data-wallie-sidebar-collapsed', 'true');
   } else {
-    document.documentElement.removeAttribute('data-walinux-sidebar-collapsed');
+    document.documentElement.removeAttribute('data-wallie-sidebar-collapsed');
   }
   window.dispatchEvent(new Event('resize'));
 }
@@ -360,12 +362,12 @@ function updatePortraitState(): void {
   if (isPortraitActive !== shouldBePortrait) {
     isPortraitActive = shouldBePortrait;
     if (isPortraitActive) {
-      document.documentElement.setAttribute('data-walinux-portrait', 'true');
+      document.documentElement.setAttribute('data-wallie-portrait', 'true');
       document.documentElement.setAttribute('data-portrait-view', currentViewState);
-      document.documentElement.removeAttribute('data-walinux-sidebar-collapsed');
+      document.documentElement.removeAttribute('data-wallie-sidebar-collapsed');
       lockMainScreenScroll();
     } else {
-      document.documentElement.removeAttribute('data-walinux-portrait');
+      document.documentElement.removeAttribute('data-wallie-portrait');
       document.documentElement.removeAttribute('data-portrait-view');
       updateLandscapeSidebar();
     }
@@ -377,8 +379,8 @@ function lockMainScreenScroll(): void {
   const container = document.querySelector<HTMLElement>('[data-testid="wa-web-main-screen"] > div');
   if (!container) return;
 
-  if (!(container as any).__walinuxScrollLocked) {
-    (container as any).__walinuxScrollLocked = true;
+  if (!(container as any).__wallieScrollLocked) {
+    (container as any).__wallieScrollLocked = true;
 
     const origDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollLeft');
     if (origDescriptor) {
@@ -458,13 +460,16 @@ function createBackButton(): HTMLButtonElement {
 }
 
 function injectBackButton(): void {
-  const headerContainer = document.querySelector('#main header > div:first-child');
-  if (!headerContainer) return;
+  const header = document.querySelector<HTMLElement>('#main header');
+  if (!header) return;
 
-  const existingBtn = headerContainer.querySelector(`.${BACK_BTN_CLASS}`);
+  const existingBtn = header.querySelector<HTMLButtonElement>(`.${BACK_BTN_CLASS}`);
   if (!existingBtn) {
     const backBtn = createBackButton();
-    headerContainer.insertBefore(backBtn, headerContainer.firstChild);
+    header.insertBefore(backBtn, header.firstChild);
+  } else if (existingBtn.parentElement !== header) {
+    // If previously injected inside conversation-info-header, hoist directly to #main header
+    header.insertBefore(existingBtn, header.firstChild);
   }
 }
 
@@ -574,7 +579,12 @@ function setupEventListeners(): void {
       }
 
       // 4. Click on chat header title/avatar to open Right Drawer (Contact/Group Info)
-      const chatHeaderTitle = target.closest('#main header > div:first-child [role="button"]');
+      if (target.closest(`.${BACK_BTN_CLASS}`)) {
+        return;
+      }
+      const chatHeaderTitle = target.closest(
+        '#main header [data-testid="conversation-info-header"], #main header [data-testid="conversation-info-header-button"], #main header > div:first-of-type [role="button"]'
+      );
       if (chatHeaderTitle && !chatHeaderTitle.classList.contains(BACK_BTN_CLASS)) {
         setTimeout(() => {
           const drawerRight = document.querySelector('[data-testid="drawer-right"]');
@@ -665,8 +675,8 @@ function setupEventListeners(): void {
   }
 
   // Ensure chat view is activated whenever a notification click is processed
-  if (window.__walinux_ipc?.onNotificationClicked) {
-    window.__walinux_ipc.onNotificationClicked(() => {
+  if (window.__wallie_ipc?.onNotificationClicked) {
+    window.__wallie_ipc.onNotificationClicked(() => {
       setPortraitViewState('chat');
     });
   }
@@ -684,8 +694,8 @@ export function initResponsiveLayout(): void {
   setupEventListeners();
 
   // Load initial mode from IPC if available
-  if (window.__walinux_ipc?.getResponsiveLayoutMode) {
-    window.__walinux_ipc.getResponsiveLayoutMode().then((mode) => {
+  if (window.__wallie_ipc?.getResponsiveLayoutMode) {
+    window.__wallie_ipc.getResponsiveLayoutMode().then((mode) => {
       if (mode) {
         setResponsiveLayoutMode(mode);
       }
@@ -693,8 +703,8 @@ export function initResponsiveLayout(): void {
   }
 
   // Subscribe to runtime mode changes
-  if (window.__walinux_ipc?.onResponsiveLayoutModeChanged) {
-    window.__walinux_ipc.onResponsiveLayoutModeChanged((mode) => {
+  if (window.__wallie_ipc?.onResponsiveLayoutModeChanged) {
+    window.__wallie_ipc.onResponsiveLayoutModeChanged((mode) => {
       if (mode) {
         setResponsiveLayoutMode(mode);
       }
