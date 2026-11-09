@@ -59,7 +59,7 @@ jobs:
         run: node scripts/build-package.cjs --linux AppImage deb rpm pacman --x64 --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-linux
           path: |
@@ -112,7 +112,7 @@ jobs:
         run: node scripts/build-package.cjs --win --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-win
           path: dist-pack/*.exe
@@ -160,7 +160,7 @@ jobs:
         run: node scripts/build-package.cjs --mac --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-mac
           path: dist-pack/*.dmg
@@ -208,7 +208,7 @@ jobs:
         run: node scripts/build-package.cjs --linux snap --x64 --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-snap-x64
           path: dist-pack/*.snap
@@ -256,7 +256,7 @@ jobs:
         run: node scripts/build-package.cjs --linux snap --arm64 --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-snap-arm64
           path: dist-pack/*.snap
@@ -316,7 +316,7 @@ jobs:
         run: node scripts/build-package.cjs --linux flatpak --x64 --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-flatpak-x64
           path: dist-pack/*.flatpak
@@ -376,7 +376,7 @@ jobs:
         run: node scripts/build-package.cjs --linux flatpak --arm64 --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-flatpak-arm64
           path: dist-pack/*.flatpak
