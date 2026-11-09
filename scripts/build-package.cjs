@@ -9,7 +9,7 @@ try {
     patchSnapCore24();
   }
 } catch (e) {
-  // Ignore if patching fails
+  console.warn(`[WAllie Builder] Warning: Snap core24 patch skipped or failed: ${e.message}`);
 }
 
 const versionInfo = getVersionInfo();
@@ -30,4 +30,13 @@ const result = spawnSync('npx', args, {
   shell: true,
 });
 
-process.exit(result.status ?? 0);
+if (result.error) {
+  console.error('[WAllie Builder] Failed to execute electron-builder:', result.error);
+  process.exit(1);
+}
+
+if (result.status !== 0) {
+  process.exit(result.status ?? 1);
+}
+
+process.exit(0);

@@ -33,3 +33,4 @@ Thumbs.db
 
 # Specific error log dumps to ignore
 ADRs/error.md
+.agents

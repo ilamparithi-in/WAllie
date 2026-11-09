@@ -5,69 +5,43 @@ on:
     tags:
       - 'v*'
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
-  build-and-release:
-    name: Build & Draft Release (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [linux, win, mac]
-        include:
-          - target: linux
-            os: ubuntu-latest
-          - target: win
-            os: windows-latest
-          - target: mac
-            os: macos-latest
-
-    permissions:
-      contents: write
-
+  build-linux:
+    name: Build (Linux)
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 26
           cache: 'npm'
 
       - name: Cache Electron & Builder Binaries
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/electron
             ~/.cache/electron-builder
-            ~/AppData/Local/electron/Cache
-            ~/AppData/Local/electron-builder/Cache
-            ~/Library/Caches/electron
-            ~/Library/Caches/electron-builder
-          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package-lock.json') }}
+          key: Linux-electron-cache-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-electron-cache-
-
-      - name: Cache Flatpak Runtime
-        if: runner.os == 'Linux'
-        uses: actions/cache@v6
-        with:
-          path: ~/.local/share/flatpak
-          key: ${{ runner.os }}-flatpak-26.08
-
-      - name: Set up Snapcraft & LXD
-        if: runner.os == 'Linux'
-        uses: canonical/craft-actions/snapcraft/setup@v1
+            Linux-electron-cache-
 
       - name: Install Linux packaging dependencies
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends rpm libarchive-tools flatpak flatpak-builder
-          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y flathub org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08
+          sudo apt-get install -y --no-install-recommends rpm libarchive-tools
 
       - name: Install npm dependencies
         run: npm ci
@@ -82,61 +56,189 @@ jobs:
         run: node scripts/version-helper.cjs --json
 
       - name: Package Electron App
-        run: node scripts/build-package.cjs --${{ matrix.target }} --publish never
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/build-package.cjs --linux AppImage deb rpm pacman --x64 --publish never
 
-      - name: Create Draft GitHub Release & Upload Assets
-        uses: softprops/action-gh-release@v3
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: WAllie ${{ github.ref_name }}
-          draft: true
-          files: |
+          name: wallie-release-linux
+          path: |
             dist-pack/*.AppImage
             dist-pack/*.zsync
             dist-pack/*.deb
             dist-pack/*.rpm
             dist-pack/*.pkg.tar.zst
-            dist-pack/*.flatpak
-            dist-pack/*.snap
-            dist-pack/*.exe
-            dist-pack/*.dmg
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          compression-level: 0
+          if-no-files-found: error
 
-      - name: Resolve Built Snap Path
-        if: runner.os == 'Linux'
-        id: snap
-        run: |
-          SNAP_PATH=$(find dist-pack -maxdepth 1 -name "*.snap" -print -quit)
-          echo "path=$SNAP_PATH" >> $GITHUB_OUTPUT
-
-      - name: Publish Snap to Stable Channel
-        if: runner.os == 'Linux' && steps.snap.outputs.path != ''
-        uses: snapcore/action-publish@v1
-        env:
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-        with:
-          snap: ${{ steps.snap.outputs.path }}
-          release: candidate,stable
-
-  build-snap-arm64:
-    name: Build & Release ARM64 Snap
-    runs-on: ubuntu-24.04-arm
-    needs: build-and-release
-    permissions:
-      contents: write
+  build-win:
+    name: Build (Windows)
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 26
           cache: 'npm'
+
+      - name: Cache Electron & Builder Binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: Windows-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            Windows-electron-cache-
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Run Typecheck
+        run: npm run typecheck
+
+      - name: Build renderer and main bundles
+        run: npm run build
+
+      - name: Print Release Version Diagnostics
+        run: node scripts/version-helper.cjs --json
+
+      - name: Package Electron App
+        run: node scripts/build-package.cjs --win --publish never
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wallie-release-win
+          path: dist-pack/*.exe
+          compression-level: 0
+          if-no-files-found: error
+
+  build-mac:
+    name: Build (macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: 'npm'
+
+      - name: Cache Electron & Builder Binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: macOS-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            macOS-electron-cache-
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Run Typecheck
+        run: npm run typecheck
+
+      - name: Build renderer and main bundles
+        run: npm run build
+
+      - name: Print Release Version Diagnostics
+        run: node scripts/version-helper.cjs --json
+
+      - name: Package Electron App
+        run: node scripts/build-package.cjs --mac --publish never
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wallie-release-mac
+          path: dist-pack/*.dmg
+          compression-level: 0
+          if-no-files-found: error
+
+  build-snap-x64:
+    name: Build (Snap x64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: 'npm'
+
+      - name: Cache Electron & Builder Binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: Linux-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            Linux-electron-cache-
+
+      - name: Set up Snapcraft & LXD
+        uses: canonical/craft-actions/snapcraft/setup@v1
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build renderer and main bundles
+        run: npm run build
+
+      - name: Print Release Version Diagnostics
+        run: node scripts/version-helper.cjs --json
+
+      - name: Package x64 Snap
+        run: node scripts/build-package.cjs --linux snap --x64 --publish never
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wallie-release-snap-x64
+          path: dist-pack/*.snap
+          compression-level: 0
+          if-no-files-found: error
+
+  build-snap-arm64:
+    name: Build (Snap ARM64)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: 'npm'
+
+      - name: Cache Electron & Builder Binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: Linux-arm64-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            Linux-arm64-electron-cache-
 
       - name: Set up Snapcraft & LXD
         uses: canonical/craft-actions/snapcraft/setup@v1
@@ -152,27 +254,209 @@ jobs:
 
       - name: Package ARM64 Snap
         run: node scripts/build-package.cjs --linux snap --arm64 --publish never
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Snap Asset to Draft Release
-        uses: softprops/action-gh-release@v3
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          files: dist-pack/*.snap
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: wallie-release-snap-arm64
+          path: dist-pack/*.snap
+          compression-level: 0
+          if-no-files-found: error
 
-      - name: Resolve Built Snap Path
-        id: snap
+  build-flatpak-x64:
+    name: Build (Flatpak x64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: 'npm'
+
+      - name: Cache Electron & Builder Binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: Linux-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            Linux-electron-cache-
+
+      - name: Cache Flatpak Runtime
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/flatpak
+          key: Linux-x64-flatpak-${{ hashFiles('electron-builder.yml') }}-26.08
+          restore-keys: |
+            Linux-x64-flatpak-
+
+      - name: Install Flatpak packaging dependencies
         run: |
-          SNAP_PATH=$(find dist-pack -maxdepth 1 -name "*.snap" -print -quit)
-          echo "path=$SNAP_PATH" >> $GITHUB_OUTPUT
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder elfutils
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08
 
-      - name: Publish ARM64 Snap to Stable Channel
-        if: steps.snap.outputs.path != ''
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build renderer and main bundles
+        run: npm run build
+
+      - name: Print Release Version Diagnostics
+        run: node scripts/version-helper.cjs --json
+
+      - name: Package x64 Flatpak
+        run: node scripts/build-package.cjs --linux flatpak --x64 --publish never
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wallie-release-flatpak-x64
+          path: dist-pack/*.flatpak
+          compression-level: 0
+          if-no-files-found: error
+
+  build-flatpak-arm64:
+    name: Build (Flatpak ARM64)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: 'npm'
+
+      - name: Cache Electron & Builder Binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: Linux-arm64-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            Linux-arm64-electron-cache-
+
+      - name: Cache Flatpak Runtime
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/flatpak
+          key: Linux-arm64-flatpak-${{ hashFiles('electron-builder.yml') }}-26.08
+          restore-keys: |
+            Linux-arm64-flatpak-
+
+      - name: Install Flatpak packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder elfutils
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub --arch=aarch64 org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build renderer and main bundles
+        run: npm run build
+
+      - name: Print Release Version Diagnostics
+        run: node scripts/version-helper.cjs --json
+
+      - name: Package ARM64 Flatpak
+        run: node scripts/build-package.cjs --linux flatpak --arm64 --publish never
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wallie-release-flatpak-arm64
+          path: dist-pack/*.flatpak
+          compression-level: 0
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish Release & Trigger Homebrew
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-win, build-mac, build-snap-x64, build-snap-arm64, build-flatpak-x64, build-flatpak-arm64]
+    permissions:
+      contents: write
+    env:
+      HAS_SNAP_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS != '' }}
+      HAS_HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-pack
+          merge-multiple: true
+
+      - name: List downloaded release assets
+        run: ls -la dist-pack
+
+      - name: Resolve Built Snaps
+        id: snaps
+        run: |
+          X64_SNAP=$(find dist-pack -maxdepth 1 -name "*amd64*.snap" -print -quit)
+          ARM_SNAP=$(find dist-pack -maxdepth 1 -name "*arm64*.snap" -print -quit)
+          echo "x64=$X64_SNAP" >> $GITHUB_OUTPUT
+          echo "arm64=$ARM_SNAP" >> $GITHUB_OUTPUT
+
+      - name: Publish x64 Snap to Stable Channel
+        if: env.HAS_SNAP_CREDENTIALS == 'true' && steps.snaps.outputs.x64 != ''
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
-          snap: ${{ steps.snap.outputs.path }}
+          snap: ${{ steps.snaps.outputs.x64 }}
           release: candidate,stable
+
+      - name: Publish ARM64 Snap to Stable Channel
+        if: env.HAS_SNAP_CREDENTIALS == 'true' && steps.snaps.outputs.arm64 != ''
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.snaps.outputs.arm64 }}
+          release: candidate,stable
+
+      - name: Create Official GitHub Release & Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          name: WAllie ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            dist-pack/*.AppImage
+            dist-pack/*.zsync
+            dist-pack/*.deb
+            dist-pack/*.rpm
+            dist-pack/*.pkg.tar.zst
+            dist-pack/*.flatpak
+            dist-pack/*.snap
+            dist-pack/*.exe
+            dist-pack/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger Homebrew Tap Update
+        if: env.HAS_HOMEBREW_TAP_TOKEN == 'true'
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          repository: ilamparithi-in/homebrew-tap
+          event-type: update_cask
+          client-payload: '{"cask": "wallie", "tag": "${{ github.ref_name }}"}'

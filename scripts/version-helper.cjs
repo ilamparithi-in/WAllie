@@ -39,15 +39,16 @@ function getVersionInfo() {
   const baseVersion = pkg.version || '1.0.0';
   const now = new Date().toISOString();
 
-  // Try checking git
-  const exactTag = runGit('describe --tags --exact-match');
-  const latestTag = runGit('describe --tags --abbrev=0');
+  // Try checking git (only match semver release tags like v1.2.0, ignoring floating tags like nightly)
+  const exactTag = runGit('describe --tags --exact-match --match "v[0-9]*"');
+  const latestTag = runGit('describe --tags --abbrev=0 --match "v[0-9]*"');
   const shortHash = runGit('rev-parse --short HEAD') || 'unknown';
   const porcelain = runGit('status --porcelain');
   const isDirty = Boolean(porcelain && porcelain.length > 0);
 
   // In GitHub Actions release workflow: GITHUB_REF_TYPE === 'tag'
-  if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME) {
+  // Only honor semver tags (e.g. v1.2.0); ignore floating tags like 'nightly' or 'edge'
+  if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME && /^v[0-9]/.test(process.env.GITHUB_REF_NAME)) {
     const cleanTag = process.env.GITHUB_REF_NAME.replace(/^v/, '');
     return {
       version: cleanTag,
@@ -63,7 +64,7 @@ function getVersionInfo() {
   }
 
   // If we are exactly on a tag (e.g. v1.0.0) without uncommitted changes
-  if (exactTag && exactTag.startsWith('v') && !isDirty) {
+  if (exactTag && /^v[0-9]/.test(exactTag) && !isDirty) {
     const cleanTag = exactTag.replace(/^v/, '');
     return {
       version: cleanTag,
