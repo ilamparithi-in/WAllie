@@ -27,7 +27,7 @@ linux:
     - target: flatpak
       arch: [x64, arm64]
     - target: snap
-      arch: [x64]
+      arch: [x64, arm64]
 snapcraft:
   base: "core24"
   core24:
@@ -45,6 +45,7 @@ snapcraft:
 flatpak:
   runtimeVersion: "26.08"
   baseVersion: "26.08"
+  artifactName: "${productName}-${version}-${arch}.${ext}"
   finishArgs:
     - "--share=ipc"
     - "--socket=x11"
@@ -68,6 +69,8 @@ nsis:
   installerHeaderIcon: build/icon.ico
   oneClick: false
   allowToChangeInstallationDirectory: true
+portable:
+  artifactName: "${productName}-${version}-portable-${arch}.${ext}"
 mac:
   category: public.app-category.social-networking
   target:

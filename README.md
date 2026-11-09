@@ -11,6 +11,7 @@ othneildrew/Best-README-Template
 [![project_license][license-shield]][license-url]
 [![CI Build][ci-shield]][ci-url]
 [![Snap Store][snap-shield]][snap-url]
+[![Homebrew Cask][homebrew-shield]][homebrew-url]
 
 <!-- PROJECT LOGO -->
 <br />
@@ -125,7 +126,20 @@ chmod +x WAllie-*.AppImage
 
 ---
 
-### 3. Prebuilt Packages & Binaries
+### 3. Homebrew Cask (macOS)
+Install WAllie on macOS via the official tap:
+```bash
+brew install --cask ilamparithi-in/tap/wallie
+```
+Or add the tap first and install:
+```bash
+brew tap ilamparithi-in/tap
+brew install --cask wallie
+```
+
+---
+
+### 4. Prebuilt Packages & Binaries
 Prebuilt binaries for every release are available on the [Releases page](https://github.com/ilamparithi-in/WAllie/releases/latest):
 * **Debian / Ubuntu**: `.deb` (x86_64 & arm64)
 * **Fedora / RHEL**: `.rpm` (x86_64 & arm64)
@@ -135,7 +149,7 @@ Prebuilt binaries for every release are available on the [Releases page](https:/
 
 ---
 
-### 4. Building from Source
+### 5. Building from Source
 WAllie can be compiled and installed on most popular Linux distributions. Since it is an Electron app, you can even build it for macOS and Windows:
 
 #### Prerequisites
@@ -291,3 +305,5 @@ Like my work? Consider buying me a Biriyani! [Donate](https://pseudosmp.github.i
 [ci-shield]: https://img.shields.io/github/actions/workflow/status/ilamparithi-in/WAllie/build.yml?style=for-the-badge
 [snap-shield]: https://img.shields.io/snapcraft/v/wallie/latest/stable?style=for-the-badge&logo=snapcraft&logoColor=white
 [snap-url]: https://snapcraft.io/wallie
+[homebrew-shield]: https://img.shields.io/badge/Homebrew_Cask-v1.2.0-FBB040?style=for-the-badge&logo=homebrew&logoColor=black
+[homebrew-url]: https://github.com/ilamparithi-in/homebrew-tap
