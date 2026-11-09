@@ -2,10 +2,9 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "ESNext",
-    "outDir": "dist/preload",
-    "rootDir": "src",
     "skipLibCheck": true,
+    "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src/preload/index.ts"]
+  "include": ["src/preload/**/*.ts"]
 }

@@ -1,0 +1,335 @@
+import { ipcMain, Menu, session, dialog } from 'electron';
+import { state } from '../state';
+import { saveAccounts, getAccountStorageSizes, invalidateStorageCache } from '../config';
+import {
+  getAccountById,
+  focusActiveView,
+  getAccountsWithLoadedStatus,
+  getAccountForWebContents,
+} from '../utils';
+import {
+  switchActiveAccount,
+  removeAccountLogic,
+  unloadAccountLogic,
+  loadAccountLogic,
+  notifyAccountListChanged,
+} from '../window';
+import { injectAccountStyling } from '../views';
+import { Account, AccountSettings, DEFAULT_ACCOUNT_SETTINGS } from '../../shared/types';
+import {
+  validate,
+  accountIdSchema,
+  accountRenameSchema,
+  accountEmojiSchema,
+  accountCssSchema,
+  accountAppearanceSchema,
+  accountSettingsSchema,
+  storageClearTypeSchema,
+} from './schemas';
+
+export function registerAccountHandlers(): void {
+  ipcMain.handle('account:get-name-for-session', (event) => {
+    const acc = getAccountForWebContents(event.sender);
+    return acc ? acc.name : null;
+  });
+
+  ipcMain.on('account:focus-active', () => {
+    focusActiveView();
+  });
+
+  ipcMain.handle('account:get-all', () => getAccountsWithLoadedStatus());
+
+  ipcMain.handle('account:get-active-id', () => state.activeAccountId);
+
+  ipcMain.on('account:switch', async (_event, rawId: unknown) => {
+    const id = validate(accountIdSchema, rawId);
+    await switchActiveAccount(id);
+  });
+
+  ipcMain.handle('account:unload', async (_event, rawId: unknown) => {
+    const id = validate(accountIdSchema, rawId);
+    return await unloadAccountLogic(id);
+  });
+
+  ipcMain.handle('account:load', async (_event, rawId: unknown) => {
+    const id = validate(accountIdSchema, rawId);
+    return await loadAccountLogic(id);
+  });
+
+  ipcMain.on('account:reload-active', () => {
+    const activeView = state.accountViews.get(state.activeAccountId);
+    if (activeView) {
+      console.log(`Reloading active view for account: ${state.activeAccountId}`);
+      activeView.webContents.reload();
+    }
+  });
+
+  ipcMain.on('account:reload', (_event, rawId: unknown) => {
+    const accountId = validate(accountIdSchema, rawId);
+    const view = state.accountViews.get(accountId);
+    if (view) {
+      console.log(`Reloading view for account: ${accountId}`);
+      view.webContents.reload();
+    }
+  });
+
+  ipcMain.handle('account:add', async (_event, customName?: unknown) => {
+    const validatedName = typeof customName === 'string' && customName.trim() ? customName.trim().substring(0, 100) : undefined;
+    const newIndex = state.accounts.length + 1;
+    const newId = `acc_${Date.now()}`;
+    const newAccount: Account = {
+      id: newId,
+      name: validatedName || `Account ${newIndex}`,
+      partition: `persist:account_${newId}`,
+      unreadCount: 0,
+      loggedIn: false,
+      extensions: [],
+      emoji: '',
+    };
+    state.accounts.push(newAccount);
+    await saveAccounts();
+    await switchActiveAccount(newAccount.id);
+    return newAccount;
+  });
+
+  ipcMain.handle('account:rename', (_event, rawId: unknown, rawName: unknown) => {
+    const { id, newName } = validate(accountRenameSchema, { id: rawId, newName: rawName });
+    const account = getAccountById(id);
+    if (account) {
+      account.name = newName;
+      saveAccounts();
+      notifyAccountListChanged();
+      return true;
+    }
+    return false;
+  });
+
+  ipcMain.handle('account:update-emoji', (_event, rawId: unknown, rawEmoji: unknown) => {
+    const { id, emoji } = validate(accountEmojiSchema, { id: rawId, emoji: rawEmoji });
+    const account = getAccountById(id);
+    if (account) {
+      account.emoji = emoji.trim();
+      saveAccounts();
+      notifyAccountListChanged();
+      return true;
+    }
+    return false;
+  });
+
+  ipcMain.handle('account:remove', async (_event, rawId: unknown) => {
+    const id = validate(accountIdSchema, rawId);
+    return await removeAccountLogic(id);
+  });
+
+  ipcMain.on('account:context-menu', (_event, rawId: unknown) => {
+    const accountId = validate(accountIdSchema, rawId);
+    const account = getAccountById(accountId);
+    if (!account) return;
+
+    const isLoaded = state.accountViews.has(accountId) && !state.accountViews.get(accountId)?.webContents.isDestroyed();
+
+    const menu = Menu.buildFromTemplate([
+      {
+        label: 'Rename Account',
+        click: () => {
+          state.mainWindow?.webContents.send('account:trigger-rename', accountId);
+        },
+      },
+      {
+        label: 'Manage Account',
+        click: () => {
+          state.mainWindow?.webContents.send('settings:open-manage-accounts', accountId);
+        },
+      },
+      { type: 'separator' },
+      isLoaded
+        ? {
+          label: 'Unload Account',
+          click: async () => {
+            await unloadAccountLogic(accountId);
+          },
+        }
+        : {
+          label: 'Load Account',
+          click: async () => {
+            await loadAccountLogic(accountId);
+          },
+        },
+      {
+        label: 'Reload Account',
+        click: () => {
+          const view = state.accountViews.get(accountId);
+          if (view && !view.webContents.isDestroyed()) {
+            view.webContents.reload();
+          }
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Delete Account',
+        click: () => {
+          state.mainWindow?.webContents.send('account:trigger-delete', accountId);
+        },
+      },
+    ]);
+
+    menu.popup();
+  });
+
+  ipcMain.handle('account:get-storage-sizes', async (_event, rawId: unknown) => {
+    const accountId = validate(accountIdSchema, rawId);
+    const account = getAccountById(accountId);
+    if (!account) return { cache: 0, localStorage: 0, indexedDb: 0, cookies: 0 };
+    return await getAccountStorageSizes(account.partition);
+  });
+
+  ipcMain.handle('account:clear-storage', async (_event, rawId: unknown, rawType: unknown) => {
+    const accountId = validate(accountIdSchema, rawId);
+    const type = validate(storageClearTypeSchema, rawType);
+    const account = getAccountById(accountId);
+    if (!account) return false;
+
+    const accountSession = session.fromPartition(account.partition);
+
+    try {
+      if (type === 'cache') {
+        await accountSession.clearCache();
+        await accountSession.clearStorageData({
+          storages: ['shadercache', 'cachestorage'],
+        });
+        console.log(`Cache cleared successfully for account: ${accountId}`);
+      } else if (type === 'media') {
+        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+          const choice = await dialog.showMessageBox(state.mainWindow, {
+            type: 'warning',
+            buttons: ['Cancel', 'Clear Data & Log Out'],
+            defaultId: 0,
+            cancelId: 0,
+            title: 'Clear Media & Databases',
+            message: `Are you sure you want to clear media & databases for "${account.name}"?`,
+            detail: 'This will wipe all local chat history, media cache, and databases, and will log you out of this account.',
+          });
+
+          if (choice.response !== 1) {
+            return false;
+          }
+        }
+
+        const view = state.accountViews.get(accountId);
+        if (view && !view.webContents.isDestroyed()) {
+          view.webContents.stop();
+          await view.webContents.loadURL('about:blank');
+        }
+
+        await accountSession.clearStorageData();
+        await accountSession.clearCache();
+        console.log(`All storage and cache cleared for account: ${accountId}`);
+
+        account.loggedIn = false;
+        await saveAccounts();
+        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+          state.mainWindow.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+        }
+
+        if (view && !view.webContents.isDestroyed()) {
+          await view.webContents.loadURL('https://web.whatsapp.com');
+        }
+      }
+
+      invalidateStorageCache(account.partition);
+      return true;
+    } catch (error) {
+      console.error(`Failed to clear storage for account ${accountId} (type: ${type}):`, error);
+      return false;
+    }
+  });
+
+  ipcMain.handle('account:update-settings', (_event, rawId: unknown, rawSettings: unknown) => {
+    const accountId = validate(accountIdSchema, rawId);
+    const settings = validate(accountSettingsSchema, rawSettings);
+    const account = getAccountById(accountId);
+    if (account) {
+      account.settings = settings as unknown as AccountSettings;
+      saveAccounts();
+      state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+      return true;
+    }
+    return false;
+  });
+
+  ipcMain.handle('account:save-css', (_event, rawId: unknown, rawCss: unknown, rawTheme: unknown) => {
+    const { accountId, customCss, selectedTheme } = validate(accountCssSchema, {
+      accountId: rawId,
+      customCss: rawCss,
+      selectedTheme: rawTheme,
+    });
+    const account = getAccountById(accountId);
+    if (account) {
+      if (!account.settings) {
+        account.settings = { ...DEFAULT_ACCOUNT_SETTINGS };
+      }
+      account.settings.customCss = customCss;
+      account.settings.selectedTheme = selectedTheme;
+      saveAccounts();
+
+      const view = state.accountViews.get(accountId);
+      if (view) {
+        injectAccountStyling(accountId, view.webContents);
+      }
+      return true;
+    }
+    return false;
+  });
+
+  ipcMain.handle('account:save-appearance', (_event, rawId: unknown, rawAppearance: unknown) => {
+    const { accountId, appearance } = validate(accountAppearanceSchema, {
+      accountId: rawId,
+      appearance: rawAppearance,
+    });
+    const account = getAccountById(accountId);
+    if (!account) return false;
+    if (!account.settings) {
+      account.settings = { ...DEFAULT_ACCOUNT_SETTINGS };
+    }
+
+    if (typeof appearance.customCss === 'string') {
+      account.settings.customCss = appearance.customCss.substring(0, 500000);
+    }
+    if (typeof appearance.selectedTheme === 'string') {
+      account.settings.selectedTheme = appearance.selectedTheme.substring(0, 100);
+    }
+    if (typeof appearance.fontFamily === 'string') {
+      account.settings.fontFamily = appearance.fontFamily.substring(0, 200);
+    }
+    if (typeof appearance.fontUrl === 'string') {
+      account.settings.fontUrl = appearance.fontUrl.substring(0, 1000);
+    }
+    if (typeof appearance.monoFontFamily === 'string') {
+      account.settings.monoFontFamily = appearance.monoFontFamily.substring(0, 200);
+    }
+    if (typeof appearance.monoFontUrl === 'string') {
+      account.settings.monoFontUrl = appearance.monoFontUrl.substring(0, 1000);
+    }
+    if (typeof appearance.preferGoogleFont === 'boolean') {
+      account.settings.preferGoogleFont = appearance.preferGoogleFont;
+    }
+    if (typeof appearance.preferGoogleMonoFont === 'boolean') {
+      account.settings.preferGoogleMonoFont = appearance.preferGoogleMonoFont;
+    }
+    if (typeof appearance.followSystemFont === 'boolean') {
+      account.settings.followSystemFont = appearance.followSystemFont;
+    }
+    if (typeof appearance.customWallpaper === 'string') {
+      account.settings.customWallpaper = appearance.customWallpaper.substring(0, 5000000);
+    }
+
+    saveAccounts();
+
+    const view = state.accountViews.get(accountId);
+    if (view) {
+      injectAccountStyling(accountId, view.webContents);
+    }
+    return true;
+  });
+}
+

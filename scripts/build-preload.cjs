@@ -6,7 +6,7 @@ const { build } = require('vite');
 const rootDir = path.resolve(__dirname, '..');
 
 async function main() {
-  // 1. Compile TypeScript sources for preload
+  // 1. Verify TypeScript types for preload
   execSync('tsc -p tsconfig.preload.json', { cwd: rootDir, stdio: 'inherit' });
 
   // 2. Bundle modular whatsappMainWorld.ts sources into a self-contained IIFE script
@@ -30,11 +30,31 @@ async function main() {
   }
   const injectCode = chunk.code;
 
-  // 3. Read compiled preload index.js
-  const preloadJsPath = path.join(rootDir, 'dist/preload/preload/index.js');
-  let preloadCode = fs.readFileSync(preloadJsPath, 'utf-8');
+  // 3. Bundle modular src/preload/index.ts into a single self-contained CJS bundle
+  const preloadBuild = await build({
+    configFile: false,
+    logLevel: 'warn',
+    build: {
+      write: false,
+      minify: false,
+      rollupOptions: {
+        external: ['electron'],
+      },
+      lib: {
+        entry: path.join(rootDir, 'src/preload/index.ts'),
+        formats: ['cjs'],
+        fileName: () => 'index.cjs',
+      },
+    },
+  });
+  const preloadOutput = Array.isArray(preloadBuild) ? preloadBuild[0].output : preloadBuild.output;
+  const preloadChunk = preloadOutput.find((o) => o.fileName.endsWith('.js') || o.fileName.endsWith('.cjs'));
+  if (!preloadChunk || !preloadChunk.code) {
+    throw new Error('Failed to bundle preload script');
+  }
+  let preloadCode = preloadChunk.code;
 
-  // 4. In sandboxed renderers, preload cannot use Node APIs (fs, path, etc.) or relative requires.
+  // 4. In sandboxed renderers, preload cannot use Node APIs or relative requires.
   // Embed compiled main-world script by replacing the build placeholder.
   const placeholder = "'__MAIN_WORLD_SCRIPT__'";
   if (!preloadCode.includes(placeholder) && !preloadCode.includes('"__MAIN_WORLD_SCRIPT__"')) {
@@ -44,14 +64,15 @@ async function main() {
     ? preloadCode.replace(placeholder, () => JSON.stringify(injectCode))
     : preloadCode.replace('"__MAIN_WORLD_SCRIPT__"', () => JSON.stringify(injectCode));
 
-  // 5. Write self-contained dist/preload/index.cjs
-  const targetCjsPath = path.join(rootDir, 'dist/preload/index.cjs');
+  // 5. Ensure target directory exists and write self-contained dist/preload/index.cjs
+  const distPreloadDir = path.join(rootDir, 'dist/preload');
+  if (!fs.existsSync(distPreloadDir)) {
+    fs.mkdirSync(distPreloadDir, { recursive: true });
+  }
+  const targetCjsPath = path.join(distPreloadDir, 'index.cjs');
   fs.writeFileSync(targetCjsPath, preloadCode, 'utf-8');
 
-  // 6. Clean up temporary directories
-  fs.rmSync(path.join(rootDir, 'dist/preload/preload'), { recursive: true, force: true });
-  fs.rmSync(path.join(rootDir, 'dist/preload/shared'), { recursive: true, force: true });
-  fs.rmSync(path.join(rootDir, 'dist/preload/inject'), { recursive: true, force: true });
+  console.log(`[build-preload] Successfully bundled self-contained dist/preload/index.cjs (${preloadCode.length} bytes)`);
 }
 
 main().catch((err) => {
