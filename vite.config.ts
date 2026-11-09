@@ -11,6 +11,13 @@ const { getVersionInfo } = require('./scripts/version-helper.cjs');
 const versionInfo = getVersionInfo();
 const isDevBridgeEnabled = process.env.ENABLE_DEV_BRIDGE === 'true';
 
+const devBridgeAlias = !isDevBridgeEnabled
+  ? [
+      { find: /^(?:\.\/|\.\.\/.*\/)?devBridge(?:\.ts)?$/, replacement: path.resolve(import.meta.dirname, './src/main/devBridgeStub.ts') },
+      { find: '@/main/devBridge', replacement: path.resolve(import.meta.dirname, './src/main/devBridgeStub.ts') },
+    ]
+  : [];
+
 if (isDevBridgeEnabled) {
   console.warn('\n\x1b[1;37;41m                                                                                \x1b[0m');
   console.warn('\x1b[1;37;41m  🚨  CRITICAL SECURITY WARNING: DEV BRIDGE ENABLED IN THIS BUILD!             🚨  \x1b[0m');
@@ -37,6 +44,12 @@ export default defineConfig({
           define: {
             __APP_VERSION_INFO__: JSON.stringify(versionInfo),
             __ENABLE_DEV_BRIDGE__: JSON.stringify(isDevBridgeEnabled),
+          },
+          resolve: {
+            alias: [
+              { find: '@', replacement: path.resolve(import.meta.dirname, './src') },
+              ...devBridgeAlias,
+            ],
           },
           build: {
             outDir: 'dist/main',
