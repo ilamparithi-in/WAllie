@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
 import { setupCallDetection } from './callDetection';
 import { showGuestToast } from './toast';
+import { VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX } from '../shared/constants';
 
 const WHATSAPP_DOMAIN_REGEX = /^([^.\s]+\.)*whatsapp\.(com|net)$/i;
 
@@ -309,7 +310,7 @@ export function setupWhatsAppIntegration(mainWorldScript: string): void {
 
   const applyVisualZoomSettings = () => {
     try {
-      webFrame.setVisualZoomLevelLimits(1, 5);
+      webFrame.setVisualZoomLevelLimits(VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX);
     } catch { }
   };
 

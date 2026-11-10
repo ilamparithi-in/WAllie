@@ -5,6 +5,7 @@ import { DEFAULT_USER_AGENT, saveAccounts, saveSettings } from './config';
 import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, showAppToast, getSystemDesktopFontName } from './utils';
 import { Account } from '../shared/types';
 import { resolveGoogleFontUrl } from '../shared/fonts';
+import { VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX } from '../shared/constants';
 import { downloadManager } from './downloads';
 import { prepareExtensionForElectron } from './extensions';
 import { createSandboxWindow } from './sandbox';
@@ -361,7 +362,7 @@ export function resetZoom(contents: Electron.WebContents) {
     const baseScale = (state.globalSettings?.appScale || 100) / 100;
     contents.setZoomFactor(baseScale);
     contents.setVisualZoomLevelLimits(1, 1).catch(() => {});
-    contents.setVisualZoomLevelLimits(1, 5).catch(() => {});
+    contents.setVisualZoomLevelLimits(VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX).catch(() => {});
     console.log(`Resetting zoom factor to baseline ${baseScale} (100%) and resetting visual zoom scale`);
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('zoom:changed', 100);
@@ -809,18 +810,8 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
 
   view.webContents.setUserAgent(DEFAULT_USER_AGENT);
   view.webContents.setZoomFactor(baseScale);
-  view.webContents.setVisualZoomLevelLimits(1, 5).catch(() => {});
   view.webContents.loadURL('https://web.whatsapp.com').catch((err) => {
     console.warn(`[Account ${account.id}] Initial loadURL aborted or failed:`, err?.message || err);
-  });
-
-  view.webContents.on('dom-ready', () => {
-    try {
-      view.webContents.send('theme:changed', {
-        themeMode: state.globalSettings?.themeMode || 'system',
-        shouldUseDarkColors: nativeTheme.shouldUseDarkColors,
-      });
-    } catch (e) {}
   });
 
   view.webContents.on('did-finish-load', () => {
@@ -1013,7 +1004,13 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   };
 
   view.webContents.on('dom-ready', () => {
-    view.webContents.setVisualZoomLevelLimits(1, 5).catch(() => {});
+    try {
+      view.webContents.send('theme:changed', {
+        themeMode: state.globalSettings?.themeMode || 'system',
+        shouldUseDarkColors: nativeTheme.shouldUseDarkColors,
+      });
+    } catch (e) {}
+    view.webContents.setVisualZoomLevelLimits(VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX).catch(() => {});
     checkLoginStatus();
     injectAccountStyling(account.id, view.webContents);
   });

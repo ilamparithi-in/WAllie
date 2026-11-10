@@ -10,7 +10,7 @@ interface TitlebarProps {
 
 export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNotificationHistory, isDisclaimerAccepted = true }) => {
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
-  const [activeId, setActiveId] = useState<string>('default');
+  const [activeId, setActiveId] = useState<string>('');
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
   const [zoomPercent, setZoomPercent] = useState<number>(100);
   const [showFlash, setShowFlash] = useState<boolean>(false);

@@ -5,7 +5,7 @@ import { state } from './state';
 import { getAppIcon, getAccountById, getAccountsWithLoadedStatus, getPreloadPath, getInitialWindowSize } from './utils';
 import { createAccountView, injectCustomCssForView, registerZoomShortcuts, registerContextMenu, handleExternalLinkClick } from './views';
 import { safeDeleteExtensionDir } from './extensions';
-import { saveAccounts } from './config';
+import { saveAccounts, saveSettings } from './config';
 import { TITLEBAR_HEIGHT } from '../shared/constants';
 import { DEFAULT_MIN_WINDOW_WIDTH, DEFAULT_MIN_WINDOW_HEIGHT } from '../shared/types';
 import { loadWindowState, saveWindowStateImmediate, debouncedSaveWindowState } from './windowState';
@@ -455,6 +455,24 @@ export async function removeAccountLogic(id: string): Promise<boolean> {
 
   state.accounts = state.accounts.filter((a) => a.id !== id);
   await saveAccounts();
+
+  if (state.globalSettings) {
+    let settingsChanged = false;
+    if (state.globalSettings.preloadAccountIds && state.globalSettings.preloadAccountIds.includes(id)) {
+      state.globalSettings.preloadAccountIds = state.globalSettings.preloadAccountIds.filter((accId) => accId !== id);
+      settingsChanged = true;
+    }
+    if (state.globalSettings.defaultProtocolAccountId === id) {
+      state.globalSettings.defaultProtocolAccountId = 'ask';
+      settingsChanged = true;
+    }
+    if (settingsChanged) {
+      await saveSettings(state.globalSettings);
+      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        state.mainWindow.webContents.send('settings:global-changed', state.globalSettings);
+      }
+    }
+  }
 
   const view = state.accountViews.get(id);
   if (view) {
