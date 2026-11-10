@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { state } from './state';
 import { getConfigDir } from './utils';
 import { Account, GlobalSettings, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
+import { createNewAccount as generateAccount } from './accountUtils';
 
 const execFileAsync = promisify(execFile);
 
@@ -29,6 +30,28 @@ export const STORAGE_CACHE_TTL = 30000;
 
 const storageSizeCache = new Map<string, { sizes: { cache: number; localStorage: number; indexedDb: number; cookies: number }; timestamp: number }>();
 
+export function createNewAccount(customName?: string, index?: number): Account {
+  const newIndex = index ?? (state.accounts ? state.accounts.length + 1 : 1);
+  const existingIds = state.accounts ? state.accounts.map((a) => a.id) : [];
+  return generateAccount(customName, newIndex, existingIds);
+}
+
+function resolveInitialPreloadAccountIds(): string[] {
+  if (state.accounts && state.accounts.length > 0) {
+    return [state.accounts[0].id];
+  }
+  try {
+    if (fs.existsSync(ACCOUNTS_FILE)) {
+      const accountsData = fs.readFileSync(ACCOUNTS_FILE, 'utf8');
+      const accs = JSON.parse(accountsData);
+      if (Array.isArray(accs) && accs.length > 0 && accs[0]?.id) {
+        return [accs[0].id];
+      }
+    }
+  } catch { }
+  return [];
+}
+
 export function loadSettings(): GlobalSettings {
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
@@ -38,7 +61,12 @@ export function loadSettings(): GlobalSettings {
       const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
       const parsed = JSON.parse(data);
       let preloadAccountIds = parsed.preloadAccountIds;
-      if (!Array.isArray(preloadAccountIds)) {
+      if (Array.isArray(preloadAccountIds)) {
+        if (state.accounts && state.accounts.length > 0) {
+          const validIds = new Set(state.accounts.map((a) => a.id));
+          preloadAccountIds = preloadAccountIds.filter((id: string) => validIds.has(id));
+        }
+      } else {
         if (parsed.loadAllOnLaunch) {
           try {
             if (fs.existsSync(ACCOUNTS_FILE)) {
@@ -53,7 +81,7 @@ export function loadSettings(): GlobalSettings {
           }
         }
         if (!Array.isArray(preloadAccountIds)) {
-          preloadAccountIds = ['acc_default'];
+          preloadAccountIds = resolveInitialPreloadAccountIds();
         }
       }
       return {
@@ -97,7 +125,7 @@ export function loadSettings(): GlobalSettings {
     themeMode: 'system',
     appScale: 100,
     ctrlScrollZoomEnabled: true,
-    preloadAccountIds: ['acc_default'],
+    preloadAccountIds: resolveInitialPreloadAccountIds(),
     showDevToolsToggle: false,
     showRefreshButton: true,
     showNotificationHistoryButton: true,
@@ -168,17 +196,13 @@ export function loadAccounts(): Account[] {
   } catch (error) {
     console.error('Failed to load accounts configuration:', error);
   }
-  return [
-    {
-      id: 'acc_default',
-      name: 'Primary Account',
-      partition: 'persist:account_default',
-      unreadCount: 0,
-      loggedIn: false,
-      extensions: [],
-      settings: DEFAULT_ACCOUNT_SETTINGS,
-    },
-  ];
+  const initialAccount = createNewAccount(undefined, 1);
+  try {
+    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify([initialAccount], null, 2), { encoding: 'utf8', mode: 0o600 });
+  } catch (err) {
+    console.error('Failed to save initial accounts configuration:', err);
+  }
+  return [initialAccount];
 }
 
 export async function saveAccounts() {

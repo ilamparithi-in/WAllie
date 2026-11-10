@@ -1,6 +1,6 @@
 import { ipcMain, Menu, session, dialog } from 'electron';
 import { state } from '../state';
-import { saveAccounts, getAccountStorageSizes, invalidateStorageCache } from '../config';
+import { saveAccounts, getAccountStorageSizes, invalidateStorageCache, createNewAccount } from '../config';
 import {
   getAccountById,
   focusActiveView,
@@ -75,17 +75,7 @@ export function registerAccountHandlers(): void {
 
   ipcMain.handle('account:add', async (_event, customName?: unknown) => {
     const validatedName = typeof customName === 'string' && customName.trim() ? customName.trim().substring(0, 100) : undefined;
-    const newIndex = state.accounts.length + 1;
-    const newId = `acc_${Date.now()}`;
-    const newAccount: Account = {
-      id: newId,
-      name: validatedName || `Account ${newIndex}`,
-      partition: `persist:account_${newId}`,
-      unreadCount: 0,
-      loggedIn: false,
-      extensions: [],
-      emoji: '',
-    };
+    const newAccount = createNewAccount(validatedName);
     state.accounts.push(newAccount);
     await saveAccounts();
     await switchActiveAccount(newAccount.id);

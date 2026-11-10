@@ -126,7 +126,7 @@ node scripts/wa-bridge.mjs screenshot /tmp/wa-current.png
 
 ### Switch Active Account
 ```bash
-node scripts/wa-bridge.mjs switch acc_default
+node scripts/wa-bridge.mjs switch acc_1731234567890
 ```
 
 ---
@@ -155,7 +155,7 @@ Returns recent console messages captured from all WebContents and guest views.
   "search": "TypeError",     // Case-insensitive substring match
   "limit": 50,               // Default 100, max 500
   "clear": false,            // If true, flushes the log buffer
-  "accountId": "acc_default" // Filter by specific account
+  "accountId": "acc_1731234567890" // Filter by specific account
 }
 ```
 
@@ -166,7 +166,7 @@ Returns recent console messages captured from all WebContents and guest views.
   "returned": 1,
   "logs": [
     {
-      "accountId": "acc_default",
+      "accountId": "acc_1731234567890",
       "url": "https://web.whatsapp.com/",
       "level": "error",
       "levelName": "error",
@@ -228,7 +228,7 @@ Directly dispatches Chromium DevTools Protocol (CDP) commands to the active What
   "params": {
     "format": "png"
   },
-  "accountId": "acc_default"
+  "accountId": "acc_1731234567890"
 }
 ```
 
@@ -255,7 +255,7 @@ Performs `document.querySelectorAll()` inside the active WhatsApp Web view and s
   "limit": 20,
   "includeHtml": false,
   "attributes": true,
-  "accountId": "acc_default" 
+  "accountId": "acc_1731234567890" 
 }
 ```
 
@@ -268,7 +268,7 @@ Runs an arbitrary JavaScript snippet or promise in the WhatsApp Web frame contex
 ```json
 {
   "code": "document.querySelector('footer [contenteditable=\"true\"]').innerText",
-  "accountId": "acc_default"
+  "accountId": "acc_1731234567890"
 }
 ```
 
@@ -283,7 +283,7 @@ Dumps the HTML of a selector or the entire document (with base64 and SVG strippi
   "selector": "html",
   "stripBlobs": true,
   "maxChars": 500000,
-  "accountId": "acc_default"
+  "accountId": "acc_1731234567890"
 }
 ```
 
@@ -297,7 +297,7 @@ Captures the active view using `webContents.capturePage()`.
 {
   "savePath": "/tmp/wa-current.png",
   "returnBase64": false,
-  "accountId": "acc_default"
+  "accountId": "acc_1731234567890"
 }
 ```
 

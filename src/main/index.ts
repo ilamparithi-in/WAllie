@@ -60,16 +60,15 @@ if (process.platform === 'linux') {
   (app as any).setDesktopName('wallie');
 }
 
-// Load initial configuration settings and accounts
+// Load initial configuration accounts and settings
+state.accounts = loadAccounts();
+state.activeAccountId = state.accounts[0].id;
 state.globalSettings = loadSettings();
 
 // Disable hardware acceleration if config specifies before app gets ready
 if (!state.globalSettings.hardwareAcceleration) {
   app.disableHardwareAcceleration();
 }
-
-state.accounts = loadAccounts();
-state.activeAccountId = state.accounts[0].id;
 
 // Enforce single-instance lock
 const gotTheLock = app.requestSingleInstanceLock();

@@ -206,11 +206,11 @@ export const AccountsSettingsPage: React.FC<AccountsSettingsPageProps> = ({
                     checked={
                       globalSettings?.preloadAccountIds
                         ? globalSettings.preloadAccountIds.includes(acc.id)
-                        : acc.id === 'acc_default'
+                        : false
                     }
                     onChange={(e) => {
                       if (!globalSettings) return;
-                      const currentIds = globalSettings.preloadAccountIds || ['acc_default'];
+                      const currentIds = globalSettings.preloadAccountIds || [];
                       const updatedIds = e.target.checked
                         ? [...currentIds, acc.id]
                         : currentIds.filter((id) => id !== acc.id);

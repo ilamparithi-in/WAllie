@@ -35,7 +35,7 @@ export const PreloadSettingsPage: React.FC<PreloadSettingsPageProps> = ({
             {accounts.map((acc) => {
               const isPreloaded = globalSettings?.preloadAccountIds
                 ? globalSettings.preloadAccountIds.includes(acc.id)
-                : acc.id === 'acc_default';
+                : false;
               const isLoaded = acc.isLoaded !== false;
               return (
                 <div
@@ -65,7 +65,7 @@ export const PreloadSettingsPage: React.FC<PreloadSettingsPageProps> = ({
                     checked={isPreloaded}
                     onChange={(checked) => {
                       if (!globalSettings) return;
-                      const currentIds = globalSettings.preloadAccountIds || ['acc_default'];
+                      const currentIds = globalSettings.preloadAccountIds || [];
                       const updatedIds = checked
                         ? [...currentIds, acc.id]
                         : currentIds.filter((id) => id !== acc.id);
