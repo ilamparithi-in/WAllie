@@ -21,6 +21,8 @@ export const App: React.FC = () => {
   // Domain hooks
   const { accounts, activeAccountId, isActiveAccountLoaded } = useAccounts();
   const { globalSettings, updateGlobalSettings } = useGlobalSettings();
+  const globalSettingsRef = useRef(globalSettings);
+  globalSettingsRef.current = globalSettings;
   useTheme();
   const { downloads, removeDownload, openDownloadedFile, showItemInFolder } = useDownloads();
   const { toasts, showToast, dismissToast } = useToasts();
@@ -170,7 +172,7 @@ export const App: React.FC = () => {
     const unsubscribeProtocol = window.electronAPI.onProtocolReceived(async (url) => {
       console.log('Renderer received custom protocol URL:', url);
       const accs = await window.electronAPI.getAccounts();
-      const defaultAccountId = globalSettings?.defaultProtocolAccountId;
+      const defaultAccountId = globalSettingsRef.current?.defaultProtocolAccountId;
 
       // If a specific default account is set and valid (and not 'ask'):
       if (defaultAccountId && defaultAccountId !== 'ask') {
@@ -210,7 +212,7 @@ export const App: React.FC = () => {
       unsubscribeProtocol?.();
       unsubscribeReopenPrompt?.();
     };
-  }, [globalSettings, handleCloseSettings, handleReopenPrompt, showToast]);
+  }, [handleCloseSettings, handleReopenPrompt, showToast]);
 
   // Loading screen before settings load
   if (globalSettings === null) {

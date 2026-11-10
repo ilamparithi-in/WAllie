@@ -69,6 +69,7 @@ export function getAccountsWithLoadedStatus(): Account[] {
 }
 
 export function focusActiveView(): void {
+  if (!state.mainWindow?.isVisible()) return;
   const activeView = state.accountViews.get(state.activeAccountId);
   if (activeView && !activeView.webContents.isDestroyed()) {
     activeView.webContents.focus();

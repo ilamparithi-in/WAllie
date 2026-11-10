@@ -126,6 +126,8 @@ export function isBlockedHostname(rawHost: string): boolean {
     host.endsWith('.local') ||
     host.endsWith('.internal') ||
     host.endsWith('.lan') ||
+    host.endsWith('.corp') ||
+    host.endsWith('.home') ||
     host.endsWith('.home.arpa') ||
     host.endsWith('.invalid')
   ) {
@@ -223,7 +225,7 @@ export function isDomainTrusted(targetDomain: string, trustedDomainsList: string
   const cleanTarget = targetDomain.trim().toLowerCase().replace(/^www\./i, '');
   return trustedDomainsList.some((td) => {
     if (!td) return false;
-    const cleanTrusted = td.trim().toLowerCase().replace(/^www\./i, '');
+    const cleanTrusted = td.trim().toLowerCase().replace(/^www\./i, '').replace(/^\*\./, '');
     if (!cleanTrusted) return false;
     return cleanTarget === cleanTrusted || cleanTarget.endsWith('.' + cleanTrusted);
   });
