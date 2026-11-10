@@ -288,6 +288,7 @@ export class FreedesktopDbusProvider implements NotificationProvider {
 
     const hints: Record<string, dbus.Variant> = {
       'desktop-entry': new dbus.Variant('s', getDesktopEntryName()),
+      'resident': new dbus.Variant('b', true),
     };
 
     if (payload.canReply) {
@@ -303,10 +304,14 @@ export class FreedesktopDbusProvider implements NotificationProvider {
       expireTimeout = payload.timeoutMs;
     }
 
+    const replacesId = typeof payload.replacesId === 'number'
+      ? payload.replacesId
+      : (typeof payload.replacesId === 'string' ? parseInt(payload.replacesId, 10) || 0 : 0);
+
     try {
       const nid = await iface.Notify(
         'WAllie',
-        0,
+        replacesId,
         iconPath,
         title,
         body,
@@ -316,6 +321,11 @@ export class FreedesktopDbusProvider implements NotificationProvider {
       ) as number;
 
       if (nid > 0) {
+        // If replacesId was tracked under a different ID, clean up old entry
+        if (replacesId > 0 && replacesId !== nid) {
+          this.cleanupTracked(replacesId);
+        }
+
         // Track notification for lifecycle callbacks & memory TTL cleanup
         const ttlMs = expireTimeout > 0 ? expireTimeout + 15000 : 120000;
         const ttlTimer = setTimeout(() => {

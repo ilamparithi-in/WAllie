@@ -17,7 +17,7 @@ export function useToasts() {
     }, 300);
   }, []);
 
-  const showToast = useCallback((message: string, url?: string) => {
+  const addLocalToast = useCallback((message: string, url?: string) => {
     if (isNavConfirmActiveRef.current) {
       console.log('Nav confirmation is open. Deferring toast:', message);
       deferredToastsRef.current.push({ message, url });
@@ -33,14 +33,18 @@ export function useToasts() {
       if (prev.some((t) => t.message === message && !t.isExiting)) return prev;
       return [...prev, { id: toastId, message, url, isExiting: false }];
     });
-    window.electronAPI?.showToast?.(message, url);
   }, []);
+
+  const showToast = useCallback((message: string, url?: string) => {
+    addLocalToast(message, url);
+    window.electronAPI?.showToast?.(message, url);
+  }, [addLocalToast]);
 
   useEffect(() => {
     if (!window.electronAPI) return;
 
     const unsubscribeToast = window.electronAPI.onToastShow((data) => {
-      showToast(data.message, data.url);
+      addLocalToast(data.message, data.url);
     });
 
     const unsubscribeNavConfirm = window.electronAPI.onNavConfirmationActive?.((isActive) => {
@@ -49,7 +53,7 @@ export function useToasts() {
         const queued = [...deferredToastsRef.current];
         deferredToastsRef.current = [];
         queued.forEach((item) => {
-          showToast(item.message, item.url);
+          addLocalToast(item.message, item.url);
         });
       }
     });
@@ -58,7 +62,7 @@ export function useToasts() {
       unsubscribeToast?.();
       unsubscribeNavConfirm?.();
     };
-  }, [showToast]);
+  }, [addLocalToast]);
 
   return {
     toasts,

@@ -816,6 +816,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
 
   view.webContents.setUserAgent(DEFAULT_USER_AGENT);
   view.webContents.setZoomFactor(baseScale);
+  view.webContents.setVisualZoomLevelLimits(1, 5).catch(() => {});
   view.webContents.loadURL('https://web.whatsapp.com').catch((err) => {
     console.warn(`[Account ${account.id}] Initial loadURL aborted or failed:`, err?.message || err);
   });
@@ -891,6 +892,8 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
           contextIsolation: true,
           nodeIntegration: false,
           sandbox: true,
+          webSecurity: true,
+          allowRunningInsecureContent: false,
           backgroundThrottling: false,
         }
       }

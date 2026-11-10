@@ -18,6 +18,7 @@ const DRAWER_WIDTH = 450;
 
 let closeTimeout: NodeJS.Timeout | null = null;
 let resizeTimeout: NodeJS.Timeout | null = null;
+let pendingMaximizeOnShow = false;
 
 export { getInitialWindowSize };
 
@@ -98,7 +99,7 @@ export async function switchActiveAccount(newAccountId: string) {
     applyActiveViewBoundsImmediately(targetView);
     updateActiveViewBounds();
 
-    if (!targetView.webContents.isDestroyed()) {
+    if (state.mainWindow?.isVisible() && !targetView.webContents.isDestroyed()) {
       targetView.webContents.focus();
     }
 
@@ -219,16 +220,23 @@ export function createMainWindow() {
   state.mainWindow.once('ready-to-show', async () => {
     console.log('Main window ready-to-show, activeAccountId:', state.activeAccountId);
     enforceWindowMinimumSize(state.mainWindow);
-    if (windowState.isMaximized) {
-      state.mainWindow?.maximize();
-    } else if (windowState.x !== undefined && windowState.y !== undefined) {
+    const startMinimized = Boolean(state.globalSettings?.startMinimized);
+
+    if (windowState.x !== undefined && windowState.y !== undefined) {
       try {
         state.mainWindow?.setPosition(windowState.x, windowState.y);
       } catch (e) {}
     }
-    if (!state.globalSettings?.startMinimized) {
+
+    if (!startMinimized) {
+      if (windowState.isMaximized) {
+        state.mainWindow?.maximize();
+      }
       state.mainWindow?.show();
     } else {
+      if (windowState.isMaximized) {
+        pendingMaximizeOnShow = true;
+      }
       setTimeout(() => {
         if (Notification.isSupported()) {
           const icon = getAppIcon();
@@ -264,9 +272,16 @@ export function createMainWindow() {
 
   state.mainWindow.on('show', () => {
     enforceWindowMinimumSize(state.mainWindow);
+    if (pendingMaximizeOnShow) {
+      pendingMaximizeOnShow = false;
+      state.mainWindow?.maximize();
+    }
     const activeView = state.accountViews.get(state.activeAccountId);
     if (activeView && !activeView.webContents.isDestroyed()) {
       applyActiveViewBoundsImmediately(activeView);
+      if (!state.disclaimerOpen && !state.protocolPromptOpen) {
+        activeView.webContents.focus();
+      }
     }
   });
 

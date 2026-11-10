@@ -8,8 +8,18 @@ import { showAppToast, getConfigDir } from './utils';
 import { DownloadRecord } from '../shared/types';
 import { notificationManager } from './notifications/index';
 import { saveSettings } from './config';
-
-export const LARGE_FILE_THRESHOLD = 64 * 1024 * 1024; // 64 MB
+export {
+  LARGE_FILE_THRESHOLD,
+  computeFileSha256Sync,
+  computeFileSha256,
+  validateFileContentSafety,
+} from './downloadSafety';
+import {
+  LARGE_FILE_THRESHOLD,
+  computeFileSha256Sync,
+  computeFileSha256,
+  validateFileContentSafety,
+} from './downloadSafety';
 
 export interface FileMatchOptions {
   size?: number;
@@ -256,8 +266,7 @@ export class DownloadManager extends EventEmitter {
       let fileHash = cachedHash;
       if (!fileHash) {
         try {
-          const buf = fs.readFileSync(candidatePath);
-          fileHash = crypto.createHash('sha256').update(buf).digest('hex');
+          fileHash = computeFileSha256Sync(candidatePath);
         } catch (err) {
           console.error('[DownloadManager] Failed to compute hash of file on disk:', err);
         }
@@ -302,7 +311,7 @@ export class DownloadManager extends EventEmitter {
         try {
           statSize = fs.statSync(defaultPath).size;
           if (statSize <= LARGE_FILE_THRESHOLD) {
-            statHash = crypto.createHash('sha256').update(fs.readFileSync(defaultPath)).digest('hex');
+            statHash = computeFileSha256Sync(defaultPath);
           }
         } catch { }
         return {
@@ -339,7 +348,7 @@ export class DownloadManager extends EventEmitter {
             try {
               statSize = fs.statSync(best.path).size;
               if (statSize <= LARGE_FILE_THRESHOLD) {
-                statHash = crypto.createHash('sha256').update(fs.readFileSync(best.path)).digest('hex');
+                statHash = computeFileSha256Sync(best.path);
               }
             } catch { }
             return {
@@ -369,7 +378,7 @@ export class DownloadManager extends EventEmitter {
           try {
             statSize = fs.statSync(manualPath).size;
             if (statSize <= LARGE_FILE_THRESHOLD) {
-              statHash = crypto.createHash('sha256').update(fs.readFileSync(manualPath)).digest('hex');
+              statHash = computeFileSha256Sync(manualPath);
             }
           } catch { }
           return {
@@ -458,6 +467,15 @@ export class DownloadManager extends EventEmitter {
       if (!fs.existsSync(resolved)) {
         return false;
       }
+
+      const safety = validateFileContentSafety(resolved);
+      if (!safety.safe) {
+        console.warn(`[DownloadManager] Blocked automatic opening of ${resolved}: ${safety.reason}`);
+        showAppToast('For security, this file cannot be opened directly. Revealing in folder instead.');
+        shell.showItemInFolder(resolved);
+        return false;
+      }
+
       const error = await shell.openPath(resolved);
       return !error;
     } catch (err) {
@@ -654,8 +672,7 @@ export class DownloadManager extends EventEmitter {
         const totalBytes = item.getTotalBytes();
         if (totalBytes <= LARGE_FILE_THRESHOLD && fs.existsSync(finalPath)) {
           try {
-            const buf = await fs.promises.readFile(finalPath);
-            fileHash = crypto.createHash('sha256').update(buf).digest('hex');
+            fileHash = await computeFileSha256(finalPath);
           } catch (err) {
             console.error('[DownloadManager] Failed to hash downloaded file:', err);
           }

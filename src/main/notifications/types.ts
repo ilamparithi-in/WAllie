@@ -12,6 +12,7 @@ export interface NotificationPayload {
   replyPlaceholder?: string;
   timeoutMs?: number;
   tag?: string;
+  replacesId?: number | string;
   contactName?: string;
   accountId?: string;
   onAction?: (actionId: string) => void;

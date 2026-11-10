@@ -32,6 +32,10 @@ export class ElectronNativeProvider implements NotificationProvider {
       return null;
     }
 
+    if (payload.replacesId) {
+      await this.close(payload.replacesId);
+    }
+
     const notifId = `electron_${this.nextId++}_${Date.now()}`;
 
     let iconImage: Electron.NativeImage | undefined;

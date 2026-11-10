@@ -26,7 +26,8 @@
     "postinstall": "node scripts/patch-snap-core24.cjs",
     "version": "node scripts/update-pkgbuild.cjs && git add PKGBUILD",
     "update:homebrew": "node scripts/update-homebrew.cjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/**/*.test.ts"
   },
   "keywords": [
     "whatsapp",

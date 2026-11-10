@@ -15,9 +15,18 @@ interface ActiveNotificationEntry {
   accountId?: string;
 }
 
-interface ContactBurstState {
+interface ConversationState {
+  notificationId?: string | number;
+  messages: string[];
   lastTime: number;
-  count: number;
+}
+
+function formatSingleMessage(msg: string, maxLen = 140): string {
+  const clean = msg.trim().replace(/\r?\n/g, ' ');
+  if (clean.length > maxLen) {
+    return clean.slice(0, maxLen - 1).trimEnd() + '…';
+  }
+  return clean;
 }
 
 export class NotificationManager {
@@ -25,12 +34,7 @@ export class NotificationManager {
   private providers: Map<string, NotificationProvider> = new Map();
   private activeProvider: NotificationProvider | null = null;
   private activeNotifications: Map<string, ActiveNotificationEntry> = new Map();
-
-  // Burst rate limiting & message coalescing
-  private static readonly BURST_WINDOW_MS = 2000;
-  private static readonly MAX_BURST_COUNT = 8;
-  private recentTimestamps: number[] = [];
-  private recentContactBursts: Map<string, ContactBurstState> = new Map();
+  private conversations: Map<string, ConversationState> = new Map();
 
   private constructor() {
     this.registerProvider(new FreedesktopDbusProvider());
@@ -81,50 +85,35 @@ export class NotificationManager {
     return provider.getCapabilities();
   }
 
-  private cleanRecentDispatches(now: number): void {
-    const cutoff = now - NotificationManager.BURST_WINDOW_MS;
-    this.recentTimestamps = this.recentTimestamps.filter((t) => t > cutoff);
-
-    // Evict stale contact burst records older than 10 seconds
-    const staleContactCutoff = now - 10000;
-    for (const [key, state] of this.recentContactBursts.entries()) {
-      if (state.lastTime < staleContactCutoff) {
-        this.recentContactBursts.delete(key);
-      }
-    }
-  }
-
   public async notify(payload: NotificationPayload): Promise<string | number | null> {
     const provider = await this.getPreferredProvider();
-    const now = Date.now();
 
-    // 1. Sliding window burst rate limiter across the application
-    this.cleanRecentDispatches(now);
-    if (this.recentTimestamps.length >= NotificationManager.MAX_BURST_COUNT) {
-      const earliest = this.recentTimestamps[0];
-      const waitTime = Math.max(50, NotificationManager.BURST_WINDOW_MS - (now - earliest));
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-    }
-    this.recentTimestamps.push(Date.now());
-
-    // 2. Per-contact coalescing within the burst window
+    // Android-style notification coalescing:
+    // Append messages sequentially on the next line and truncate long individual messages with an ellipsis
+    let convKey: string | null = null;
     if (payload.contactName && payload.accountId) {
-      const contactKey = `${payload.accountId}:${payload.contactName.trim().toLowerCase()}`;
-      const existingBurst = this.recentContactBursts.get(contactKey);
+      convKey = `${payload.accountId}:${payload.contactName.trim().toLowerCase()}`;
+      const now = Date.now();
+      const existing = this.conversations.get(convKey);
+      const formattedMsg = formatSingleMessage(payload.body, 140);
 
-      if (existingBurst && now - existingBurst.lastTime < NotificationManager.BURST_WINDOW_MS) {
-        existingBurst.count++;
-        existingBurst.lastTime = now;
-        // Close previous notification from this contact so desktop daemon doesn't stack alerts
-        await this.closeByContact(payload.contactName, payload.accountId);
-        payload.body = `(${existingBurst.count} messages)\n${payload.body}`;
+      // If active conversation exists within 60s window, append message and update in-place
+      if (existing && now - existing.lastTime < 60000 && existing.notificationId) {
+        existing.messages.push(formattedMsg);
+        existing.lastTime = now;
+        payload.body = existing.messages.join('\n');
+        payload.replacesId = existing.notificationId;
       } else {
-        this.recentContactBursts.set(contactKey, { lastTime: now, count: 1 });
+        this.conversations.set(convKey, {
+          messages: [formattedMsg],
+          lastTime: now,
+        });
+        payload.body = formattedMsg;
       }
     }
 
-    // If a tag is provided and already active, close previous instance first
-    if (payload.tag) {
+    // If a tag is provided and already active without an in-place update, close previous instance first
+    if (payload.tag && !payload.replacesId) {
       await this.closeByTag(payload.tag);
     }
 
@@ -135,7 +124,44 @@ export class NotificationManager {
       if (notifKey) {
         this.activeNotifications.delete(notifKey);
       }
+      if (convKey) {
+        const conv = this.conversations.get(convKey);
+        if (conv && String(conv.notificationId) === notifKey) {
+          this.conversations.delete(convKey);
+        }
+      }
       originalOnClose?.(reason);
+    };
+
+    const originalOnReply = payload.onReply;
+    payload.onReply = async (replyText) => {
+      const trimmed = replyText.trim();
+      if (convKey && trimmed) {
+        const conv = this.conversations.get(convKey);
+        if (conv) {
+          conv.messages.push(`You: ${formatSingleMessage(trimmed, 140)}`);
+          conv.lastTime = Date.now();
+          if (conv.notificationId) {
+            // Re-render the notification in-place with "You: <reply>" appended and reply box removed
+            const postReplyPayload: NotificationPayload = {
+              ...payload,
+              body: conv.messages.join('\n'),
+              replacesId: conv.notificationId,
+              canReply: false,
+              timeoutMs: 8000,
+            };
+            try {
+              const updatedId = await provider.notify(postReplyPayload);
+              if (updatedId) {
+                conv.notificationId = updatedId;
+              }
+            } catch (err) {
+              console.warn('[NotificationManager] Failed to update notification with reply:', err);
+            }
+          }
+        }
+      }
+      originalOnReply?.(replyText);
     };
 
     const id = await provider.notify(payload);
@@ -149,6 +175,12 @@ export class NotificationManager {
         contactName: payload.contactName,
         accountId: payload.accountId,
       });
+      if (convKey) {
+        const conv = this.conversations.get(convKey);
+        if (conv) {
+          conv.notificationId = id;
+        }
+      }
     }
 
     return id;
@@ -158,6 +190,12 @@ export class NotificationManager {
     const key = String(id);
     const entry = this.activeNotifications.get(key);
     this.activeNotifications.delete(key);
+
+    for (const [cKey, conv] of this.conversations.entries()) {
+      if (String(conv.notificationId) === key) {
+        this.conversations.delete(cKey);
+      }
+    }
 
     if (entry) {
       try {
@@ -184,6 +222,11 @@ export class NotificationManager {
     }
 
     for (const item of toClose) {
+      for (const [cKey, conv] of this.conversations.entries()) {
+        if (String(conv.notificationId) === String(item.id)) {
+          this.conversations.delete(cKey);
+        }
+      }
       try {
         await item.provider.close(item.id);
       } catch (err) {
@@ -195,6 +238,15 @@ export class NotificationManager {
   public async closeByContact(contactName: string, accountId?: string): Promise<void> {
     if (!contactName) return;
     const target = contactName.trim().toLowerCase();
+    if (accountId) {
+      this.conversations.delete(`${accountId}:${target}`);
+    } else {
+      for (const key of this.conversations.keys()) {
+        if (key.endsWith(`:${target}`)) {
+          this.conversations.delete(key);
+        }
+      }
+    }
     const toClose: ActiveNotificationEntry[] = [];
 
     for (const [key, entry] of this.activeNotifications.entries()) {
@@ -217,6 +269,11 @@ export class NotificationManager {
 
   public async closeAllForAccount(accountId: string): Promise<void> {
     if (!accountId) return;
+    for (const key of this.conversations.keys()) {
+      if (key.startsWith(`${accountId}:`)) {
+        this.conversations.delete(key);
+      }
+    }
     const toClose: ActiveNotificationEntry[] = [];
 
     for (const [key, entry] of this.activeNotifications.entries()) {
@@ -236,6 +293,7 @@ export class NotificationManager {
   }
 
   public async dispose(): Promise<void> {
+    this.conversations.clear();
     const entries = Array.from(this.activeNotifications.values());
     this.activeNotifications.clear();
 
