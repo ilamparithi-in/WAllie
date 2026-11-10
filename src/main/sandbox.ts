@@ -445,14 +445,137 @@ export function createSandboxWindow(initialUrl: string): BrowserWindow {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
-      allowRunningInsecureContent: false,
+      allowRunningInsecureContent: true, // Sandbox exclusion: allows mixed content in isolated sandbox view
     },
   });
 
   const instance = new SandboxInstance(sandboxWin, pageView, ephemeralPartition, sandboxSession, finalUrl);
   sandboxInstances.set(sandboxWin.id, instance);
 
-  // 4. Permission Prompts: Intercept every permission request and prompt user
+  // 4. Sandbox Security & Permission Boundaries:
+  // Strictly isolate sandboxSession from device APIs and deny unpromptable permissions
+  sandboxSession.setDevicePermissionHandler(() => false);
+  sandboxSession.setBluetoothPairingHandler((_details, callback) => callback({ confirmed: false }));
+  pageView.webContents.setWebRTCIPHandlingPolicy('default_public_interface_only');
+
+  // Prompt user when an external site tries to download a file
+  sandboxSession.on('will-download', async (_event, item) => {
+    item.pause();
+
+    const filename = item.getFilename();
+    const totalBytes = item.getTotalBytes();
+    const sizeStr = totalBytes > 0 ? ` (${(totalBytes / (1024 * 1024)).toFixed(1)} MB)` : '';
+
+    const choice = await dialog.showMessageBox(sandboxWin, {
+      type: 'warning',
+      buttons: ['Cancel', 'Download Anyway'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'File Download Warning',
+      message: `The site tried to download "${filename}"${sizeStr}`,
+      detail:
+        'The safety of this file cannot be checked. Do not trust or download files from random links.\n\nDo you want to download this file anyway?',
+      noLink: true,
+    });
+
+    if (choice.response !== 1) {
+      item.cancel();
+      return;
+    }
+
+    const saveResult = await dialog.showSaveDialog(sandboxWin, {
+      title: 'Save Downloaded File',
+      defaultPath: path.join(app.getPath('downloads'), filename),
+    });
+
+    if (saveResult.canceled || !saveResult.filePath) {
+      item.cancel();
+      return;
+    }
+
+    item.setSavePath(saveResult.filePath);
+    item.resume();
+  });
+
+interface CapabilityExplanation {
+  label: string;
+  explanation: string;
+}
+
+function getCapabilityExplanation(permission: string, details?: any): CapabilityExplanation {
+  switch (permission) {
+    case 'pointerLock':
+      return {
+        label: 'Mouse Pointer Lock (Cursor Capture)',
+        explanation:
+          'Allows the website to lock and hide your mouse cursor inside the page (commonly used for 3D games and canvas). Warning: Malicious pages can abuse this to trap your cursor and make it difficult to navigate away or close the window.',
+      };
+    case 'fullscreen':
+      return {
+        label: 'Full Screen Mode',
+        explanation:
+          'Allows the website to expand and take over your entire display. Warning: Malicious pages can use full screen to simulate desktop dialogs or trap user interaction.',
+      };
+    case 'media': {
+      const types = (details as any)?.mediaTypes;
+      const isBoth = Array.isArray(types) && types.includes('video') && types.includes('audio');
+      const isVideo = Array.isArray(types) && types.includes('video');
+      const isAudio = Array.isArray(types) && types.includes('audio');
+      const label = isBoth ? 'Camera & Microphone' : isVideo ? 'Camera' : isAudio ? 'Microphone' : 'Camera & Microphone';
+      return {
+        label,
+        explanation: `Allows the website to capture live ${label.toLowerCase()} stream from your computer hardware.`,
+      };
+    }
+    case 'display-capture':
+      return {
+        label: 'Screen Recording / Window Sharing',
+        explanation: 'Allows the website to capture your computer display, active windows, or desktop screen.',
+      };
+    case 'geolocation':
+      return {
+        label: 'Location / Geolocation',
+        explanation: 'Allows the website to determine your physical location using Wi-Fi, IP, and network geolocation.',
+      };
+    case 'notifications':
+      return {
+        label: 'Desktop Notifications',
+        explanation: 'Allows the website to post popups and notification alerts to your desktop.',
+      };
+    case 'clipboard-read':
+      return {
+        label: 'Clipboard (Read Access)',
+        explanation: 'Allows the website to read data, text, or passwords currently copied to your system clipboard.',
+      };
+    case 'clipboard-sanitized-write':
+      return {
+        label: 'Clipboard (Write Access)',
+        explanation: 'Allows the website to write data to your system clipboard.',
+      };
+    case 'idle-detection':
+      return {
+        label: 'User Idle Detection',
+        explanation: 'Allows the website to monitor when you are active at your keyboard or away from your computer.',
+      };
+    case 'screen-wake-lock':
+      return {
+        label: 'Screen Wake Lock',
+        explanation: 'Allows the website to prevent your display from turning off or going to sleep.',
+      };
+    case 'window-management':
+      return {
+        label: 'Multi-Display / Window Management',
+        explanation: 'Allows the website to query information about connected screens and monitor resolutions.',
+      };
+    default:
+      return {
+        label: `Browser Capability: ${permission}`,
+        explanation: `The website is requesting access to the "${permission}" capability.`,
+      };
+  }
+}
+
+  // Permission Prompts: Intercept permissions and prompt user for explicit approval
   sandboxSession.setPermissionRequestHandler(async (webContents, permission, callback, details) => {
     let origin = 'This website';
     try {
@@ -460,18 +583,32 @@ export function createSandboxWindow(initialUrl: string): BrowserWindow {
       if (reqUrl) origin = new URL(reqUrl).origin;
     } catch {}
 
-    let permLabel: string = permission;
-    if (permission === 'media') {
-      const types = (details as any).mediaTypes;
-      permLabel = Array.isArray(types) && types.length > 0 ? types.join(' & ') : 'Camera & Microphone';
-    } else if (permission === 'geolocation') {
-      permLabel = 'Location / Geolocation';
-    } else if (permission === 'notifications') {
-      permLabel = 'Desktop Notifications';
-    } else if (permission === 'clipboard-read') {
-      permLabel = 'Clipboard (Read)';
+    // Handle host application breakout attempts
+    if (permission === 'openExternal') {
+      callback(false);
+      const targetUri = (details as any)?.externalURL || 'Unknown application URI';
+      let scheme = '';
+      try {
+        scheme = new URL(targetUri).protocol.replace(/:$/, '');
+      } catch {
+        scheme = targetUri.split(':')[0] || 'external';
+      }
+
+      if (!sandboxWin.isDestroyed()) {
+        dialog.showMessageBox(sandboxWin, {
+          type: 'warning',
+          buttons: ['OK'],
+          defaultId: 0,
+          title: 'External Application Request Blocked in Sandbox',
+          message: 'The website requested to open an external application:',
+          detail: `Target URI: ${targetUri}\nApplication / Protocol: ${scheme}://\n\nFor security, sandbox windows cannot launch desktop applications. If you want this website to interact with desktop apps, open this link in your default browser using the toolbar menu.`,
+          noLink: true,
+        });
+      }
+      return;
     }
 
+    const permInfo = getCapabilityExplanation(permission, details);
     const cacheKey = `${origin}:${permission}`;
     if (instance.permissions.has(cacheKey)) {
       callback(instance.permissions.get(cacheKey)!);
@@ -481,11 +618,11 @@ export function createSandboxWindow(initialUrl: string): BrowserWindow {
     const choice = await dialog.showMessageBox(sandboxWin, {
       type: 'question',
       buttons: ['Allow', 'Block'],
-      defaultId: 0,
+      defaultId: 1, // Default to Block for safety
       cancelId: 1,
       title: 'Sandbox Permission Request',
       message: `"${origin}" is requesting access to:`,
-      detail: `Permission: ${permLabel}\n\nDo you want to allow this sandboxed site to access ${permLabel}?\n\n(Zero data saved — Permissions are forgotten when this sandbox window closes.)`,
+      detail: `Permission: ${permInfo.label}\n\n${permInfo.explanation}\n\nDo you want to allow this sandboxed site to access this capability?\n\n(Zero data saved — Permissions are forgotten when this sandbox window closes.)`,
       noLink: true,
     });
 
@@ -535,9 +672,21 @@ export function createSandboxWindow(initialUrl: string): BrowserWindow {
     }
   });
 
-  // Keep target="_blank" and popups safely within the sandboxed view
+  // Navigation guard: Restrict top-level navigations strictly to http/https/about:blank
+  pageView.webContents.on('will-navigate', (event, navUrl) => {
+    if (!/^https?:\/\//i.test(navUrl) && navUrl !== 'about:blank') {
+      event.preventDefault();
+      console.warn('[Sandbox] Blocked navigation to non-HTTP(S) protocol:', navUrl);
+    }
+  });
+
+  // Keep target="_blank" and popups safely within the sandboxed view (restricting to http/https)
   pageView.webContents.setWindowOpenHandler((details) => {
-    pageView.webContents.loadURL(details.url);
+    if (/^https?:\/\//i.test(details.url) || details.url === 'about:blank') {
+      pageView.webContents.loadURL(details.url);
+    } else {
+      console.warn('[Sandbox] Blocked window.open to non-HTTP(S) protocol:', details.url);
+    }
     return { action: 'deny' };
   });
 
