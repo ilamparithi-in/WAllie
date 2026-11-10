@@ -74,8 +74,10 @@ export function registerChatExportHandlers(): void {
       data: string | Buffer
     ) => {
       const outputDirectory = validate(filePathSchema, rawOutputDirectory);
-      const filesDirName = typeof rawFilesDirName === 'string' ? rawFilesDirName.replace(/[/\\?%*:|"<>]/g, '_') : 'files';
-      const subPath = typeof rawSubPath === 'string' ? rawSubPath.replace(/\.\./g, '_') : 'file';
+      const filesDirName = chatExporterManager.sanitizeFilename(typeof rawFilesDirName === 'string' ? rawFilesDirName : 'files');
+      const subPath = typeof rawSubPath === 'string'
+        ? rawSubPath.replace(/\\/g, '/').split('/').map((s) => chatExporterManager.sanitizeFilename(s)).join('/')
+        : 'file';
       return await chatExporterManager.saveMediaFile(outputDirectory, filesDirName, subPath, data);
     }
   );
@@ -98,10 +100,12 @@ export function registerChatExportHandlers(): void {
     async (_event, rawOutputDirectory: unknown, rawFilesDirName: unknown, rawSubPath: unknown, rawSourcePath: unknown) => {
       const outputDirectory = validate(filePathSchema, rawOutputDirectory);
       const sourcePath = validate(filePathSchema, rawSourcePath);
-      const filesDirName = typeof rawFilesDirName === 'string' ? rawFilesDirName.replace(/[/\\?%*:|"<>]/g, '_') : 'files';
-      const subPath = typeof rawSubPath === 'string' ? rawSubPath.replace(/\.\./g, '_') : 'file';
+      const filesDirName = chatExporterManager.sanitizeFilename(typeof rawFilesDirName === 'string' ? rawFilesDirName : 'files');
+      const subPath = typeof rawSubPath === 'string'
+        ? rawSubPath.replace(/\\/g, '/').split('/').map((s) => chatExporterManager.sanitizeFilename(s)).join('/')
+        : 'file';
 
-      const fullDest = path.join(outputDirectory, filesDirName, subPath);
+      const fullDest = chatExporterManager.verifyContainedPath(outputDirectory, filesDirName, subPath);
       const destDir = path.dirname(fullDest);
       if (!fs.existsSync(destDir)) {
         fs.mkdirSync(destDir, { recursive: true });
@@ -173,7 +177,7 @@ export function registerChatExportHandlers(): void {
       try {
         const outputDirectory = validate(filePathSchema, rawOutputDirectory);
         const zipPath = validate(filePathSchema, rawZipPath);
-        const filesDirName = typeof rawFilesDirName === 'string' ? rawFilesDirName.replace(/[/\\?%*:|"<>]/g, '_') : 'files';
+        const filesDirName = chatExporterManager.sanitizeFilename(typeof rawFilesDirName === 'string' ? rawFilesDirName : 'files');
         const safeStanzaIds = Array.isArray(stanzaIds) ? stanzaIds.map((s) => String(s)) : [];
 
         if (!fs.existsSync(zipPath)) {
@@ -186,20 +190,22 @@ export function registerChatExportHandlers(): void {
 
         entries.sort((a, b) => a.entryName.localeCompare(b.entryName, undefined, { numeric: true, sensitivity: 'base' }));
 
-        const mediaDir = path.join(outputDirectory, filesDirName, 'media');
+        const mediaDir = chatExporterManager.verifyContainedPath(outputDirectory, filesDirName, 'media');
         await fs.promises.mkdir(mediaDir, { recursive: true });
 
         const mapping: Record<string, string> = {};
 
         for (let i = 0; i < entries.length; i++) {
           const zipEntry = entries[i];
-          const stanzaId = safeStanzaIds[i] || `album_item_${i + 1}`;
-          const ext = path.extname(zipEntry.entryName) || '.jpeg';
+          const rawStanzaId = safeStanzaIds[i] || `album_item_${i + 1}`;
+          const stanzaId = chatExporterManager.sanitizeFilename(rawStanzaId);
+          const rawExt = path.extname(zipEntry.entryName) || '.jpeg';
+          const ext = '.' + chatExporterManager.sanitizeFilename(rawExt.replace(/^\./, ''));
           const safeName = `${stanzaId}${ext}`;
-          const destPath = path.join(mediaDir, safeName);
+          const destPath = chatExporterManager.verifyContainedPath(mediaDir, safeName);
 
           await fs.promises.writeFile(destPath, zipEntry.getData());
-          mapping[stanzaId] = `${filesDirName}/media/${safeName}`;
+          mapping[rawStanzaId] = `${filesDirName}/media/${safeName}`;
         }
 
         if (downloadManager.isExportDownloadedPath(zipPath)) {

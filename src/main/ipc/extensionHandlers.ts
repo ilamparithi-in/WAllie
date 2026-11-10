@@ -37,6 +37,8 @@ export function registerExtensionHandlers(): void {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
+        webSecurity: true,
+        allowRunningInsecureContent: false,
       },
     });
 

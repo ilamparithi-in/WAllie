@@ -199,6 +199,8 @@ export function createMainWindow() {
       nodeIntegration: false,
       sandbox: true,
       visualZoom: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     } as any,
   });
 

@@ -22,7 +22,7 @@ if (process.platform === 'linux') {
 } else {
   app.commandLine.appendSwitch('enable-features', 'TouchpadPinch,PinchToZoom');
 }
-app.commandLine.appendSwitch('disable-features', 'TranslateUI');
+app.commandLine.appendSwitch('disable-features', 'TranslateUI,WaylandColorManagement');
 
 // Configure userData path: If running inside a Snap, point Chromium session & cache storage
 // to SNAP_USER_COMMON (~/snap/wallie/common/chromium-data) so heavy WhatsApp Web caches
