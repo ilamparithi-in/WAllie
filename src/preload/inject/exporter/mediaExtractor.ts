@@ -10,7 +10,6 @@ import type {
 } from '../../../shared/chatExportTypes';
 import {
   sleep,
-  getCollection,
   getMemberLabelsMap,
   dismissContextMenuSafely,
   clickElementThoroughly,

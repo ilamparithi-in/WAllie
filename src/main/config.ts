@@ -32,6 +32,9 @@ const storageSizeCache = new Map<string, { sizes: { cache: number; localStorage:
 export function loadSettings(): GlobalSettings {
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
+      try {
+        fs.chmodSync(SETTINGS_FILE, 0o600);
+      } catch { }
       const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
       const parsed = JSON.parse(data);
       let preloadAccountIds = parsed.preloadAccountIds;
@@ -122,7 +125,7 @@ export function loadSettings(): GlobalSettings {
 
 export async function saveSettings(settings: GlobalSettings) {
   try {
-    await fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+    await fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2), { encoding: 'utf8', mode: 0o600 });
   } catch (error) {
     console.error('Failed to save settings configuration:', error);
   }
@@ -131,6 +134,9 @@ export async function saveSettings(settings: GlobalSettings) {
 export function loadAccounts(): Account[] {
   try {
     if (fs.existsSync(ACCOUNTS_FILE)) {
+      try {
+        fs.chmodSync(ACCOUNTS_FILE, 0o600);
+      } catch { }
       const data = fs.readFileSync(ACCOUNTS_FILE, 'utf8');
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -186,7 +192,7 @@ export async function saveAccounts() {
       emoji: emoji || '',
       settings: settings || DEFAULT_ACCOUNT_SETTINGS,
     }));
-    await fs.promises.writeFile(ACCOUNTS_FILE, JSON.stringify(dataToSave, null, 2), 'utf8');
+    await fs.promises.writeFile(ACCOUNTS_FILE, JSON.stringify(dataToSave, null, 2), { encoding: 'utf8', mode: 0o600 });
   } catch (error) {
     console.error('Failed to save accounts configuration:', error);
   }

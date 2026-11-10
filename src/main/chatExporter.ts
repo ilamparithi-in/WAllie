@@ -1,19 +1,13 @@
-import { app, BrowserWindow, dialog, shell } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { state } from './state';
 import { getInitialWindowSize, getAppIcon, getPreloadPath } from './utils';
 import type {
   WhatsAppChatExport,
   ChatExportOptions,
-  MultiChatExportRequest,
   ChatExportProgress,
-  ChatExportResult,
 } from '../shared/chatExportTypes';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export class ChatExporterManager {
   private activeJobs = new Map<

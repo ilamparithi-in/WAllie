@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Plus, Shield, ArrowLeft, Users, RotateCw, FolderOpen, User, Trash2, Download, Copy, Check, Sliders, FileArchive } from 'lucide-react';
+import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Shield, ArrowLeft, Users, RotateCw, User, Download, Copy, Check, Sliders, FileArchive } from 'lucide-react';
 import type { AccountInfo, GlobalSettings, AppVersionInfo, AccountSettings, SystemFontInfo } from '../../preload';
 import { GeneralSettingsPage } from './settings/GeneralSettingsPage';
 import { PreloadSettingsPage } from './settings/PreloadSettingsPage';

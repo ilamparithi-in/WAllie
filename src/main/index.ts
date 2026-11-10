@@ -76,7 +76,7 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', (event, commandLine) => {
+  app.on('second-instance', (_event, commandLine) => {
     if (state.mainWindow) {
       if (state.mainWindow.isMinimized()) state.mainWindow.restore();
       state.mainWindow.show();

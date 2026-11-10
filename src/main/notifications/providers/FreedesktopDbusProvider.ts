@@ -2,6 +2,7 @@ import { app } from 'electron';
 import dbus from 'dbus-native';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import {
   NotificationProvider,
   NotificationPayload,
@@ -47,6 +48,8 @@ export class FreedesktopDbusProvider implements NotificationProvider {
   private serverCapabilities = new Set<string>();
   private activeNotifications = new Map<number, TrackedNotification>();
   private avatarCacheDir: string;
+  private avatarLruCache = new Map<string, string>();
+  private static readonly MAX_AVATAR_CACHE_ENTRIES = 50;
 
   constructor() {
     this.avatarCacheDir = path.join(app.getPath('userData'), 'cache', 'avatars');
@@ -208,13 +211,31 @@ export class FreedesktopDbusProvider implements NotificationProvider {
       clearTimeout(tracked.ttlTimer);
     }
 
-    if (tracked.tempAvatarPath) {
+    if (tracked.tempAvatarPath && !this.isPathInLru(tracked.tempAvatarPath)) {
       fs.promises.unlink(tracked.tempAvatarPath).catch(() => { });
     }
   }
 
+  private isPathInLru(filePath: string): boolean {
+    for (const p of this.avatarLruCache.values()) {
+      if (p === filePath) return true;
+    }
+    return false;
+  }
+
   private writeTempAvatar(dataUrl: string): string | null {
     try {
+      if (this.avatarLruCache.has(dataUrl)) {
+        const cachedPath = this.avatarLruCache.get(dataUrl)!;
+        if (fs.existsSync(cachedPath)) {
+          this.avatarLruCache.delete(dataUrl);
+          this.avatarLruCache.set(dataUrl, cachedPath);
+          return cachedPath;
+        } else {
+          this.avatarLruCache.delete(dataUrl);
+        }
+      }
+
       const match = dataUrl.match(/^data:image\/(png|jpe?g|webp);base64,([A-Za-z0-9+/=]+)$/);
       if (!match) return null;
 
@@ -222,10 +243,26 @@ export class FreedesktopDbusProvider implements NotificationProvider {
       const ext = rawExt === 'jpeg' ? 'jpg' : rawExt;
       const buffer = Buffer.from(match[2], 'base64');
 
-      const filename = `avatar-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+      const contentHash = crypto.createHash('sha256').update(buffer).digest('hex').substring(0, 16);
+      const filename = `avatar-${contentHash}.${ext}`;
       const fullPath = path.join(this.avatarCacheDir, filename);
 
-      fs.writeFileSync(fullPath, buffer, { mode: 0o600 });
+      if (!fs.existsSync(fullPath)) {
+        fs.writeFileSync(fullPath, buffer, { mode: 0o600 });
+      }
+
+      if (this.avatarLruCache.size >= FreedesktopDbusProvider.MAX_AVATAR_CACHE_ENTRIES) {
+        const oldestKey = this.avatarLruCache.keys().next().value;
+        if (oldestKey) {
+          const oldPath = this.avatarLruCache.get(oldestKey);
+          this.avatarLruCache.delete(oldestKey);
+          if (oldPath && oldPath !== fullPath && !this.isPathInLru(oldPath)) {
+            fs.promises.unlink(oldPath).catch(() => { });
+          }
+        }
+      }
+
+      this.avatarLruCache.set(dataUrl, fullPath);
       return fullPath;
     } catch (err) {
       console.error('[FreedesktopDbusProvider] Failed to cache avatar:', err);
@@ -371,6 +408,10 @@ export class FreedesktopDbusProvider implements NotificationProvider {
   }
 
   public async dispose(): Promise<void> {
+    for (const p of this.avatarLruCache.values()) {
+      fs.promises.unlink(p).catch(() => { });
+    }
+    this.avatarLruCache.clear();
     for (const id of Array.from(this.activeNotifications.keys())) {
       this.cleanupTracked(id);
     }

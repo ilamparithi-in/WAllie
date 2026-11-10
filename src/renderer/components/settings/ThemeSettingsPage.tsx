@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Palette, Type, Image as ImageIcon, Trash2, Upload, Monitor, Code, ChevronDown, Check, Loader2, AlertCircle, X, Info, Sun, Moon } from 'lucide-react';
+import { Palette, Type, Image as ImageIcon, Trash2, Upload, Monitor, Code, Check, Loader2, AlertCircle, X, Info, Sun, Moon } from 'lucide-react';
 import type { AccountInfo, SystemFontInfo } from '../../../preload';
 import { resolveGoogleFont, resolveGoogleFontUrl } from '../../../shared/fonts';
 
@@ -51,7 +51,6 @@ interface FontComboboxProps {
 
 const FontCombobox: React.FC<FontComboboxProps> = ({
   label,
-  sublabel,
   value,
   onChange,
   systemFonts,

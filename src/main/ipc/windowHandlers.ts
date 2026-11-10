@@ -3,7 +3,6 @@ import { state } from '../state';
 import {
   getInitialWindowSize,
   enforceWindowMinimumSize,
-  updateActiveViewBounds,
 } from '../window';
 import { saveWindowStateImmediate } from '../windowState';
 import { getActiveWebContents, resetZoom, changeZoom } from '../views';

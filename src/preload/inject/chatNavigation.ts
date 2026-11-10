@@ -56,8 +56,8 @@ export function clickChatRow(row: Element): void {
     row
   );
   triggerEvents(clickTarget, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
-  if (typeof (clickTarget as any).click === 'function') {
-    try { (clickTarget as any).click(); } catch (e) {}
+  if (clickTarget instanceof HTMLElement && typeof clickTarget.click === 'function') {
+    try { clickTarget.click(); } catch (e) {}
   }
 }
 
@@ -115,11 +115,11 @@ export function getSearchText(el: HTMLElement | null): string {
 export function setSearchText(el: HTMLElement, val: string): void {
   el.focus();
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-    const inputEl = el as HTMLInputElement;
+    const inputEl = el as HTMLInputElement & { _valueTracker?: { setValue(val: string): void } };
     const proto = el.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype;
 
     // Reset React internal valueTracker so synthetic change detection reliably fires
-    const tracker = (inputEl as any)._valueTracker;
+    const tracker = inputEl._valueTracker;
     if (tracker) {
       tracker.setValue(val === '' ? ' ' : '');
     }
@@ -186,8 +186,8 @@ export function restoreSearchBox(sbox: HTMLElement | null, originalText: string)
 
   if (clearBtn) {
     triggerEvents(clearBtn, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
-    if (typeof (clearBtn as any).click === 'function') {
-      try { (clearBtn as any).click(); } catch (e) {}
+    if (typeof (clearBtn as HTMLElement).click === 'function') {
+      try { (clearBtn as HTMLElement).click(); } catch (e) {}
     }
   } else {
     setSearchText(sbox, '');
@@ -314,10 +314,35 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
     chatHeaderObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
   } catch (e) {}
 
+  const activeNavTimers = new Set<ReturnType<typeof setInterval> | ReturnType<typeof setTimeout>>();
+
+  const registerNavInterval = (fn: () => void, ms: number): ReturnType<typeof setInterval> => {
+    const timer = setInterval(fn, ms);
+    activeNavTimers.add(timer);
+    return timer;
+  };
+
+  const clearNavTimer = (timer: ReturnType<typeof setInterval> | ReturnType<typeof setTimeout> | null | undefined): void => {
+    if (timer) {
+      clearInterval(timer);
+      clearTimeout(timer);
+      activeNavTimers.delete(timer);
+    }
+  };
+
+  const clearAllNavTimers = (): void => {
+    for (const timer of activeNavTimers) {
+      clearInterval(timer);
+      clearTimeout(timer);
+    }
+    activeNavTimers.clear();
+  };
+
   if (window.__wallie_ipc) {
-    window.__wallie_ipc.onNotificationClicked((arg: any) => {
-      const tag = typeof arg === 'string' ? arg : arg?.tag;
-      const contactName = typeof arg === 'object' ? arg?.contactName : '';
+    window.__wallie_ipc.onNotificationClicked((arg: { tag?: string; contactName?: string } | string) => {
+      clearAllNavTimers();
+      const tag = typeof arg === 'string' ? arg : arg?.tag || '';
+      const contactName = typeof arg === 'object' && arg ? arg.contactName || '' : '';
 
       // Activate portrait chat view immediately upon notification click
       setPortraitViewState('chat');
@@ -347,17 +372,17 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
 
       // Step 1: Give WhatsApp native notification callback a quick chance (~200ms) to open the chat
       let attempts = 0;
-      const checkNativeInterval = setInterval(() => {
+      const checkNativeInterval = registerNavInterval(() => {
         attempts++;
         if (isChatOpen(targetQuery)) {
-          clearInterval(checkNativeInterval);
+          clearNavTimer(checkNativeInterval);
           setPortraitViewState('chat');
           dismissActiveChat();
           return;
         }
 
         if (attempts >= 4) {
-          clearInterval(checkNativeInterval);
+          clearNavTimer(checkNativeInterval);
 
           // Step 2: Check if chat row is visible in sidebar without searching
           const row = findMatchingRow(targetQuery);
@@ -365,10 +390,10 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
             clickChatRow(row);
             setPortraitViewState('chat');
             let waitOpenAttempts = 0;
-            const waitOpen = setInterval(() => {
+            const waitOpen = registerNavInterval(() => {
               waitOpenAttempts++;
               if (isChatOpen(targetQuery) || waitOpenAttempts >= 10) {
-                clearInterval(waitOpen);
+                clearNavTimer(waitOpen);
                 setPortraitViewState('chat');
                 dismissActiveChat();
               }
@@ -383,20 +408,20 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
             setSearchText(sbox, contactName);
 
             let searchAttempts = 0;
-            const searchPoll = setInterval(() => {
+            const searchPoll = registerNavInterval(() => {
               searchAttempts++;
               const searchedRow = findMatchingRow(targetQuery);
               if (searchedRow) {
-                clearInterval(searchPoll);
+                clearNavTimer(searchPoll);
                 clickChatRow(searchedRow);
                 setPortraitViewState('chat');
 
                 // Wait for chat to open, then restore search box to previous state
                 let openAttempts = 0;
-                const openPoll = setInterval(() => {
+                const openPoll = registerNavInterval(() => {
                   openAttempts++;
                   if (isChatOpen(targetQuery) || openAttempts >= 15) {
-                    clearInterval(openPoll);
+                    clearNavTimer(openPoll);
                     setPortraitViewState('chat');
                     dismissActiveChat();
                     setTimeout(() => {
@@ -408,7 +433,7 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
               }
 
               if (searchAttempts > 25) {
-                clearInterval(searchPoll);
+                clearNavTimer(searchPoll);
                 restoreSearchBox(sbox, prevSearchText);
               }
             }, 50);
@@ -418,6 +443,7 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
     });
 
     window.__wallie_ipc.onSendInlineReply((data: { contactName: string; text: string; tag: string }) => {
+      clearAllNavTimers();
       const { contactName, text, tag } = data;
       let sendTriggered = false;
 
@@ -506,10 +532,10 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
         }
       }
 
-      const interval = setInterval(() => {
+      const interval = registerNavInterval(() => {
         attempts++;
         if (attempts > 50) {
-          clearInterval(interval);
+          clearNavTimer(interval);
           if (searched && sboxEl) {
             restoreSearchBox(sboxEl, prevSearchText);
           }
@@ -518,7 +544,7 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
 
         const comp = getComposer();
         if (comp && isChatOpen(targetQuery)) {
-          clearInterval(interval);
+          clearNavTimer(interval);
           doSendText(comp);
           if (searched && sboxEl) {
             setTimeout(() => {
