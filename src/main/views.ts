@@ -367,8 +367,8 @@ export function resetZoom(contents: Electron.WebContents) {
   try {
     const baseScale = (state.globalSettings?.appScale || 100) / 100;
     contents.setZoomFactor(baseScale);
-    contents.setVisualZoomLevelLimits(1, 1);
-    contents.setVisualZoomLevelLimits(1, 5);
+    contents.setVisualZoomLevelLimits(1, 1).catch(() => {});
+    contents.setVisualZoomLevelLimits(1, 5).catch(() => {});
     console.log(`Resetting zoom factor to baseline ${baseScale} (100%) and resetting visual zoom scale`);
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('zoom:changed', 100);
@@ -803,6 +803,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
       backgroundThrottling: true,
       sandbox: true,
       webSecurity: true,
+      allowRunningInsecureContent: false,
       v8CacheOptions: 'bypassHeatCheck',
       spellcheck: false,
       visualZoom: true,
@@ -815,8 +816,9 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
 
   view.webContents.setUserAgent(DEFAULT_USER_AGENT);
   view.webContents.setZoomFactor(baseScale);
-  view.webContents.setVisualZoomLevelLimits(1, 5);
-  view.webContents.loadURL('https://web.whatsapp.com');
+  view.webContents.loadURL('https://web.whatsapp.com').catch((err) => {
+    console.warn(`[Account ${account.id}] Initial loadURL aborted or failed:`, err?.message || err);
+  });
 
   view.webContents.on('dom-ready', () => {
     try {
@@ -846,7 +848,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   view.webContents.on('did-navigate', (_event, url) => {
     if (url === 'about:blank' || (!isWhatsAppUrl(url) && !url.startsWith('chrome-extension://'))) {
       console.warn(`[Account ${account.id}] Navigated away to ${url}, redirecting back to WhatsApp Web`);
-      view.webContents.loadURL('https://web.whatsapp.com');
+      view.webContents.loadURL('https://web.whatsapp.com').catch(() => {});
     }
   });
 

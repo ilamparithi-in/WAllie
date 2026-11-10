@@ -4,6 +4,21 @@
  * and renderer history views.
  */
 
+const HTML_ENTITY_HEX_REGEX = /&#x([0-9a-fA-F]+);/g;
+const HTML_ENTITY_DEC_REGEX = /&#(\d+);/g;
+const STRIP_HTML_REGEX = /<[^>]*>/g;
+const WHITESPACE_COLLAPSE_REGEX = /[\r\n\t]+/g;
+const MULTI_SPACE_REGEX = /\s+/g;
+const SAFE_TAG_REGEX = /<\/?(b|i|u|s|strike|tt|code|br)\b[^>]*>/gi;
+const SAFE_TAG_RESTORE_REGEX = /\uE000(\d+)\uE001/g;
+const CODE_BLOCK_REGEX = /```([\s\S]+?)```/g;
+const INLINE_CODE_REGEX = /`([^`\n]+)`/g;
+const BOLD_REGEX = /(^|[\s\p{P}\p{S}])\*([^\s*](?:[\s\S]*?[^\s*])?)\*(?=[\s\p{P}\p{S}]|$)/gu;
+const ITALIC_REGEX = /(^|[\s\p{P}\p{S}])_([^\s_](?:[\s\S]*?[^\s_])?)_(?=[\s\p{P}\p{S}]|$)/gu;
+const STRIKE_REGEX = /(^|[\s\p{P}\p{S}])~([^\s~](?:[\s\S]*?[^\s~])?)~(?=[\s\p{P}\p{S}]|$)/gu;
+const BR_TO_NEWLINE_REGEX = /<br\s*\/?>/gi;
+const TOKENIZE_REGEX = /```([\s\S]+?)```|`([^`\n]+)`|(?<=^|[\s\p{P}\p{S}])\*([^\s*](?:[\s\S]*?[^\s*])?)\*(?=[\s\p{P}\p{S}]|$)|(?<=^|[\s\p{P}\p{S}])_([^\s_](?:[\s\S]*?[^\s_])?)_(?=[\s\p{P}\p{S}]|$)|(?<=^|[\s\p{P}\p{S}])~([^\s~](?:[\s\S]*?[^\s~])?)~(?=[\s\p{P}\p{S}]|$)/gu;
+
 /**
  * Decodes all common HTML and XML entities (named, decimal, hex numeric).
  * Performs up to 2 passes to handle nested/double-escaped entities (e.g. &amp;apos;).
@@ -22,14 +37,14 @@ export function decodeHtmlEntities(str: string): string {
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&nbsp;/g, ' ')
-      .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => {
+      .replace(HTML_ENTITY_HEX_REGEX, (_, hex) => {
         try {
           return String.fromCodePoint(parseInt(hex, 16));
         } catch {
           return '';
         }
       })
-      .replace(/&#(\d+);/g, (_, dec) => {
+      .replace(HTML_ENTITY_DEC_REGEX, (_, dec) => {
         try {
           return String.fromCodePoint(parseInt(dec, 10));
         } catch {
@@ -46,7 +61,7 @@ export function decodeHtmlEntities(str: string): string {
  */
 export function stripHtmlTags(str: string): string {
   if (!str) return '';
-  return str.replace(/<[^>]*>/g, '');
+  return str.replace(STRIP_HTML_REGEX, '');
 }
 
 /**
@@ -59,7 +74,7 @@ export function formatNotificationSummary(title: string, maxLength = 256): strin
   if (!title) return '';
   let text = decodeHtmlEntities(title);
   text = stripHtmlTags(text);
-  text = text.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+  text = text.replace(WHITESPACE_COLLAPSE_REGEX, ' ').replace(MULTI_SPACE_REGEX, ' ').trim();
   return text.slice(0, maxLength);
 }
 
@@ -79,7 +94,6 @@ export function formatNotificationBody(rawBody: string, maxLength = 4096): strin
   }
 
   // Preserve existing safe tags if present
-  const SAFE_TAG_REGEX = /<\/?(b|i|u|s|strike|tt|code|br)\b[^>]*>/gi;
   const placeholders: string[] = [];
   text = text.replace(SAFE_TAG_REGEX, (match) => {
     const idx = placeholders.length;
@@ -94,7 +108,7 @@ export function formatNotificationBody(rawBody: string, maxLength = 4096): strin
     .replace(/>/g, '&gt;');
 
   // Restore safe tags normalized
-  text = text.replace(/\uE000(\d+)\uE001/g, (_, idx) => {
+  text = text.replace(SAFE_TAG_RESTORE_REGEX, (_, idx) => {
     let tag = placeholders[parseInt(idx, 10)];
     if (tag.startsWith('<strike')) tag = '<s>';
     else if (tag.startsWith('</strike')) tag = '</s>';
@@ -105,16 +119,11 @@ export function formatNotificationBody(rawBody: string, maxLength = 4096): strin
   });
 
   // WhatsApp formatting:
-  // 1. Monospace code block ```...```
-  text = text.replace(/```([\s\S]+?)```/g, '<tt>$1</tt>');
-  // 2. Inline code `...`
-  text = text.replace(/`([^`\n]+)`/g, '<tt>$1</tt>');
-  // 3. Bold *...*
-  text = text.replace(/(^|[\s\p{P}\p{S}])\*([^\s*](?:[\s\S]*?[^\s*])?)\*(?=[\s\p{P}\p{S}]|$)/gu, '$1<b>$2</b>');
-  // 4. Italic _..._
-  text = text.replace(/(^|[\s\p{P}\p{S}])_([^\s_](?:[\s\S]*?[^\s_])?)_(?=[\s\p{P}\p{S}]|$)/gu, '$1<i>$2</i>');
-  // 5. Strikethrough ~...~
-  text = text.replace(/(^|[\s\p{P}\p{S}])~([^\s~](?:[\s\S]*?[^\s~])?)~(?=[\s\p{P}\p{S}]|$)/gu, '$1<s>$2</s>');
+  text = text.replace(CODE_BLOCK_REGEX, '<tt>$1</tt>');
+  text = text.replace(INLINE_CODE_REGEX, '<tt>$1</tt>');
+  text = text.replace(BOLD_REGEX, '$1<b>$2</b>');
+  text = text.replace(ITALIC_REGEX, '$1<i>$2</i>');
+  text = text.replace(STRIKE_REGEX, '$1<s>$2</s>');
 
   return text;
 }
@@ -125,7 +134,7 @@ export function formatNotificationBody(rawBody: string, maxLength = 4096): strin
 export function stripNotificationMarkup(rawBody: string, maxLength = 4096): string {
   if (!rawBody) return '';
   let text = decodeHtmlEntities(rawBody.trim());
-  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(BR_TO_NEWLINE_REGEX, '\n');
   text = stripHtmlTags(text);
   if (text.length > maxLength) {
     text = text.slice(0, maxLength);
@@ -144,13 +153,13 @@ export interface FormattedToken {
 export function tokenizeFormattedText(rawText: string): FormattedToken[] {
   if (!rawText) return [];
   const text = decodeHtmlEntities(rawText);
-  const regex = /```([\s\S]+?)```|`([^`\n]+)`|(?<=^|[\s\p{P}\p{S}])\*([^\s*](?:[\s\S]*?[^\s*])?)\*(?=[\s\p{P}\p{S}]|$)|(?<=^|[\s\p{P}\p{S}])_([^\s_](?:[\s\S]*?[^\s_])?)_(?=[\s\p{P}\p{S}]|$)|(?<=^|[\s\p{P}\p{S}])~([^\s~](?:[\s\S]*?[^\s~])?)~(?=[\s\p{P}\p{S}]|$)/gu;
+  TOKENIZE_REGEX.lastIndex = 0;
 
   const tokens: FormattedToken[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = TOKENIZE_REGEX.exec(text)) !== null) {
     if (match.index > lastIndex) {
       tokens.push({ type: 'text', value: text.slice(lastIndex, match.index) });
     }
@@ -159,7 +168,7 @@ export function tokenizeFormattedText(rawText: string): FormattedToken[] {
     else if (match[3] !== undefined) tokens.push({ type: 'bold', value: match[3] });
     else if (match[4] !== undefined) tokens.push({ type: 'italic', value: match[4] });
     else if (match[5] !== undefined) tokens.push({ type: 'strike', value: match[5] });
-    lastIndex = regex.lastIndex;
+    lastIndex = TOKENIZE_REGEX.lastIndex;
   }
 
   if (lastIndex < text.length) {

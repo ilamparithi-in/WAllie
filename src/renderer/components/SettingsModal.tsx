@@ -44,6 +44,7 @@ const SETTINGS_MENU_ITEMS: {
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialPage, initialAccountId, onShowDisclaimer }) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
   const [activePage, setActivePage] = useState<PageType>('main');
 
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
@@ -588,7 +589,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
         {/* Main Menu Page */}
         <div className={`absolute inset-0 p-4 overflow-y-auto transition-transform duration-300 ease-in-out flex flex-col ${activePage === 'main' ? 'translate-x-0' : '-translate-x-full pointer-events-none invisible'
           }`}>
-          <div className="flex flex-col space-y-2 select-text pb-4">
+          <div
+            ref={menuContainerRef}
+            role="navigation"
+            aria-label="Settings Categories"
+            onKeyDown={(e) => {
+              if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
+              const container = menuContainerRef.current;
+              if (!container) return;
+              const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('button.settings-menu-card'));
+              if (buttons.length === 0) return;
+              const activeIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+              let nextIndex = activeIndex;
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                nextIndex = activeIndex === -1 || activeIndex === buttons.length - 1 ? 0 : activeIndex + 1;
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                nextIndex = activeIndex <= 0 ? buttons.length - 1 : activeIndex - 1;
+              } else if (e.key === 'Home') {
+                e.preventDefault();
+                nextIndex = 0;
+              } else if (e.key === 'End') {
+                e.preventDefault();
+                nextIndex = buttons.length - 1;
+              }
+              buttons[nextIndex]?.focus();
+            }}
+            className="flex flex-col space-y-2 select-text pb-4"
+          >
             {SETTINGS_MENU_ITEMS.map((item) => {
               const IconComponent = item.icon;
               return (

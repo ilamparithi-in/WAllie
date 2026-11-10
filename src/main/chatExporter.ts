@@ -29,12 +29,38 @@ export class ChatExporterManager {
 
   /**
    * Cleans filename strings for safe cross-platform filesystem use.
+   * Strips directory traversal sequences and invalid filesystem characters.
    */
   public sanitizeFilename(name: string): string {
-    return (name || 'WhatsApp-Chat')
+    let sanitized = (name || 'WhatsApp-Chat')
       .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+      .replace(/\.{2,}/g, '_') // block directory traversal like ".."
+      .replace(/^[\.\s]+|[\.\s]+$/g, '') // strip leading and trailing dots / whitespace
       .trim()
       .slice(0, 100);
+
+    if (
+      !sanitized ||
+      sanitized === '.' ||
+      sanitized === '..' ||
+      /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(sanitized)
+    ) {
+      sanitized = 'WhatsApp-Chat';
+    }
+    return sanitized;
+  }
+
+  /**
+   * Verifies that target path strictly resolves inside the expected base directory.
+   * Throws an error if path traversal is detected.
+   */
+  public verifyContainedPath(baseDir: string, ...segments: string[]): string {
+    const resolvedBase = path.resolve(baseDir);
+    const resolvedTarget = path.resolve(baseDir, ...segments);
+    if (!resolvedTarget.startsWith(resolvedBase + path.sep) && resolvedTarget !== resolvedBase) {
+      throw new Error(`Security Exception: Path traversal attempt outside base directory: ${path.join(...segments)}`);
+    }
+    return resolvedTarget;
   }
 
   /**
@@ -85,11 +111,11 @@ export class ChatExporterManager {
   public prepareExportPaths(outputDirectory: string, chatTitle: string) {
     const safeTitle = this.sanitizeFilename(chatTitle);
     const filesDirName = `${safeTitle}_files`;
-    const filesDirPath = path.join(outputDirectory, filesDirName);
-    const mediaDirPath = path.join(filesDirPath, 'media');
-    const avatarsDirPath = path.join(filesDirPath, 'avatars');
-    const jsonPath = path.join(outputDirectory, `${safeTitle}.json`);
-    const htmlPath = path.join(outputDirectory, `${safeTitle}.html`);
+    const filesDirPath = this.verifyContainedPath(outputDirectory, filesDirName);
+    const mediaDirPath = this.verifyContainedPath(filesDirPath, 'media');
+    const avatarsDirPath = this.verifyContainedPath(filesDirPath, 'avatars');
+    const jsonPath = this.verifyContainedPath(outputDirectory, `${safeTitle}.json`);
+    const htmlPath = this.verifyContainedPath(outputDirectory, `${safeTitle}.html`);
 
     fs.mkdirSync(mediaDirPath, { recursive: true });
     fs.mkdirSync(avatarsDirPath, { recursive: true });
@@ -114,7 +140,14 @@ export class ChatExporterManager {
     subPath: string, // e.g. "media/3EB0XX.jpeg" or "avatars/123@lid.jpg"
     data: Buffer | ArrayBuffer | string // binary buffer or base64 data url
   ): Promise<string> {
-    const fullPath = path.join(outputDirectory, filesDirName, subPath);
+    const safeFilesDir = this.sanitizeFilename(filesDirName);
+    const safeSubPath = subPath
+      .replace(/\\/g, '/')
+      .split('/')
+      .map((part) => this.sanitizeFilename(part))
+      .join('/');
+
+    const fullPath = this.verifyContainedPath(outputDirectory, safeFilesDir, safeSubPath);
     const dir = path.dirname(fullPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -139,7 +172,7 @@ export class ChatExporterManager {
       await fs.promises.writeFile(fullPath, data);
     }
 
-    return `${filesDirName}/${subPath}`;
+    return `${safeFilesDir}/${safeSubPath}`;
   }
 
   /**
@@ -296,6 +329,8 @@ export class ChatExporterManager {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
+        webSecurity: true,
+        allowRunningInsecureContent: false,
       },
     });
 

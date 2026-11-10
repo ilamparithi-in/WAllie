@@ -44,6 +44,20 @@ export function handleThemeUpdate() {
       }
     }
   }
+
+  for (const callWin of state.callWindows) {
+    if (callWin && !callWin.isDestroyed()) {
+      try {
+        callWin.setBackgroundColor(bgColor);
+        callWin.webContents.send('theme:changed', {
+          themeMode,
+          shouldUseDarkColors: isDark,
+        });
+      } catch (e) {
+        console.error('[Theme] Error updating call window theme:', e);
+      }
+    }
+  }
 }
 
 export function applyThemeMode(themeMode: 'system' | 'light' | 'dark') {

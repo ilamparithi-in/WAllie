@@ -16,8 +16,25 @@ function resolveAssetSha(asset) {
     return asset.digest.replace(/^sha256:/, '');
   }
   console.log(`[Homebrew Updater] Downloading ${asset.name} to compute SHA256...`);
-  const buffer = execFileSync('curl', ['-sL', asset.url], { maxBuffer: 500 * 1024 * 1024 });
-  return crypto.createHash('sha256').update(buffer).digest('hex');
+  const tmpFile = path.join(os.tmpdir(), `wallie-asset-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`);
+  try {
+    execFileSync('curl', ['-sL', asset.url, '-o', tmpFile]);
+    const hash = crypto.createHash('sha256');
+    const fd = fs.openSync(tmpFile, 'r');
+    const buffer = Buffer.alloc(64 * 1024);
+    let bytesRead = 0;
+    while ((bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) {
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+    fs.closeSync(fd);
+    return hash.digest('hex');
+  } finally {
+    try {
+      if (fs.existsSync(tmpFile)) {
+        fs.unlinkSync(tmpFile);
+      }
+    } catch {}
+  }
 }
 
 async function main() {
