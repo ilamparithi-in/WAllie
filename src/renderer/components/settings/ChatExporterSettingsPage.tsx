@@ -8,8 +8,6 @@ import {
   Square,
   Users,
   MessageSquare,
-  FileText,
-  Clock,
   X,
   Sparkles,
 } from 'lucide-react';

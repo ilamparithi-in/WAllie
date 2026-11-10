@@ -1,7 +1,6 @@
 import { app, dialog, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
-import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { state } from './state';
 import { showAppToast, getConfigDir } from './utils';
@@ -74,7 +73,7 @@ export class DownloadManager extends EventEmitter {
       if (this.history.length > 200) {
         this.history = this.history.slice(0, 200);
       }
-      await fs.promises.writeFile(this.downloadsFile, JSON.stringify(this.history, null, 2), 'utf8');
+      await fs.promises.writeFile(this.downloadsFile, JSON.stringify(this.history, null, 2), { encoding: 'utf8', mode: 0o600 });
     } catch (err) {
       console.error('Failed to save download history:', err);
     }
@@ -517,7 +516,7 @@ export class DownloadManager extends EventEmitter {
 
   public handleWillDownload(
     item: Electron.DownloadItem,
-    webContents: Electron.WebContents,
+    _webContents: Electron.WebContents,
     accountId: string
   ): void {
     const fileName = item.getFilename();

@@ -148,7 +148,7 @@ export class ElectronNativeProvider implements NotificationProvider {
   }
 
   public async dispose(): Promise<void> {
-    for (const [key, entry] of this.activeNotifications.entries()) {
+    for (const entry of this.activeNotifications.values()) {
       if (entry.timer) clearTimeout(entry.timer);
       try {
         entry.notif.close();

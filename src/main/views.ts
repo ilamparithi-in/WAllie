@@ -1,19 +1,13 @@
-import { app, BrowserWindow, WebContentsView, Menu, session, desktopCapturer, shell, Notification, dialog, clipboard, nativeTheme } from 'electron';
-import path from 'node:path';
+import { BrowserWindow, WebContentsView, Menu, session, desktopCapturer, shell, dialog, clipboard, nativeTheme } from 'electron';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { state } from './state';
 import { DEFAULT_USER_AGENT, saveAccounts, saveSettings } from './config';
-import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, getAppIcon, getInitialWindowSize, showAppToast, getSystemDesktopFontName } from './utils';
-import { Account, DEFAULT_ACCOUNT_SETTINGS } from '../shared/types';
+import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, showAppToast, getSystemDesktopFontName } from './utils';
+import { Account } from '../shared/types';
 import { resolveGoogleFontUrl } from '../shared/fonts';
-import { TITLEBAR_HEIGHT } from '../shared/constants';
 import { downloadManager } from './downloads';
 import { prepareExtensionForElectron } from './extensions';
 import { createSandboxWindow } from './sandbox';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export const OLED_THEME_CSS = `
 /* OLED Dark Theme overrides */
@@ -132,7 +126,6 @@ export async function buildAccountStyling(account: Account): Promise<{ fontCss: 
     preferGoogleFont = false,
     monoFontFamily = '',
     monoFontUrl = '',
-    preferGoogleMonoFont = false,
     followSystemFont = false,
     customWallpaper = '',
   } = account.settings || {};
@@ -384,7 +377,7 @@ export function getActiveWebContents(): Electron.WebContents | null {
 }
 
 export function registerContextMenu(webContents: Electron.WebContents) {
-  webContents.on('context-menu', (event, params) => {
+  webContents.on('context-menu', (_event, params) => {
     const menuItems: Electron.MenuItemConstructorOptions[] = [];
 
     const isEditable = params.isEditable;
@@ -692,7 +685,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
     state.configuredSessions.add(account.partition);
 
     // Permission Request Handler
-    accountSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    accountSession.setPermissionRequestHandler((_webContents, permission, callback, details) => {
       const url = details.requestingUrl;
       if (isWhatsAppUrl(url)) {
         const targetAccount = state.accounts.find((a) => a.partition === account.partition);
@@ -706,7 +699,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
     });
 
     // Permission Check Handler
-    accountSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+    accountSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin, details) => {
       if (isWhatsAppUrl(requestingOrigin)) {
         const targetAccount = state.accounts.find((a) => a.partition === account.partition);
         if (targetAccount) {
@@ -717,7 +710,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
     });
 
     // Screen Sharing / Display Media Request Handler
-    accountSession.setDisplayMediaRequestHandler((request, callback) => {
+    accountSession.setDisplayMediaRequestHandler((_request, callback) => {
       const isWayland = process.platform === 'linux' && (!!process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland');
 
       if (isWayland) {

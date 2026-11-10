@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen } from 'electron';
+import { BrowserWindow, screen } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { state } from './state';
@@ -119,7 +119,7 @@ export function saveWindowStateImmediate(win?: BrowserWindow | null): void {
       isMaximized,
     };
 
-    fs.writeFileSync(WINDOW_STATE_FILE, JSON.stringify(stateToSave, null, 2), 'utf-8');
+    fs.writeFileSync(WINDOW_STATE_FILE, JSON.stringify(stateToSave, null, 2), { encoding: 'utf-8', mode: 0o600 });
   } catch (err) {
     console.error('[WindowState] Failed to save window state:', err);
   }

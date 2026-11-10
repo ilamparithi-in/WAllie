@@ -82,14 +82,6 @@ const formatHeaderDate = (dateKey: string): string => {
   });
 };
 
-const formatDismissalDisplay = (sec?: number): string => {
-  if (sec === undefined || sec === 10) return '10s (Default)';
-  if (sec === -1) return 'System Default';
-  if (sec === 0) return 'Never (Persistent)';
-  if (sec >= 60 && sec % 60 === 0) return `${sec / 60}m (${sec}s)`;
-  return `${sec}s`;
-};
-
 const formatRetentionDisplay = (days?: number): string => {
   if (days === undefined || days === 30) return '30d (Default)';
   if (days === 0) return 'Forever';

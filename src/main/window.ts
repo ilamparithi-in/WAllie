@@ -1,12 +1,11 @@
-import { app, BrowserWindow, WebContentsView, Tray, Menu, nativeImage, Notification, session, dialog, shell, screen, nativeTheme } from 'electron';
+import { app, BrowserWindow, WebContentsView, Tray, Menu, Notification, session, dialog, nativeTheme } from 'electron';
 import path from 'node:path';
-import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
-import { getAppIcon, isWhatsAppUrl, getAccountById, getAccountsWithLoadedStatus, getPreloadPath, getInitialWindowSize } from './utils';
-import { createAccountView, pauseAllMedia, injectCustomCssForView, registerZoomShortcuts, registerContextMenu, handleExternalLinkClick } from './views';
+import { getAppIcon, getAccountById, getAccountsWithLoadedStatus, getPreloadPath, getInitialWindowSize } from './utils';
+import { createAccountView, injectCustomCssForView, registerZoomShortcuts, registerContextMenu, handleExternalLinkClick } from './views';
 import { safeDeleteExtensionDir } from './extensions';
-import { saveSettings, saveAccounts, ACCOUNTS_FILE } from './config';
+import { saveAccounts } from './config';
 import { TITLEBAR_HEIGHT } from '../shared/constants';
 import { DEFAULT_MIN_WINDOW_WIDTH, DEFAULT_MIN_WINDOW_HEIGHT } from '../shared/types';
 import { loadWindowState, saveWindowStateImmediate, debouncedSaveWindowState } from './windowState';

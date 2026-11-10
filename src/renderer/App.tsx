@@ -19,7 +19,7 @@ import type { SettingsPageType } from './types';
 
 export const App: React.FC = () => {
   // Domain hooks
-  const { accounts, activeAccountId, isActiveAccountLoaded } = useAccounts();
+  const { isActiveAccountLoaded } = useAccounts();
   const { globalSettings, updateGlobalSettings } = useGlobalSettings();
   const globalSettingsRef = useRef(globalSettings);
   globalSettingsRef.current = globalSettings;

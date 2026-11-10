@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Minus, Square, Copy, X, Settings, Plus, MessageSquare, RotateCw, Code, Bell } from 'lucide-react';
+import { Minus, Square, Copy, X, Settings, Plus, RotateCw, Code, Bell } from 'lucide-react';
 import type { AccountInfo } from '../../preload';
 
 interface TitlebarProps {

@@ -644,7 +644,7 @@ function getCapabilityExplanation(permission: string, details?: any): Capability
   sandboxWin.on('resize', () => instance.updateBounds());
 
   // 7. Synchronize web view lifecycle and toolbar state
-  pageView.webContents.on('did-start-navigation', (_e, navUrl, isInPlace, isMainFrame) => {
+  pageView.webContents.on('did-start-navigation', (_e, navUrl, _isInPlace, isMainFrame) => {
     if (isMainFrame && navUrl && navUrl !== 'about:blank') {
       instance.sendStateUpdate(navUrl);
     }

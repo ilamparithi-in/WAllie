@@ -1,10 +1,10 @@
-import { app, WebContents } from 'electron';
+import { WebContents } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { state } from './state';
 import { switchActiveAccount } from './window';
 import { getAccountForWebContents, getConfigDir } from './utils';
-import { HistoricalNotification, TimelineEntry, MessageEntry } from '../shared/types';
+import { TimelineEntry } from '../shared/types';
 import { getAccountDisplayName } from '../shared/constants';
 import { decodeHtmlEntities } from '../shared/notificationFormatting';
 import { notificationManager } from './notifications/index';
@@ -76,7 +76,7 @@ export function scheduleHistoryFlush() {
     if (state.notificationHistoryCache) {
       try {
         const tempFile = `${NOTIFICATION_HISTORY_FILE}.tmp`;
-        await fs.promises.writeFile(tempFile, JSON.stringify(state.notificationHistoryCache, null, 2), 'utf8');
+        await fs.promises.writeFile(tempFile, JSON.stringify(state.notificationHistoryCache, null, 2), { encoding: 'utf8', mode: 0o600 });
         await fs.promises.rename(tempFile, NOTIFICATION_HISTORY_FILE);
       } catch (error) {
         console.error('Failed to flush notification history to disk:', error);

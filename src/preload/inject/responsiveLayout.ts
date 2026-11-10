@@ -402,7 +402,7 @@ function lockMainScreenScroll(): void {
 
     const origScrollTo = container.scrollTo;
     if (origScrollTo) {
-      container.scrollTo = function (optionsOrX?: any, y?: any) {
+      container.scrollTo = function (optionsOrX?: any, _y?: any) {
         if (isPortraitActive) {
           if (typeof optionsOrX === 'object' && optionsOrX !== null) {
             optionsOrX = { ...optionsOrX, left: 0 };
