@@ -535,9 +535,21 @@ function setupEventListeners(): void {
         '#side [role="row"], #side [data-testid^="list-item-"], #side [role="listitem"]'
       );
       if (chatListItem) {
-        if (isPortraitActive) {
-          setPortraitViewState('chat');
-          setTimeout(injectBackButton, 50);
+        // Do not trigger a pane change if clicking on the gap/space between chats (e.g. 4px vertical
+        // row margin/padding, 10px horizontal gutter divs/spans), selection checkboxes, or dropdown menu triggers.
+        const isContextOrSelectTrigger = !!target.closest(
+          '[data-testid="down-context"], [data-icon="down-context"], button, input[type="checkbox"], [role="checkbox"]'
+        );
+        const cellContainer = target.closest(
+          '[data-testid="cell-frame-container"], [data-testid="cell-frame-title"], [data-testid="cell-frame-primary-detail"], [data-testid="cell-frame-secondary"]'
+        );
+        const isClickableChat = !!cellContainer && chatListItem.contains(cellContainer) && !isContextOrSelectTrigger;
+
+        if (isClickableChat) {
+          if (isPortraitActive) {
+            setPortraitViewState('chat');
+            setTimeout(injectBackButton, 50);
+          }
         }
         return;
       }
@@ -550,12 +562,16 @@ function setupEventListeners(): void {
         const activeTab = getActiveTabLabel();
         if (activeTab.includes('call')) {
           // Clicking a call history item opens Call Info in drawer-middle
-          if (isPortraitActive) {
+          const isCallItem = !!target.closest('[data-testid="cell-frame-container"], [data-testid="cell-frame-title"]') &&
+            !target.closest('button, [role="button"]:not([role="row"])');
+          if (isPortraitActive && isCallItem) {
             setPortraitViewState('chat');
           }
         } else if (activeTab.includes('channel')) {
           // Clicking a channel opens chat in #main
-          if (isPortraitActive) {
+          const isChannelItem = !!target.closest('[data-testid="cell-frame-container"], [data-testid="cell-frame-title"]') &&
+            !target.closest('[data-testid="down-context"], [data-icon="down-context"], button');
+          if (isPortraitActive && isChannelItem) {
             setPortraitViewState('chat');
             setTimeout(injectBackButton, 50);
           }
