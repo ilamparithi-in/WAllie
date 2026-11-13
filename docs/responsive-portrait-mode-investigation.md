@@ -171,7 +171,8 @@ graph TD
 #### 2. Attachment Popup Menu (`button[aria-label="Attach"]` / `+`)
 - **Problem**: The popover container (`div.xu96u03`) uses `transform: translate(102px, 642px) translate(-50%, -100%)`. With a menu width of ~171px and the Attach button center at ~102px, `102px - (171px / 2) = 16.5px`, causing the menu to overlap the 64px navigation rail by ~48px.
 - **Solution**:
-  - Specifically target bottom popup menus using `div.xu96u03[style*="-50%, -100%)"]` (avoiding false positives with top-down menus like the 3-dots chat menu which use `translate(-100%, 0px)`).
+  - Target bottom popup menus specifically using `div.xu96u03[style*="-50%, -100%)"]:has([data-menu-content="true"]):not(:has([role="tooltip"]))`.
+  - Adding `:has([data-menu-content="true"]):not(:has([role="tooltip"]))` ensures that bottom-anchored tooltips (such as the Voice Message button tooltip) are not inadvertently shifted, preventing right-viewport overflow and scrollbar flicker.
   - Apply `left: 52px !important;` in portrait mode or collapsed landscape mode. This shifts the menu coordinate by 52px (`16.4px + 52px = 68.4px`), placing it right beside the 64px rail with a clean 4px gutter.
 
 #### 3. Fullscreen Profile Photo & Media Lightbox Overlays (`.app-wrapper-web > span:has(> div)`)

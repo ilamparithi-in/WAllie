@@ -15,7 +15,7 @@ import {
   notifyAccountListChanged,
 } from '../window';
 import { injectAccountStyling } from '../views';
-import { Account, AccountSettings, DEFAULT_ACCOUNT_SETTINGS } from '../../shared/types';
+import { AccountSettings, DEFAULT_ACCOUNT_SETTINGS } from '../../shared/types';
 import {
   validate,
   accountIdSchema,
