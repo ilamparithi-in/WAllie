@@ -234,9 +234,9 @@ const RESPONSIVE_CSS = `
     width: 100% !important;
   }
 
-  /* Attachment Popup Menu Positioning */
-  html[data-wallie-portrait="true"] div.xu96u03[style*="-50%, -100%)"],
-  html:not([data-wallie-portrait="true"])[data-wallie-sidebar-collapsed="true"] div.xu96u03[style*="-50%, -100%)"] {
+  /* Attachment Popup Menu Positioning (target menu popups only, excluding tooltips) */
+  html[data-wallie-portrait="true"] div.xu96u03[style*="-50%, -100%)"]:has([data-menu-content="true"]):not(:has([role="tooltip"])),
+  html:not([data-wallie-portrait="true"])[data-wallie-sidebar-collapsed="true"] div.xu96u03[style*="-50%, -100%)"]:has([data-menu-content="true"]):not(:has([role="tooltip"])) {
     left: 52px !important;
   }
 
