@@ -61,10 +61,12 @@ export interface ElectronAPI {
   maximizeWindow: () => void;
   closeWindow: () => void;
   isMaximized: () => Promise<boolean>;
+  isFullScreen: () => Promise<boolean>;
   resetWindowSize: () => Promise<boolean>;
   toggleAlwaysOnTop: () => void;
   getAlwaysOnTop: () => Promise<boolean>;
   onAlwaysOnTopChanged: (callback: (isAlwaysOnTop: boolean) => void) => () => void;
+  platform: string;
 
   // Account controls
   getAccounts: () => Promise<AccountInfo[]>;
@@ -144,6 +146,7 @@ export interface ElectronAPI {
   onAccountListChanged: (callback: (accounts: AccountInfo[], activeId: string) => void) => () => void;
   onUnreadCountChanged: (callback: (accountId: string, count: number) => void) => () => void;
   onMaximizedStateChanged: (callback: (isMaximized: boolean) => void) => () => void;
+  onFullScreenChanged: (callback: (isFullScreen: boolean) => void) => () => void;
   onZoomChanged: (callback: (zoomPercent: number) => void) => () => void;
   onTriggerRename: (callback: (accountId: string) => void) => () => void;
   onNotificationHistoryChanged: (callback: (history: HistoricalNotification[]) => void) => () => void;
@@ -190,9 +193,11 @@ export const api: ElectronAPI = {
   maximizeWindow: () => ipcRenderer.send('window:maximize'),
   closeWindow: () => ipcRenderer.send('window:close'),
   isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+  isFullScreen: () => ipcRenderer.invoke('window:isFullScreen'),
   resetWindowSize: () => ipcRenderer.invoke('window:reset-size'),
   toggleAlwaysOnTop: () => ipcRenderer.send('window:toggle-always-on-top'),
   getAlwaysOnTop: () => ipcRenderer.invoke('window:get-always-on-top'),
+  platform: process.platform,
 
   getAccounts: () => ipcRenderer.invoke('account:get-all'),
   getActiveAccountId: () => ipcRenderer.invoke('account:get-active-id'),
@@ -298,6 +303,12 @@ export const api: ElectronAPI = {
     const subscription = (_event: unknown, isMaximized: boolean) => callback(isMaximized);
     ipcRenderer.on('window:maximized-changed', subscription);
     return () => ipcRenderer.removeListener('window:maximized-changed', subscription);
+  },
+
+  onFullScreenChanged: (callback) => {
+    const subscription = (_event: unknown, isFullScreen: boolean) => callback(isFullScreen);
+    ipcRenderer.on('window:fullscreen-changed', subscription);
+    return () => ipcRenderer.removeListener('window:fullscreen-changed', subscription);
   },
 
   onZoomChanged: (callback) => {

@@ -49,6 +49,11 @@ export function registerWindowHandlers(): void {
     return win?.isMaximized() ?? false;
   });
 
+  ipcMain.handle('window:isFullScreen', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) || state.mainWindow;
+    return win?.isFullScreen() ?? false;
+  });
+
   ipcMain.handle('window:reset-size', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender) || state.mainWindow;
     if (!win || win.isDestroyed()) return false;

@@ -9,9 +9,11 @@ interface TitlebarProps {
 }
 
 export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNotificationHistory, isDisclaimerAccepted = true }) => {
+  const isMac = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin';
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [activeId, setActiveId] = useState<string>('');
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
+  const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
   const [zoomPercent, setZoomPercent] = useState<number>(100);
   const [showFlash, setShowFlash] = useState<boolean>(false);
   const [showDevTools, setShowDevTools] = useState<boolean>(false);
@@ -39,6 +41,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
     });
     window.electronAPI.getActiveAccountId().then(setActiveId);
     window.electronAPI.isMaximized().then(setIsMaximized);
+    window.electronAPI.isFullScreen?.().then(setIsFullScreen);
     window.electronAPI.getGlobalSettings().then((settings) => {
       setShowDevTools(!!settings.showDevToolsToggle);
       if (settings.showRefreshButton !== undefined) {
@@ -66,6 +69,10 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
 
     const unsubscribeMaximized = window.electronAPI.onMaximizedStateChanged((maxState) => {
       setIsMaximized(maxState);
+    });
+
+    const unsubscribeFullScreen = window.electronAPI.onFullScreenChanged?.((fsState) => {
+      setIsFullScreen(fsState);
     });
 
     let flashTimeout: NodeJS.Timeout | null = null;
@@ -113,6 +120,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
       unsubscribeAccount();
       unsubscribeUnread();
       unsubscribeMaximized();
+      unsubscribeFullScreen?.();
       unsubscribeZoom();
       unsubscribeTriggerRename();
       unsubscribeGlobalSettings();
@@ -182,15 +190,25 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
     window.electronAPI?.showAccountContextMenu(id);
   };
 
+  const showTrafficLightSpacer = isMac && !isFullScreen;
+
   return (
     <header className="h-[28px] w-full bg-[#111b21] border-b border-[#222d34] flex items-center justify-between select-none text-[#aebac1] text-xs font-sans app-titlebar">
+      {/* macOS Traffic Lights Spacer (draggable window region) */}
+      {showTrafficLightSpacer && (
+        <div
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+          className="w-[78px] h-full flex-shrink-0"
+        />
+      )}
+
       {/* Left: App Logo & Account Tabs */}
       <div
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        className="flex items-center h-full overflow-hidden pl-2 gap-1"
+        className={`flex items-center h-full overflow-hidden ${showTrafficLightSpacer ? 'pl-0' : 'pl-2'} gap-1`}
       >
         {/* Branding Icon */}
-        <div className="flex items-center justify-center pr-1.5" title="WhatsApp Linux">
+        <div className="flex items-center justify-center pr-1.5" title="WAllie">
           <img src="./icon.png" alt="WAllie" className="w-4 h-4 object-contain" />
         </div>
 
@@ -274,7 +292,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
       {/* Right: Settings Gear + Window Controls */}
       <div
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        className="flex items-center h-full gap-0.5"
+        className={`flex items-center h-full gap-0.5 ${isMac ? 'pr-2' : ''}`}
       >
         {isDisclaimerAccepted && (
           <>
@@ -289,11 +307,10 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
                 tabIndex={-1}
                 title="Zoom level active. Click to reset to 100%"
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                className={`flex items-center justify-center px-1.5 h-[18px] rounded text-[10px] font-extrabold tracking-wide transition-all duration-200 focus:outline-none ${
-                  showFlash
-                    ? 'bg-[#00a884] text-[#111b21] scale-105 shadow-md'
-                    : 'bg-[#202c33] text-[#00a884] hover:bg-[#2a3942] hover:text-[#e9edef]'
-                }`}
+                className={`flex items-center justify-center px-1.5 h-[18px] rounded text-[10px] font-extrabold tracking-wide transition-all duration-200 focus:outline-none ${showFlash
+                  ? 'bg-[#00a884] text-[#111b21] scale-105 shadow-md'
+                  : 'bg-[#202c33] text-[#00a884] hover:bg-[#2a3942] hover:text-[#e9edef]'
+                  }`}
               >
                 {zoomPercent}%
               </button>
@@ -365,42 +382,46 @@ export const Titlebar: React.FC<TitlebarProps> = ({ onToggleSettings, onOpenNoti
               <Settings className="w-3.5 h-3.5" />
             </button>
 
-            {/* Divider */}
-            <div className="h-3 w-[1px] bg-[#222d34] mx-1" />
+            {/* Divider (only on non-macOS platforms with window controls) */}
+            {!isMac && <div className="h-3 w-[1px] bg-[#222d34] mx-1" />}
           </>
         )}
 
-        {/* Window Controls */}
-        <button
-          onClick={handleMinimize}
-          onMouseDown={(e) => e.preventDefault()}
-          tabIndex={-1}
-          title="Minimize"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none"
-        >
-          <Minus className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={handleMaximize}
-          onMouseDown={(e) => e.preventDefault()}
-          tabIndex={-1}
-          title={isMaximized ? 'Restore' : 'Maximize'}
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none"
-        >
-          {isMaximized ? <Copy className="w-3 h-3 rotate-180" /> : <Square className="w-3 h-3" />}
-        </button>
-        <button
-          onClick={handleClose}
-          onMouseDown={(e) => e.preventDefault()}
-          tabIndex={-1}
-          title={closeToTray ? 'Minimize to Tray' : 'Close'}
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="titlebar-close-btn flex items-center justify-center w-8 h-[28px] hover:bg-[#ea4335] text-[#8696a0] hover:text-white transition-colors focus:outline-none"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+        {/* Window Controls (hidden on macOS where native traffic lights are used) */}
+        {!isMac && (
+          <>
+            <button
+              onClick={handleMinimize}
+              onMouseDown={(e) => e.preventDefault()}
+              tabIndex={-1}
+              title="Minimize"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleMaximize}
+              onMouseDown={(e) => e.preventDefault()}
+              tabIndex={-1}
+              title={isMaximized ? 'Restore' : 'Maximize'}
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] transition-colors focus:outline-none"
+            >
+              {isMaximized ? <Copy className="w-3 h-3 rotate-180" /> : <Square className="w-3 h-3" />}
+            </button>
+            <button
+              onClick={handleClose}
+              onMouseDown={(e) => e.preventDefault()}
+              tabIndex={-1}
+              title={closeToTray ? 'Minimize to Tray' : 'Close'}
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              className="titlebar-close-btn flex items-center justify-center w-8 h-[28px] hover:bg-[#ea4335] text-[#8696a0] hover:text-white transition-colors focus:outline-none"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
       </div>
     </header>
   );
