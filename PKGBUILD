@@ -3,7 +3,7 @@
 pkgname=wallie
 pkgver=1.2.0
 pkgrel=1
-pkgdesc="Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support"
+pkgdesc="Unofficial Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support"
 arch=('any')
 url="https://github.com/ilamparithi-in/WAllie"
 license=('MIT')

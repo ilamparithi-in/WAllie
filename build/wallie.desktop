@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=WAllie
-Comment=Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
+Comment=Unofficial Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
 Exec=wallie %u
 Icon=wallie
 Type=Application
