@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Trash2, Database, Shield, Puzzle, Palette, Bell, ExternalLink } from 'lucide-react';
+import { User, Trash2, Database, Shield, Puzzle, Palette, Bell, ExternalLink, Plus } from 'lucide-react';
 import type { AccountInfo, GlobalSettings } from '../../../preload';
 
 interface AccountsSettingsPageProps {
@@ -11,6 +11,7 @@ interface AccountsSettingsPageProps {
   setSelectedAccountId: (id: string) => void;
   setNotifAccountFilter: (filter: string) => void;
   setActivePage: (page: any) => void;
+  onOpenAddAccount?: () => void;
 }
 
 export const AccountsSettingsPage: React.FC<AccountsSettingsPageProps> = ({
@@ -22,14 +23,27 @@ export const AccountsSettingsPage: React.FC<AccountsSettingsPageProps> = ({
   setSelectedAccountId,
   setNotifAccountFilter,
   setActivePage,
+  onOpenAddAccount,
 }) => {
   return (
     <div className="space-y-5 subpage-animate">
       <div>
-        <h3 className="text-sm font-semibold text-[#e9edef] border-b border-[#222d34] pb-2 flex items-center gap-1.5">
-          <User className="w-4 h-4 text-[#00a884]" />
-          <span>Manage Accounts</span>
-        </h3>
+        <div className="flex items-center justify-between border-b border-[#222d34] pb-2">
+          <h3 className="text-sm font-semibold text-[#e9edef] flex items-center gap-1.5">
+            <User className="w-4 h-4 text-[#00a884]" />
+            <span>Manage Accounts</span>
+          </h3>
+          {onOpenAddAccount && (
+            <button
+              onClick={onOpenAddAccount}
+              className="flex items-center gap-1 px-2.5 py-1 rounded bg-[#00a884]/20 hover:bg-[#00a884]/30 text-[#00a884] border border-[#00a884]/40 text-xs font-medium transition-colors"
+              title="Add New Account"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Account</span>
+            </button>
+          )}
+        </div>
         <p className="text-[11px] text-[#8696a0] mt-2 mb-4 leading-relaxed">
           Set custom names and emojis, configure startup preloading, delete accounts, or jump to profile-specific settings.
         </p>

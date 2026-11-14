@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 import type {
   ExtensionInfo,
   Account as AccountInfo,
+  AddAccountOptions,
   GlobalSettings,
   HistoricalNotification,
   DownloadRecord,
@@ -31,6 +32,7 @@ import type { GoogleFontResolution } from '../shared/fonts';
 export type {
   ExtensionInfo,
   AccountInfo,
+  AddAccountOptions,
   GlobalSettings,
   HistoricalNotification,
   DownloadRecord,
@@ -72,7 +74,9 @@ export interface ElectronAPI {
   getAccounts: () => Promise<AccountInfo[]>;
   getActiveAccountId: () => Promise<string>;
   switchAccount: (id: string) => void;
-  addAccount: (name?: string) => Promise<AccountInfo>;
+  addAccount: (optionsOrName?: string | AddAccountOptions) => Promise<AccountInfo>;
+  toggleAddAccountPrompt?: (isOpen: boolean) => void;
+  onTriggerAddAccount?: (callback: () => void) => () => void;
   removeAccount: (id: string) => Promise<boolean>;
   renameAccount: (id: string, name: string) => Promise<boolean>;
   updateAccountEmoji: (id: string, emoji: string) => Promise<boolean>;
@@ -211,7 +215,8 @@ export const api: ElectronAPI = {
   getAccounts: () => ipcRenderer.invoke('account:get-all'),
   getActiveAccountId: () => ipcRenderer.invoke('account:get-active-id'),
   switchAccount: (id) => ipcRenderer.send('account:switch', id),
-  addAccount: (name) => ipcRenderer.invoke('account:add', name),
+  addAccount: (optionsOrName) => ipcRenderer.invoke('account:add', optionsOrName),
+  toggleAddAccountPrompt: (isOpen) => ipcRenderer.send('account:toggle-add-prompt', isOpen),
   removeAccount: (id) => ipcRenderer.invoke('account:remove', id),
   renameAccount: (id, name) => ipcRenderer.invoke('account:rename', id, name),
   updateAccountEmoji: (id, emoji) => ipcRenderer.invoke('account:update-emoji', id, emoji),
@@ -341,6 +346,12 @@ export const api: ElectronAPI = {
     const subscription = (_event: unknown, accountId: string) => callback(accountId);
     ipcRenderer.on('account:trigger-rename', subscription);
     return () => ipcRenderer.removeListener('account:trigger-rename', subscription);
+  },
+
+  onTriggerAddAccount: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('account:trigger-add', subscription);
+    return () => ipcRenderer.removeListener('account:trigger-add', subscription);
   },
 
   onNotificationHistoryChanged: (callback) => {

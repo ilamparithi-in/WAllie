@@ -29,6 +29,17 @@ export const zoomDirectionSchema = z.enum(['in', 'out']);
 /**
  * Account schemas
  */
+export const addAccountOptionsSchema = z
+  .union([
+    z.string().trim().max(100),
+    z.object({
+      name: z.string().trim().max(100).optional(),
+      emoji: z.string().trim().max(32).optional(),
+      preload: z.boolean().optional(),
+    }),
+  ])
+  .optional();
+
 export const accountRenameSchema = z.object({
   id: accountIdSchema,
   newName: z.string().trim().min(1).max(100),

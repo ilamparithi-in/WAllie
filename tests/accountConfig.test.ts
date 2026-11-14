@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNewAccount } from '../src/main/accountUtils.ts';
+import { addAccountOptionsSchema } from '../src/main/ipc/schemas.ts';
 
 describe('Account Configuration & Generation', () => {
   test('createNewAccount creates an account with dynamic id and standard structure', () => {
@@ -28,6 +29,15 @@ describe('Account Configuration & Generation', () => {
     assert.equal(acc2.name, 'Account 5');
   });
 
+  test('createNewAccount supports custom emoji', () => {
+    const acc = createNewAccount('Personal', 2, [], '💼');
+    assert.equal(acc.name, 'Personal');
+    assert.equal(acc.emoji, '💼');
+
+    const accNoEmoji = createNewAccount('Work', 3);
+    assert.equal(accNoEmoji.emoji, '');
+  });
+
   test('createNewAccount generates unique ids across multiple invocations', async () => {
     const acc1 = createNewAccount(undefined, 1);
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -42,5 +52,24 @@ describe('Account Configuration & Generation', () => {
     const acc = createNewAccount(undefined, 1, [fakeId]);
 
     assert.notEqual(acc.id, fakeId);
+  });
+
+  test('addAccountOptionsSchema validates strings and option objects', () => {
+    const parsedStr = addAccountOptionsSchema.parse('Personal');
+    assert.equal(parsedStr, 'Personal');
+
+    const parsedObj = addAccountOptionsSchema.parse({
+      name: 'Work Account',
+      emoji: '🏢',
+      preload: true,
+    });
+    assert.deepEqual(parsedObj, {
+      name: 'Work Account',
+      emoji: '🏢',
+      preload: true,
+    });
+
+    const parsedEmpty = addAccountOptionsSchema.parse(undefined);
+    assert.equal(parsedEmpty, undefined);
   });
 });

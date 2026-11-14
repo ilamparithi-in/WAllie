@@ -13,6 +13,7 @@ export const state = {
   globalSettings: null as GlobalSettings | null,
   disclaimerOpen: false,
   protocolPromptOpen: false,
+  addAccountPromptOpen: false,
   settingsOpen: false,
   settingsDrawerWidth: 0,
   settingsWindow: null as BrowserWindow | null,

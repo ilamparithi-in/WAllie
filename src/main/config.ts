@@ -30,10 +30,10 @@ export const STORAGE_CACHE_TTL = 30000;
 
 const storageSizeCache = new Map<string, { sizes: { cache: number; localStorage: number; indexedDb: number; cookies: number }; timestamp: number }>();
 
-export function createNewAccount(customName?: string, index?: number): Account {
+export function createNewAccount(customName?: string, index?: number, emoji?: string): Account {
   const newIndex = index ?? (state.accounts ? state.accounts.length + 1 : 1);
   const existingIds = state.accounts ? state.accounts.map((a) => a.id) : [];
-  return generateAccount(customName, newIndex, existingIds);
+  return generateAccount(customName, newIndex, existingIds, emoji);
 }
 
 function resolveInitialPreloadAccountIds(): string[] {

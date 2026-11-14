@@ -578,7 +578,7 @@ export function openSettingsWindow(page?: string, accountId?: string) {
     height: Math.max(height, 600),
     minWidth: 420,
     minHeight: 480,
-    title: 'WAllie Settings',
+    title: 'Configure WAllie',
     icon: getAppIcon(),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#111b21' : '#ffffff',
     autoHideMenuBar: true,
@@ -591,6 +591,10 @@ export function openSettingsWindow(page?: string, accountId?: string) {
       webSecurity: true,
       allowRunningInsecureContent: false,
     } as any,
+  });
+
+  state.settingsWindow.on('page-title-updated', (e) => {
+    e.preventDefault();
   });
 
   state.settingsWindow.removeMenu();

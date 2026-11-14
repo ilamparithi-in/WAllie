@@ -12,6 +12,7 @@ import { NotificationSettingsPage } from './settings/NotificationSettingsPage';
 import { DownloadsSettingsPage } from './settings/DownloadsSettingsPage';
 import { AdvancedSettingsPage } from './settings/AdvancedSettingsPage';
 import { ChatExporterSettingsPage } from './settings/ChatExporterSettingsPage';
+import { AddAccountModal } from './AddAccountModal';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ interface SettingsModalProps {
   isDetached?: boolean;
   onPopout?: (page?: PageType, accountId?: string) => void;
   onCurrentPageChange?: (page: PageType, accountId?: string) => void;
+  onOpenAddAccount?: () => void;
 }
 
 type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads' | 'advanced' | 'exporter';
@@ -54,6 +56,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   isDetached = false,
   onPopout,
   onCurrentPageChange,
+  onOpenAddAccount,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const menuContainerRef = useRef<HTMLDivElement>(null);
@@ -61,6 +64,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
+
+  const handleOpenAddAccount = () => {
+    if (isDetached) {
+      setIsAddAccountModalOpen(true);
+    } else if (onOpenAddAccount) {
+      onOpenAddAccount();
+    } else {
+      setIsAddAccountModalOpen(true);
+    }
+  };
+
+  const handleAddAccountConfirm = async (options: any) => {
+    await window.electronAPI?.addAccount(options);
+  };
 
   useEffect(() => {
     onCurrentPageChange?.(activePage, selectedAccountId);
@@ -816,6 +834,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     setSelectedAccountId={setSelectedAccountId}
                     setNotifAccountFilter={setNotifAccountFilter}
                     setActivePage={setActivePage}
+                    onOpenAddAccount={handleOpenAddAccount}
                   />
                 )}
 
@@ -958,6 +977,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
       )}
+
+      {/* Add Account Modal Prompt (for detached window or direct modal display) */}
+      <AddAccountModal
+        isOpen={isAddAccountModalOpen}
+        onClose={() => setIsAddAccountModalOpen(false)}
+        onConfirm={handleAddAccountConfirm}
+        accounts={accounts}
+      />
     </div>
   );
 };
