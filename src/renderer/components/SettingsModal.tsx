@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Shield, ArrowLeft, Users, RotateCw, User, Download, Copy, Check, Sliders, FileArchive } from 'lucide-react';
+import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Shield, ArrowLeft, Users, RotateCw, User, Download, Copy, Check, Sliders, FileArchive, ExternalLink } from 'lucide-react';
 import type { AccountInfo, GlobalSettings, AppVersionInfo, AccountSettings, SystemFontInfo } from '../../preload';
 import { GeneralSettingsPage } from './settings/GeneralSettingsPage';
 import { PreloadSettingsPage } from './settings/PreloadSettingsPage';
@@ -19,6 +19,9 @@ interface SettingsModalProps {
   initialPage?: PageType;
   initialAccountId?: string;
   onShowDisclaimer: () => void;
+  isDetached?: boolean;
+  onPopout?: (page?: PageType, accountId?: string) => void;
+  onCurrentPageChange?: (page: PageType, accountId?: string) => void;
 }
 
 type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads' | 'advanced' | 'exporter';
@@ -42,13 +45,26 @@ const SETTINGS_MENU_ITEMS: {
     { page: 'advanced', icon: Sliders, title: 'Advanced Settings', description: 'Standalone link previews & desktop enhancements' },
   ];
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialPage, initialAccountId, onShowDisclaimer }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+  isOpen,
+  onClose,
+  initialPage,
+  initialAccountId,
+  onShowDisclaimer,
+  isDetached = false,
+  onPopout,
+  onCurrentPageChange,
+}) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const menuContainerRef = useRef<HTMLDivElement>(null);
   const [activePage, setActivePage] = useState<PageType>('main');
 
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+
+  useEffect(() => {
+    onCurrentPageChange?.(activePage, selectedAccountId);
+  }, [activePage, selectedAccountId, onCurrentPageChange]);
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [showImportDropdown, setShowImportDropdown] = useState<boolean>(false);
   const [webstoreUrlOrId, setWebstoreUrlOrId] = useState<string>('');
@@ -529,15 +545,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     }
   };
 
+  const containerClass = isDetached
+    ? 'w-full h-full relative flex flex-col bg-[#111b21] select-text settings-modal-drawer m-0 p-0 border-none'
+    : `fixed top-[28px] right-0 bottom-0 z-50 w-[450px] bg-[#111b21] border-l border-[#222d34] shadow-2xl flex flex-col transform transition-transform duration-300 ease-[cubic-bezier(0.1,0.9,0.2,1)] select-text settings-modal-drawer m-0 p-0 ${
+        isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none invisible'
+      }`;
+
   return (
     <div
       ref={modalRef}
       role="dialog"
       aria-modal="true"
+      id="settings-dialog"
       aria-labelledby="settings-dialog-title"
-      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      className={`fixed top-[28px] right-0 bottom-0 z-50 w-[450px] bg-[#111b21] border-l border-[#222d34] shadow-2xl flex flex-col transform transition-transform duration-300 ease-[cubic-bezier(0.1,0.9,0.2,1)] select-text settings-modal-drawer ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
-        }`}
+      aria-hidden={!isOpen && !isDetached}
+      tabIndex={-1}
+      style={{
+        WebkitAppRegion: 'no-drag',
+        overscrollBehavior: 'contain',
+      } as React.CSSProperties}
+      className={containerClass}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#222d34] bg-[#202c33] flex-shrink-0 settings-modal-header">
@@ -570,18 +597,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             </span>
           </button>
         )}
-        <button
-          onClick={(e) => {
-            setActivePage('main');
-            onClose();
-            e.currentTarget.blur();
-          }}
-          onMouseDown={(e) => e.preventDefault()}
-          tabIndex={-1}
-          className="p-1 rounded hover:bg-[#111b21] text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {!isDetached && onPopout && (
+            <button
+              onClick={(e) => {
+                onPopout(activePage, selectedAccountId);
+                e.currentTarget.blur();
+              }}
+              onMouseDown={(e) => e.preventDefault()}
+              tabIndex={-1}
+              title="Open in new window"
+              aria-label="Open settings in a separate window"
+              className="p-1 rounded hover:bg-[#111b21] text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none cursor-pointer"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              setActivePage('main');
+              onClose();
+              e.currentTarget.blur();
+            }}
+            onMouseDown={(e) => e.preventDefault()}
+            tabIndex={-1}
+            title="Close Settings"
+            aria-label="Close Settings"
+            className="p-1 rounded hover:bg-[#111b21] text-[#8696a0] hover:text-[#e9edef] transition-colors focus-visible:ring-2 focus-visible:ring-[#00a884] focus-visible:outline-none cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Modal Body / Drawer Content */}

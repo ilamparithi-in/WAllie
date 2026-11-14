@@ -81,6 +81,10 @@ export interface ElectronAPI {
   unloadAccount: (accountId: string) => Promise<boolean>;
   loadAccount: (accountId: string) => Promise<boolean>;
   showAccountContextMenu: (accountId: string) => void;
+  showAccountDropdownMenu: (rect?: { x: number; y: number; width: number; height: number }) => void;
+  onAccountDropdownStatus: (callback: (isOpen: boolean) => void) => () => void;
+  openAccountSwitcherDropdown: () => Promise<string>;
+  closeAccountSwitcherDropdown: () => void;
 
   // Extension controls
   importExtension: (accountId: string, importType: 'folder' | 'archive') => Promise<ExtensionInfo | null>;
@@ -92,6 +96,9 @@ export interface ElectronAPI {
 
   // Settings & View toggle
   toggleSettings: (isOpen: boolean) => void;
+  openDetachedSettings: (page?: string, accountId?: string) => void;
+  closeDetachedSettings: () => void;
+  isSettingsDetachedOpen: () => Promise<boolean>;
   toggleDisclaimer: (isOpen: boolean) => void;
   resetZoom: () => void;
   resetAppScale: () => void;
@@ -151,6 +158,8 @@ export interface ElectronAPI {
   onTriggerRename: (callback: (accountId: string) => void) => () => void;
   onNotificationHistoryChanged: (callback: (history: HistoricalNotification[]) => void) => () => void;
   onSettingsCloseRequest: (callback: () => void) => () => void;
+  onDetachedSettingsClosed: (callback: () => void) => () => void;
+  onSettingsNavigate: (callback: (data: { page?: string; accountId?: string }) => void) => () => void;
   onGlobalSettingsChanged: (callback: (settings: GlobalSettings) => void) => () => void;
   onDownloadProgress: (
     callback: (data: {
@@ -211,6 +220,14 @@ export const api: ElectronAPI = {
   unloadAccount: (accountId) => ipcRenderer.invoke('account:unload', accountId),
   loadAccount: (accountId) => ipcRenderer.invoke('account:load', accountId),
   showAccountContextMenu: (accountId) => ipcRenderer.send('account:context-menu', accountId),
+  showAccountDropdownMenu: (rect) => ipcRenderer.send('account:show-dropdown-menu', rect),
+  onAccountDropdownStatus: (callback) => {
+    const subscription = (_event: unknown, isOpen: boolean) => callback(isOpen);
+    ipcRenderer.on('account:dropdown-status', subscription);
+    return () => ipcRenderer.removeListener('account:dropdown-status', subscription);
+  },
+  openAccountSwitcherDropdown: () => Promise.resolve(''),
+  closeAccountSwitcherDropdown: () => {},
 
   importExtension: (accountId, importType) => ipcRenderer.invoke('extension:import', accountId, importType),
   toggleExtension: (accountId, extensionId, enabled) => ipcRenderer.invoke('extension:toggle', accountId, extensionId, enabled),
@@ -220,6 +237,9 @@ export const api: ElectronAPI = {
   checkExtensionUpdates: (accountId) => ipcRenderer.invoke('extension:check-updates', accountId),
 
   toggleSettings: (isOpen) => ipcRenderer.send('settings:toggle', isOpen),
+  openDetachedSettings: (page, accountId) => ipcRenderer.send('settings:open-detached', page, accountId),
+  closeDetachedSettings: () => ipcRenderer.send('settings:close-detached'),
+  isSettingsDetachedOpen: () => ipcRenderer.invoke('settings:is-detached-open'),
   toggleDisclaimer: (isOpen) => ipcRenderer.send('disclaimer:toggle', isOpen),
   resetZoom: () => ipcRenderer.send('zoom:reset'),
   resetAppScale: () => ipcRenderer.send('settings:reset-app-scale'),
@@ -333,6 +353,18 @@ export const api: ElectronAPI = {
     const subscription = () => callback();
     ipcRenderer.on('settings:close-request', subscription);
     return () => ipcRenderer.removeListener('settings:close-request', subscription);
+  },
+
+  onDetachedSettingsClosed: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('settings:detached-closed', subscription);
+    return () => ipcRenderer.removeListener('settings:detached-closed', subscription);
+  },
+
+  onSettingsNavigate: (callback) => {
+    const subscription = (_event: unknown, data: { page?: string; accountId?: string }) => callback(data);
+    ipcRenderer.on('settings:navigate', subscription);
+    return () => ipcRenderer.removeListener('settings:navigate', subscription);
   },
 
   onOpenManageAccounts: (callback) => {

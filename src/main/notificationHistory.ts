@@ -39,6 +39,9 @@ export function applyRetentionPruning() {
   state.notificationHistoryCache = updated;
   scheduleHistoryFlush();
   state.mainWindow?.webContents.send('notification:history-changed', updated);
+  if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+    state.settingsWindow.webContents.send('notification:history-changed', updated);
+  }
 }
 
 export function getNotificationHistory(): TimelineEntry[] {
@@ -93,6 +96,9 @@ export function logNotificationToHistory(notif: TimelineEntry) {
     state.notificationHistoryCache = updated;
     scheduleHistoryFlush();
     state.mainWindow?.webContents.send('notification:history-changed', updated);
+  if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+    state.settingsWindow.webContents.send('notification:history-changed', updated);
+  }
   }
 }
 
@@ -162,6 +168,9 @@ export function clearNotificationHistoryCache(optionsOrPeriod: string | ClearHis
   state.notificationHistoryCache = updatedHistory;
   scheduleHistoryFlush();
   state.mainWindow?.webContents.send('notification:history-changed', updatedHistory);
+  if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+    state.settingsWindow.webContents.send('notification:history-changed', updatedHistory);
+  }
 }
 
 export async function closeDbusNotificationByTag(tag: string) {

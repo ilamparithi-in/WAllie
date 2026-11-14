@@ -61,17 +61,22 @@ export function getAccountById(id: string): Account | undefined {
   return state.accounts.find((a) => a.id === id);
 }
 
+export function isAccountLoaded(id: string): boolean {
+  const view = state.accountViews.get(id);
+  return Boolean(view && view.webContents && !view.webContents.isDestroyed());
+}
+
 export function getAccountsWithLoadedStatus(): Account[] {
   return state.accounts.map((acc) => ({
     ...acc,
-    isLoaded: state.accountViews.has(acc.id) && !state.accountViews.get(acc.id)?.webContents.isDestroyed(),
+    isLoaded: isAccountLoaded(acc.id),
   }));
 }
 
 export function focusActiveView(): void {
   if (!state.mainWindow?.isVisible()) return;
   const activeView = state.accountViews.get(state.activeAccountId);
-  if (activeView && !activeView.webContents.isDestroyed()) {
+  if (activeView && activeView.webContents && !activeView.webContents.isDestroyed()) {
     activeView.webContents.focus();
   }
 }

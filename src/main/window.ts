@@ -2,7 +2,7 @@ import { app, BrowserWindow, WebContentsView, Tray, Menu, Notification, session,
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
-import { getAppIcon, getAccountById, getAccountsWithLoadedStatus, getPreloadPath, getInitialWindowSize } from './utils';
+import { getAppIcon, getAccountById, getAccountsWithLoadedStatus, getPreloadPath, getInitialWindowSize, isAccountLoaded } from './utils';
 import { createAccountView, injectCustomCssForView, registerZoomShortcuts, registerContextMenu, handleExternalLinkClick } from './views';
 import { safeDeleteExtensionDir } from './extensions';
 import { saveAccounts, saveSettings } from './config';
@@ -39,7 +39,7 @@ export function applyActiveViewBoundsImmediately(aView: WebContentsView) {
       width: Math.max(0, vWidth),
       height: Math.max(0, h - scaledTitlebarHeight),
     });
-    if (!aView.webContents.isDestroyed()) {
+    if (aView.webContents && !aView.webContents.isDestroyed()) {
       aView.webContents.invalidate();
     }
   }
@@ -65,11 +65,15 @@ export function updateActiveViewBounds() {
 export async function switchActiveAccount(newAccountId: string) {
   if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
 
+  // Track active account history (MRU stack)
+  state.accountHistory = state.accountHistory.filter((id) => id !== newAccountId);
+  state.accountHistory.push(newAccountId);
+
   const currentView = state.accountViews.get(state.activeAccountId);
   if (state.activeAccountId === newAccountId && currentView) {
     currentView.setVisible(true);
     applyActiveViewBoundsImmediately(currentView);
-    if (!currentView.webContents.isDestroyed()) {
+    if (currentView.webContents && !currentView.webContents.isDestroyed()) {
       currentView.webContents.focus();
     }
     return;
@@ -98,7 +102,7 @@ export async function switchActiveAccount(newAccountId: string) {
     applyActiveViewBoundsImmediately(targetView);
     updateActiveViewBounds();
 
-    if (state.mainWindow?.isVisible() && !targetView.webContents.isDestroyed()) {
+    if (state.mainWindow?.isVisible() && targetView.webContents && !targetView.webContents.isDestroyed()) {
       targetView.webContents.focus();
     }
 
@@ -353,6 +357,11 @@ export function createMainWindow() {
 
   state.mainWindow.on('close', (event) => {
     saveWindowStateImmediate(state.mainWindow);
+    if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+      try {
+        state.settingsWindow.close();
+      } catch (e) { }
+    }
     if (state.mainWindow && !(app as any).isQuitting && !state.isQuitting) {
       if (state.globalSettings?.closeToTray) {
         event.preventDefault();
@@ -431,20 +440,23 @@ export async function removeAccountLogic(id: string): Promise<boolean> {
   const account = getAccountById(id);
   if (!account) return false;
 
-  if (state.mainWindow) {
-    const choice = await dialog.showMessageBox(state.mainWindow, {
-      type: 'warning',
-      buttons: ['Cancel', 'Remove'],
-      defaultId: 0,
-      cancelId: 0,
-      title: 'Confirm Account Removal',
-      message: `Are you sure you want to remove "${account.name}"?`,
-      detail: 'This will clear all session storage, account settings, and delete all imported extensions for this account.',
-    });
+  // Always show confirmation prompt when trying to delete
+  const parentWindow = (state.settingsWindow && !state.settingsWindow.isDestroyed() && state.settingsWindow.isVisible() && state.settingsWindow.isFocused())
+    ? state.settingsWindow
+    : (state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : (state.settingsWindow && !state.settingsWindow.isDestroyed() ? state.settingsWindow : undefined));
 
-    if (choice.response !== 1) {
-      return false;
-    }
+  const choice = await dialog.showMessageBox(parentWindow!, {
+    type: 'warning',
+    buttons: ['Cancel', 'Remove'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Confirm Account Removal',
+    message: `Are you sure you want to remove "${account.name}"?`,
+    detail: 'This will log you out, clear all session cache and storage, and delete all imported extensions for this account.',
+  });
+
+  if (choice.response !== 1) {
+    return false;
   }
 
   if (account.extensions && account.extensions.length > 0) {
@@ -482,24 +494,52 @@ export async function removeAccountLogic(id: string): Promise<boolean> {
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
         state.mainWindow.webContents.send('settings:global-changed', state.globalSettings);
       }
+      if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+        state.settingsWindow.webContents.send('settings:global-changed', state.globalSettings);
+      }
     }
   }
 
   const view = state.accountViews.get(id);
   if (view) {
-    if (!view.webContents.isDestroyed()) {
+    try {
+      (view as any)._cleanup?.();
+    } catch (e) { }
+
+    if (view.webContents && !view.webContents.isDestroyed()) {
       try {
         view.webContents.closeDevTools();
       } catch (e) { }
+      try {
+        (view.webContents as any).destroy();
+      } catch (e) { }
     }
-    if (state.activeAccountId === id && state.mainWindow) {
-      state.mainWindow.contentView.removeChildView(view);
+    if (state.activeAccountId === id && state.mainWindow && !state.mainWindow.isDestroyed()) {
+      try {
+        state.mainWindow.contentView.removeChildView(view);
+      } catch (e) { }
     }
     state.accountViews.delete(id);
   }
 
+  state.accountHistory = state.accountHistory.filter((accId) => accId !== id);
+
   if (state.activeAccountId === id) {
-    await switchActiveAccount(state.accounts[0].id);
+    let targetAccountId = '';
+    for (let i = state.accountHistory.length - 1; i >= 0; i--) {
+      const candidateId = state.accountHistory[i];
+      if (candidateId !== id && state.accounts.some((a) => a.id === candidateId)) {
+        targetAccountId = candidateId;
+        break;
+      }
+    }
+    if (!targetAccountId) {
+      const loadedCandidate = state.accounts.find((a) => a.id !== id && isAccountLoaded(a.id));
+      targetAccountId = loadedCandidate?.id || state.accounts.find((a) => a.id !== id)?.id || state.accounts[0]?.id;
+    }
+    if (targetAccountId) {
+      await switchActiveAccount(targetAccountId);
+    }
   } else {
     notifyAccountListChanged();
   }
@@ -510,6 +550,83 @@ export function notifyAccountListChanged() {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     state.mainWindow.webContents.send('account:list-changed', getAccountsWithLoadedStatus(), state.activeAccountId);
   }
+  if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+    state.settingsWindow.webContents.send('account:list-changed', getAccountsWithLoadedStatus(), state.activeAccountId);
+  }
+}
+
+export function openSettingsWindow(page?: string, accountId?: string) {
+  if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+    if (page) {
+      state.settingsWindow.webContents.send('settings:navigate', { page, accountId });
+    }
+    state.settingsWindow.show();
+    state.settingsWindow.focus();
+    return;
+  }
+
+  // If the drawer in the main window was open, close it cleanly
+  if (state.settingsOpen) {
+    animateSettingsTransition(false);
+    state.mainWindow?.webContents.send('settings:close-drawer');
+  }
+
+  const { width, height } = getInitialWindowSize(520, 720, state.mainWindow);
+
+  state.settingsWindow = new BrowserWindow({
+    width: Math.min(width, 560),
+    height: Math.max(height, 600),
+    minWidth: 420,
+    minHeight: 480,
+    title: 'WAllie Settings',
+    icon: getAppIcon(),
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#111b21' : '#ffffff',
+    autoHideMenuBar: true,
+    show: false,
+    webPreferences: {
+      preload: getPreloadPath(),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+    } as any,
+  });
+
+  state.settingsWindow.removeMenu();
+  registerContextMenu(state.settingsWindow.webContents);
+
+  const queryParams = new URLSearchParams();
+  queryParams.set('window', 'settings');
+  if (page) queryParams.set('page', page);
+  if (accountId) queryParams.set('accountId', accountId);
+
+  if (process.env.VITE_DEV_SERVER_URL) {
+    state.settingsWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}?${queryParams.toString()}`);
+  } else {
+    state.settingsWindow.loadFile(path.join(__dirname, '../renderer/index.html'), {
+      search: queryParams.toString(),
+    });
+  }
+
+  state.settingsWindow.once('ready-to-show', () => {
+    state.settingsWindow?.show();
+    state.settingsWindow?.focus();
+  });
+
+  state.settingsWindow.on('closed', () => {
+    state.settingsWindow = null;
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('settings:detached-closed');
+    }
+  });
+}
+
+export function closeSettingsWindow() {
+  if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+    state.settingsWindow.close();
+  }
+  state.settingsWindow = null;
 }
 
 export async function unloadAccountLogic(id: string): Promise<boolean> {
@@ -518,12 +635,16 @@ export async function unloadAccountLogic(id: string): Promise<boolean> {
 
   const view = state.accountViews.get(id);
   if (view) {
+    try {
+      (view as any)._cleanup?.();
+    } catch (e) { }
+
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       try {
         state.mainWindow.contentView.removeChildView(view);
       } catch (e) { }
     }
-    if (!view.webContents.isDestroyed()) {
+    if (view.webContents && !view.webContents.isDestroyed()) {
       try {
         view.webContents.closeDevTools();
       } catch (e) { }
@@ -534,7 +655,32 @@ export async function unloadAccountLogic(id: string): Promise<boolean> {
     state.accountViews.delete(id);
   }
 
-  notifyAccountListChanged();
+  // Remove the unloaded account from active history
+  state.accountHistory = state.accountHistory.filter((accId) => accId !== id);
+
+  if (state.activeAccountId === id) {
+    // Switch to the previous account in order (last active account)
+    let targetAccountId = '';
+    for (let i = state.accountHistory.length - 1; i >= 0; i--) {
+      const candidateId = state.accountHistory[i];
+      if (candidateId !== id && state.accounts.some((a) => a.id === candidateId)) {
+        targetAccountId = candidateId;
+        break;
+      }
+    }
+
+    if (!targetAccountId) {
+      const loadedCandidate = state.accounts.find((a) => a.id !== id && isAccountLoaded(a.id));
+      targetAccountId = loadedCandidate?.id || state.accounts.find((a) => a.id !== id)?.id || state.accounts[0]?.id;
+    }
+
+    if (targetAccountId && targetAccountId !== id) {
+      await switchActiveAccount(targetAccountId);
+    }
+  } else {
+    notifyAccountListChanged();
+  }
+
   return true;
 }
 
@@ -542,7 +688,7 @@ export async function loadAccountLogic(id: string): Promise<boolean> {
   const account = getAccountById(id);
   if (!account) return false;
 
-  if (state.accountViews.has(id) && !state.accountViews.get(id)?.webContents.isDestroyed()) {
+  if (isAccountLoaded(id)) {
     return true;
   }
 

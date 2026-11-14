@@ -6,6 +6,7 @@ import {
   focusActiveView,
   getAccountsWithLoadedStatus,
   getAccountForWebContents,
+  isAccountLoaded,
 } from '../utils';
 import {
   switchActiveAccount,
@@ -116,7 +117,7 @@ export function registerAccountHandlers(): void {
     const account = getAccountById(accountId);
     if (!account) return;
 
-    const isLoaded = state.accountViews.has(accountId) && !state.accountViews.get(accountId)?.webContents.isDestroyed();
+    const isLoaded = isAccountLoaded(accountId);
 
     const menu = Menu.buildFromTemplate([
       {
@@ -157,8 +158,9 @@ export function registerAccountHandlers(): void {
       { type: 'separator' },
       {
         label: 'Delete Account',
-        click: () => {
-          state.mainWindow?.webContents.send('account:trigger-delete', accountId);
+        enabled: state.accounts.length > 1,
+        click: async () => {
+          await removeAccountLogic(accountId);
         },
       },
     ]);
@@ -320,6 +322,55 @@ export function registerAccountHandlers(): void {
       injectAccountStyling(accountId, view.webContents);
     }
     return true;
+  });
+
+  ipcMain.on('account:show-dropdown-menu', (_event, rect?: { x: number; y: number; width: number; height: number }) => {
+    if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
+
+    const scaleFactor = (state.globalSettings?.appScale || 100) / 100;
+    const accounts = state.accounts;
+
+    const menu = Menu.buildFromTemplate([
+      ...accounts.map((acc) => {
+        const isLoaded = isAccountLoaded(acc.id);
+        const unread = acc.unreadCount > 0 ? ` (${acc.unreadCount > 99 ? '99+' : acc.unreadCount})` : '';
+        const status = !isLoaded ? ' [unloaded]' : '';
+        const label = `${acc.emoji ? acc.emoji + ' ' : ''}${acc.name}${unread}${status}`;
+        return {
+          label,
+          type: 'radio' as const,
+          checked: acc.id === state.activeAccountId,
+          click: () => {
+            switchActiveAccount(acc.id);
+          },
+        };
+      }),
+      { type: 'separator' },
+      {
+        label: '+ Add Account',
+        click: () => {
+          state.mainWindow?.webContents.send('account:trigger-add');
+        },
+      },
+    ]);
+
+    state.mainWindow.webContents.send('account:dropdown-status', true);
+
+    const popupOptions: Electron.PopupOptions = {
+      window: state.mainWindow,
+      callback: () => {
+        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+          state.mainWindow.webContents.send('account:dropdown-status', false);
+        }
+      },
+    };
+
+    if (rect && typeof rect.x === 'number' && typeof rect.y === 'number') {
+      popupOptions.x = Math.round(rect.x * scaleFactor);
+      popupOptions.y = Math.round((rect.y + (rect.height || 22)) * scaleFactor);
+    }
+
+    menu.popup(popupOptions);
   });
 }
 
