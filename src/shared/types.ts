@@ -30,6 +30,18 @@ export interface AccountSettings {
 export interface SystemFontInfo {
   name: string;
   isVariable: boolean;
+  isMono?: boolean;
+}
+
+export interface DesktopFontMeta {
+  name: string;
+  isVariable: boolean;
+}
+
+export interface SystemFontsMetaResponse {
+  fonts: SystemFontInfo[];
+  desktopFont: DesktopFontMeta;
+  desktopMonoFont?: DesktopFontMeta;
 }
 
 export interface GroupInviteDetails {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Palette, Type, Image as ImageIcon, Trash2, Upload, Monitor, Code, Check, Loader2, AlertCircle, X, Info, Sun, Moon } from 'lucide-react';
 import type { AccountInfo, SystemFontInfo } from '../../../preload';
 import { resolveGoogleFont, resolveGoogleFontUrl } from '../../../shared/fonts';
@@ -24,6 +24,7 @@ interface ThemeSettingsPageProps {
   systemFonts: string[];
   systemFontsMeta: SystemFontInfo[];
   desktopFont: { name: string; isVariable: boolean };
+  desktopMonoFont?: { name: string; isVariable: boolean };
   onUpdateFont: (font: string, fontUrl?: string) => void;
   onUpdateMonoFont: (monoFont: string, monoFontUrl?: string) => void;
   onToggleFollowSystemFont: (enabled: boolean) => void;
@@ -416,6 +417,7 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
   systemFonts,
   systemFontsMeta,
   desktopFont,
+  desktopMonoFont,
   onUpdateFont,
   onUpdateMonoFont,
   onToggleFollowSystemFont,
@@ -427,6 +429,17 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
   const [previewWeight, setPreviewWeight] = useState<number>(545);
   const [isResolvingDesktopGFont, setIsResolvingDesktopGFont] = useState(false);
   const [desktopGFontStatus, setDesktopGFontStatus] = useState<{ success: boolean; message: string } | null>(null);
+
+  const systemMonoFontsMeta = useMemo(() => {
+    return systemFontsMeta.filter((f: SystemFontInfo) => f.isMono);
+  }, [systemFontsMeta]);
+
+  const systemMonoFonts = useMemo(() => {
+    if (systemMonoFontsMeta.length > 0) {
+      return systemMonoFontsMeta.map((f: SystemFontInfo) => f.name);
+    }
+    return systemFonts.filter((f: string) => /\b(mono|monospace|code|console|courier)\b/i.test(f));
+  }, [systemMonoFontsMeta, systemFonts]);
 
   useEffect(() => {
     if (followSystemFont && desktopFont?.name && !desktopFont.isVariable && preferGoogleFont) {
@@ -445,8 +458,13 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
       { name: cleanFamily(fontFamily), preferGoogle: preferGoogleFont },
       { name: cleanFamily(monoFontFamily), preferGoogle: preferGoogleMonoFont },
     ];
-    if (followSystemFont && preferGoogleFont && desktopFont?.name) {
-      fonts.push({ name: cleanFamily(desktopFont.name), preferGoogle: true });
+    if (followSystemFont && preferGoogleFont) {
+      if (desktopFont?.name) {
+        fonts.push({ name: cleanFamily(desktopFont.name), preferGoogle: true });
+      }
+      if (desktopMonoFont?.name) {
+        fonts.push({ name: cleanFamily(desktopMonoFont.name), preferGoogle: true });
+      }
     }
     const filteredFonts = fonts.filter((f) => Boolean(f.name));
 
@@ -470,10 +488,10 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
       }
       link.href = url;
     });
-  }, [fontFamily, monoFontFamily, preferGoogleFont, preferGoogleMonoFont, systemFontsMeta, followSystemFont, desktopFont?.name]);
+  }, [fontFamily, monoFontFamily, preferGoogleFont, preferGoogleMonoFont, systemFontsMeta, followSystemFont, desktopFont?.name, desktopMonoFont?.name]);
 
   const activeBodyFont = followSystemFont ? (desktopFont?.name || '') : cleanFamily(fontFamily);
-  const activeMonoFont = cleanFamily(monoFontFamily);
+  const activeMonoFont = followSystemFont ? (desktopMonoFont?.name || cleanFamily(monoFontFamily)) : cleanFamily(monoFontFamily);
 
   return (
     <div className="flex flex-col h-full space-y-4 subpage-animate overflow-y-auto pr-1">
@@ -585,8 +603,8 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
             <div>
               <div className="text-xs font-medium text-[#e9edef]">Follow System Desktop Font</div>
               <div className="text-[10px] text-[#8696a0]">
-                Apply native desktop UI font stack to WhatsApp Web
-                {desktopFont?.name ? ` (${desktopFont.name}${desktopFont.isVariable ? ' - Variable' : ' - Static'})` : ''}
+                Apply native desktop UI font ({desktopFont?.name || 'Default'}{desktopFont?.isVariable ? ' - Variable' : ''})
+                {desktopMonoFont?.name ? ` & monospace font (${desktopMonoFont.name})` : ''}
               </div>
             </div>
           </div>
@@ -696,11 +714,11 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
                 sublabel="Used for formatted code snippets and monospace text"
                 value={monoFontFamily}
                 onChange={onUpdateMonoFont}
-                systemFonts={systemFonts}
-                systemFontsMeta={systemFontsMeta}
+                systemFonts={systemMonoFonts}
+                systemFontsMeta={systemMonoFontsMeta}
                 preferGoogleFont={preferGoogleMonoFont}
                 onTogglePreferGoogleFont={onTogglePreferGoogleMonoFont}
-                placeholder="Search system fonts or type Google Font (e.g. JetBrains Mono, Fira Code)..."
+                placeholder="Search monospace fonts or type Google Font (e.g. JetBrains Mono, Fira Code)..."
                 icon={Code}
                 defaultLabel="Default Monospace Font"
               />

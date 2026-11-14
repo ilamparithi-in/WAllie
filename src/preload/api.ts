@@ -133,7 +133,11 @@ export interface ElectronAPI {
   selectWallpaperFile: () => Promise<string | null>;
   selectCustomCssFile: () => Promise<string | null>;
   getSystemFonts: () => Promise<string[]>;
-  getSystemFontsMeta: () => Promise<{ fonts: SystemFontInfo[]; desktopFont: { name: string; isVariable: boolean } }>;
+  getSystemFontsMeta: () => Promise<{
+    fonts: SystemFontInfo[];
+    desktopFont: { name: string; isVariable: boolean };
+    desktopMonoFont?: { name: string; isVariable: boolean };
+  }>;
   resolveGoogleFont: (family: string, cachedUrl?: string) => Promise<GoogleFontResolution | null>;
 
   // Custom protocol controls

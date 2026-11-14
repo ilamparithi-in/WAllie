@@ -129,6 +129,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [systemFonts, setSystemFonts] = useState<string[]>([]);
   const [systemFontsMeta, setSystemFontsMeta] = useState<SystemFontInfo[]>([]);
   const [desktopFont, setDesktopFont] = useState<{ name: string; isVariable: boolean }>({ name: '', isVariable: false });
+  const [desktopMonoFont, setDesktopMonoFont] = useState<{ name: string; isVariable: boolean }>({ name: '', isVariable: false });
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Notification History state
@@ -312,6 +313,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           setSystemFonts(res.fonts.map((f) => f.name));
           if (res.desktopFont) {
             setDesktopFont(res.desktopFont);
+          }
+          if (res.desktopMonoFont) {
+            setDesktopMonoFont(res.desktopMonoFont);
           }
         }
       }).catch(() => {
@@ -888,6 +892,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     systemFonts={systemFonts}
                     systemFontsMeta={systemFontsMeta}
                     desktopFont={desktopFont}
+                    desktopMonoFont={desktopMonoFont}
                     preferGoogleFont={preferGoogleFont}
                     onTogglePreferGoogleFont={handleTogglePreferGoogleFont}
                     preferGoogleMonoFont={preferGoogleMonoFont}
