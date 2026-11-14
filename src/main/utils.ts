@@ -75,10 +75,20 @@ export function getAccountsWithLoadedStatus(): Account[] {
 
 export function focusActiveView(): void {
   if (!state.mainWindow?.isVisible()) return;
+  if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+    return;
+  }
   const activeView = state.accountViews.get(state.activeAccountId);
   if (activeView && activeView.webContents && !activeView.webContents.isDestroyed()) {
     activeView.webContents.focus();
   }
+}
+
+export function getActiveWindow(): BrowserWindow | undefined {
+  const focused = BrowserWindow.getFocusedWindow();
+  if (focused && !focused.isDestroyed()) return focused;
+  if (state.settingsWindow && !state.settingsWindow.isDestroyed()) return state.settingsWindow;
+  return state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined;
 }
 
 

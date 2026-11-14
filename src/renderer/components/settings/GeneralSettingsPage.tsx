@@ -160,7 +160,6 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
     setQuery('');
     setDebouncedQuery('');
     setCurrentPage(1);
-    window.electronAPI?.focusActiveAccount?.();
   };
 
   const handleRemoveDomain = async (domainToRemove: string) => {
@@ -595,9 +594,6 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
                     setQuery(e.target.value);
                     setCurrentPage(1);
                   }}
-                  onBlur={() => {
-                    window.electronAPI?.focusActiveAccount?.();
-                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -606,7 +602,6 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
                       }
                     } else if (e.key === 'Escape') {
                       e.currentTarget.blur();
-                      window.electronAPI?.focusActiveAccount?.();
                     }
                   }}
                   className="w-full bg-[#202c33] text-[#e9edef] text-xs pl-8 pr-7 py-2 rounded-lg border border-[#2c3943] focus:border-[#00a884] focus:outline-none placeholder-[#8696a0]"
