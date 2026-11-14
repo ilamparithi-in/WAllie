@@ -309,8 +309,10 @@ function ensureStyleSheet(): void {
 }
 
 export function setPortraitViewState(view: PortraitViewState): void {
+  const previousState = currentViewState;
   currentViewState = view;
   if (isPortraitActive && document.documentElement) {
+    const currentStateAttr = document.documentElement.getAttribute('data-portrait-view');
     document.documentElement.setAttribute('data-portrait-view', view);
     if (view === 'chat') {
       lockMainScreenScroll();
@@ -319,7 +321,9 @@ export function setPortraitViewState(view: PortraitViewState): void {
       setTimeout(injectBackButton, 150);
       setTimeout(injectBackButton, 300);
     }
-    window.dispatchEvent(new Event('resize'));
+    if (previousState !== view || currentStateAttr !== view) {
+      window.dispatchEvent(new Event('resize'));
+    }
   }
 }
 
@@ -479,7 +483,106 @@ function getActiveTabLabel(): string {
 }
 
 function setupEventListeners(): void {
-  // 1. Navigation rail click interception (capture phase)
+  // Chat list item interaction handler (supports both mousedown and click)
+  const handleChatListItemInteraction = (target: HTMLElement, isMouseDown: boolean, event: MouseEvent): boolean => {
+    const chatListItem = target.closest(
+      '#side [role="row"], #side [data-testid^="list-item-"], #side [role="listitem"]'
+    );
+    if (!chatListItem) return false;
+
+    // Do not trigger a pane change if clicking on context menu chevron or selection checkboxes
+    const isContextOrSelectTrigger = !!target.closest(
+      '[data-testid="down-context"], [data-icon="down-context"], [data-testid="context-btn"], [aria-label*="context menu" i], input[type="checkbox"], [role="checkbox"], [data-testid="select-checkbox"]'
+    );
+    if (isContextOrSelectTrigger) return true;
+
+    const cellContainer = target.closest<HTMLElement>(
+      '[data-testid="cell-frame-container"], [data-testid="cell-frame-title"], [data-testid="cell-frame-primary-detail"], [data-testid="cell-frame-secondary"]'
+    );
+
+    // If clicked within the row but outside cell-frame-container (e.g. 4px vertical gap or 10px outer gutters),
+    // WhatsApp Web did not receive mousedown on cell-frame-container. Forward synthetic mousedown so WhatsApp Web activates the chat.
+    if (!cellContainer && isMouseDown && !(event as any).__wallieForwarded) {
+      const targetCell = chatListItem.querySelector<HTMLElement>('[data-testid="cell-frame-container"]');
+      if (targetCell) {
+        const syntheticMousedown = new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          button: 0,
+          buttons: 1,
+        });
+        (syntheticMousedown as any).__wallieForwarded = true;
+        targetCell.dispatchEvent(syntheticMousedown);
+      }
+    }
+
+    if (isPortraitActive) {
+      setPortraitViewState('chat');
+      setTimeout(injectBackButton, 50);
+    }
+    return true;
+  };
+
+  // Drawer left item interaction handler (Calls, Channels, Communities, Status)
+  const handleDrawerItemInteraction = (target: HTMLElement): boolean => {
+    const drawerLeftItem = target.closest(
+      '[data-testid="drawer-left"] [role="row"], [data-testid="drawer-left"] [data-testid^="list-item-"], [data-testid="drawer-left"] [role="listitem"], [data-testid="drawer-left"] [role="button"]'
+    );
+    if (!drawerLeftItem) return false;
+
+    const activeTab = getActiveTabLabel();
+    if (activeTab.includes('call')) {
+      // Clicking a call history item opens Call Info in drawer-middle
+      const isCallItem = !!target.closest('[data-testid="cell-frame-container"], [data-testid="cell-frame-title"]') &&
+        !target.closest('button, [role="button"]:not([role="row"])');
+      if (isPortraitActive && isCallItem) {
+        setPortraitViewState('chat');
+      }
+      return true;
+    } else if (activeTab.includes('channel')) {
+      // Clicking a channel opens chat in #main
+      const isChannelItem = !target.closest('[data-testid="down-context"], [data-icon="down-context"], button');
+      if (isPortraitActive && isChannelItem) {
+        setPortraitViewState('chat');
+        setTimeout(injectBackButton, 50);
+      }
+      return true;
+    } else if (activeTab.includes('communit')) {
+      // In communities: sub-groups / announcements open #main, community headers just expand
+      const isSubgroup = !!target.closest(
+        '[data-testid="community-tab-subgroup-cell"], [data-testid="cell-frame-container"]'
+      );
+      const isCommunityHeader = !!target.closest(
+        '[data-testid="community-tab-community-cell"], [data-testid="new-community-row"]'
+      );
+      if (isSubgroup && !isCommunityHeader) {
+        if (isPortraitActive) {
+          setPortraitViewState('chat');
+          setTimeout(injectBackButton, 50);
+        }
+      }
+      return true;
+    }
+    return false;
+  };
+
+  // 1. Mousedown listener (capture phase): WhatsApp Web switches chats on mousedown (button 0).
+  // Capturing here ensures immediate pane switching even if the user micro-drags or cursor moves slightly.
+  window.addEventListener(
+    'mousedown',
+    (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      if (handleChatListItemInteraction(target, true, e)) return;
+      if (handleDrawerItemInteraction(target)) return;
+    },
+    true
+  );
+
+  // 2. Click listener (capture phase): Navigation rail, drawers, back button, and click fallback
   window.addEventListener(
     'click',
     (e: MouseEvent) => {
@@ -530,67 +633,13 @@ function setupEventListeners(): void {
         return;
       }
 
-      // 2. Chat list item click (in Chats tab)
-      const chatListItem = target.closest(
-        '#side [role="row"], #side [data-testid^="list-item-"], #side [role="listitem"]'
-      );
-      if (chatListItem) {
-        // Do not trigger a pane change if clicking on the gap/space between chats (e.g. 4px vertical
-        // row margin/padding, 10px horizontal gutter divs/spans), selection checkboxes, or dropdown menu triggers.
-        const isContextOrSelectTrigger = !!target.closest(
-          '[data-testid="down-context"], [data-icon="down-context"], button, input[type="checkbox"], [role="checkbox"]'
-        );
-        const cellContainer = target.closest(
-          '[data-testid="cell-frame-container"], [data-testid="cell-frame-title"], [data-testid="cell-frame-primary-detail"], [data-testid="cell-frame-secondary"]'
-        );
-        const isClickableChat = !!cellContainer && chatListItem.contains(cellContainer) && !isContextOrSelectTrigger;
-
-        if (isClickableChat) {
-          if (isPortraitActive) {
-            setPortraitViewState('chat');
-            setTimeout(injectBackButton, 50);
-          }
-        }
+      // Chat list item click fallback
+      if (handleChatListItemInteraction(target, false, e)) {
         return;
       }
 
-      // 3. Drawer-left item clicks (Calls, Channels, Communities, Status)
-      const drawerLeftItem = target.closest(
-        '[data-testid="drawer-left"] [role="row"], [data-testid="drawer-left"] [data-testid^="list-item-"], [data-testid="drawer-left"] [role="listitem"], [data-testid="drawer-left"] [role="button"]'
-      );
-      if (drawerLeftItem) {
-        const activeTab = getActiveTabLabel();
-        if (activeTab.includes('call')) {
-          // Clicking a call history item opens Call Info in drawer-middle
-          const isCallItem = !!target.closest('[data-testid="cell-frame-container"], [data-testid="cell-frame-title"]') &&
-            !target.closest('button, [role="button"]:not([role="row"])');
-          if (isPortraitActive && isCallItem) {
-            setPortraitViewState('chat');
-          }
-        } else if (activeTab.includes('channel')) {
-          // Clicking a channel opens chat in #main
-          const isChannelItem = !!target.closest('[data-testid="cell-frame-container"], [data-testid="cell-frame-title"]') &&
-            !target.closest('[data-testid="down-context"], [data-icon="down-context"], button');
-          if (isPortraitActive && isChannelItem) {
-            setPortraitViewState('chat');
-            setTimeout(injectBackButton, 50);
-          }
-        } else if (activeTab.includes('communit')) {
-          // In communities: sub-groups / announcements open #main, community headers just expand
-          const isSubgroup = !!target.closest(
-            '[data-testid="community-tab-subgroup-cell"], [data-testid="cell-frame-container"]'
-          );
-          const isCommunityHeader = !!target.closest(
-            '[data-testid="community-tab-community-cell"], [data-testid="new-community-row"]'
-          );
-          if (isSubgroup && !isCommunityHeader) {
-            if (isPortraitActive) {
-              setPortraitViewState('chat');
-              setTimeout(injectBackButton, 50);
-            }
-          }
-          return;
-        }
+      // Drawer-left item clicks fallback (Calls, Channels, Communities, Status)
+      if (handleDrawerItemInteraction(target)) {
         return;
       }
 
