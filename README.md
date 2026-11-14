@@ -23,7 +23,7 @@ othneildrew/Best-README-Template
 <h1 align="center">WAllie</h1>
 
   <p align="center">
-    Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
+    Unofficial Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
     <br />
     <!--a href="https://github.com/ilamparithi-in/WAllie"><strong>Explore the docs »</strong></a>
     <br />

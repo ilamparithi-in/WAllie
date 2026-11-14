@@ -81,12 +81,12 @@ const FontCombobox: React.FC<FontComboboxProps> = ({
   useEffect(() => {
     setInput(value);
     setError(null);
-    if (preferGoogleFont && isSystemFont && !isSystemFontVariable) {
+    if (preferGoogleFont && Boolean(value)) {
       setGFontStatus({
         success: true,
         message: 'Google Fonts version active.',
       });
-    } else {
+    } else if (!preferGoogleFont) {
       setGFontStatus(null);
     }
   }, [value, preferGoogleFont, isSystemFont, isSystemFontVariable]);
@@ -193,28 +193,32 @@ const FontCombobox: React.FC<FontComboboxProps> = ({
       </div>
 
       {/* Input Group */}
-      <div className="flex gap-1.5 items-center">
-        <div className="relative flex-grow flex items-center">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              setError(null);
-              setIsOpen(true);
-            }}
-            onFocus={() => setIsOpen(true)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleApply(input);
-              } else if (e.key === 'Escape') {
-                setIsOpen(false);
-              }
-            }}
-            placeholder={placeholder}
-            className="w-full bg-[#202c33] text-[#e9edef] pl-3 pr-8 py-2 rounded border border-[#222d34] text-xs outline-none focus:border-[#00a884] placeholder-[#667781] transition-colors"
-          />
+      <div className="relative flex items-center">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value);
+            setError(null);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleApply(input);
+            } else if (e.key === 'Escape') {
+              setIsOpen(false);
+            }
+          }}
+          placeholder={placeholder}
+          className="w-full bg-[#202c33] text-[#e9edef] pl-3 pr-14 py-2 rounded border border-[#222d34] text-xs outline-none focus:border-[#00a884] placeholder-[#667781] transition-colors"
+        />
+
+        <div className="absolute right-2.5 flex items-center gap-1.5">
+          {isChecking && (
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#00a884]" />
+          )}
 
           {input && (
             <button
@@ -223,29 +227,13 @@ const FontCombobox: React.FC<FontComboboxProps> = ({
                 setInput('');
                 handleApply('');
               }}
-              className="absolute right-2.5 text-[#8696a0] hover:text-[#e9edef] p-0.5"
+              className="text-[#8696a0] hover:text-[#e9edef] p-0.5"
               title="Clear font"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
-
-        <button
-          type="button"
-          onClick={() => handleApply(input)}
-          disabled={isChecking}
-          className="px-3.5 py-2 bg-[#00a884] hover:bg-[#02906f] disabled:opacity-50 text-[#111b21] font-semibold rounded text-xs inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 shadow-sm"
-        >
-          {isChecking ? (
-            <>
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Checking...</span>
-            </>
-          ) : (
-            <span>Apply</span>
-          )}
-        </button>
       </div>
 
       {/* Non-variable system font notice & Google Fonts replacement checkbox */}
@@ -386,7 +374,7 @@ const FontCombobox: React.FC<FontComboboxProps> = ({
             <div className="px-3 py-2.5 text-[11px] text-[#8696a0] bg-[#111b21]">
               <span>No local system font matches "{trimmedInput}".</span>
               <div className="text-[10px] text-[#00a884] mt-0.5">
-                Press <strong>Apply</strong> to fetch it directly from Google Fonts.
+                Press <strong>Enter</strong> to fetch it directly from Google Fonts.
               </div>
             </div>
           )}
@@ -442,7 +430,7 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
   }, [systemMonoFontsMeta, systemFonts]);
 
   useEffect(() => {
-    if (followSystemFont && desktopFont?.name && !desktopFont.isVariable && preferGoogleFont) {
+    if (followSystemFont && preferGoogleFont) {
       setDesktopGFontStatus({
         success: true,
         message: 'Google Fonts version active.',
@@ -450,7 +438,7 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
     } else if (!preferGoogleFont) {
       setDesktopGFontStatus(null);
     }
-  }, [followSystemFont, desktopFont?.name, desktopFont?.isVariable, preferGoogleFont]);
+  }, [followSystemFont, preferGoogleFont]);
 
   // Dynamically load Google Fonts stylesheet in the settings window for preview
   useEffect(() => {
@@ -616,13 +604,13 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
           />
         </label>
 
-        {followSystemFont && desktopFont?.name && !desktopFont.isVariable && (
+        {followSystemFont && (desktopFont?.name || desktopMonoFont?.name) && (!desktopFont?.isVariable || !desktopMonoFont?.isVariable) && (
           <div className="p-2.5 rounded bg-[#182229] border border-[#222d34] space-y-2">
             {!preferGoogleFont && (
               <div className="text-[10.5px] text-[#e5a50a] flex items-start gap-1.5">
                 <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                 <span>
-                  <strong>Note:</strong> Your desktop font "{desktopFont.name}" is not a variable-width font. WhatsApp Web uses custom font weights (like 545 for buttons and tabs), which may not render at their intended intermediate weight.
+                  <strong>Note:</strong> System desktop {[desktopFont?.name ? `"${desktopFont.name}"` : null, desktopMonoFont?.name ? `"${desktopMonoFont.name}"` : null].filter(Boolean).join(' and ')} may not be variable-width. WhatsApp Web uses custom font weights (like 545 for buttons and tabs), which may not render at their intended intermediate weight.
                 </span>
               </div>
             )}
@@ -635,23 +623,36 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
                 onChange={async (e) => {
                   const checked = e.target.checked;
                   onTogglePreferGoogleFont?.(checked);
+                  onTogglePreferGoogleMonoFont?.(checked);
                   setDesktopGFontStatus(null);
                   if (checked) {
                     setIsResolvingDesktopGFont(true);
                     try {
-                      const res = await resolveGoogleFont(desktopFont.name);
-                      if (res) {
-                        onUpdateFont(desktopFont.name, res.url);
+                      let resolvedRegularUrl = '';
+                      let resolvedMonoUrl = '';
+                      if (desktopFont?.name) {
+                        const res = await resolveGoogleFont(desktopFont.name);
+                        if (res) resolvedRegularUrl = res.url;
+                      }
+                      if (desktopMonoFont?.name) {
+                        const resMono = await resolveGoogleFont(desktopMonoFont.name);
+                        if (resMono) resolvedMonoUrl = resMono.url;
+                      }
+                      if (desktopFont?.name) {
+                        onUpdateFont(desktopFont.name, resolvedRegularUrl);
+                      }
+                      if (desktopMonoFont?.name) {
+                        onUpdateMonoFont(desktopMonoFont.name, resolvedMonoUrl);
+                      }
+                      if (resolvedRegularUrl || resolvedMonoUrl) {
                         setDesktopGFontStatus({
                           success: true,
-                          message: res.isVariable
-                            ? `Using variable-weight version from Google Fonts`
-                            : `Loaded from Google Fonts (discrete weights).`,
+                          message: 'Google Fonts version active.',
                         });
                       } else {
                         setDesktopGFontStatus({
                           success: false,
-                          message: `"${desktopFont.name}" is not available on Google Fonts.`,
+                          message: `Fonts are not available on Google Fonts.`,
                         });
                       }
                     } catch {
@@ -664,13 +665,14 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
                     }
                   } else {
                     onUpdateFont('', '');
+                    onUpdateMonoFont('', '');
                     setDesktopGFontStatus(null);
                   }
                 }}
                 className="w-3.5 h-3.5 accent-[#00a884] cursor-pointer rounded"
               />
               <span className="text-[11px] text-[#c2c5d1]">
-                Fetch "{desktopFont.name}" from Google Fonts instead {isResolvingDesktopGFont ? '(checking...)' : '(to get variable weight file if available)'}
+                Fetch {[desktopFont?.name ? `"${desktopFont.name}"` : null, desktopMonoFont?.name ? `"${desktopMonoFont.name}"` : null].filter(Boolean).join(' & ')} from Google Fonts instead {isResolvingDesktopGFont ? '(checking...)' : '(to get variable weight file if available)'}
               </span>
             </label>
 
@@ -683,10 +685,10 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
           </div>
         )}
 
-        {followSystemFont && desktopFont?.name && desktopFont.isVariable && (
+        {followSystemFont && desktopFont?.name && desktopFont.isVariable && (!desktopMonoFont?.name || desktopMonoFont.isVariable) && (
           <div className="text-[10.5px] text-[#00a884] flex items-center gap-1.5 px-1">
             <Check className="w-3.5 h-3.5 shrink-0" />
-            <span>Your desktop font "{desktopFont.name}" is a variable-width font. Custom 545 weight supported.</span>
+            <span>Your desktop fonts are variable-width fonts. Custom 545 weight supported.</span>
           </div>
         )}
 

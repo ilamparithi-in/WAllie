@@ -569,9 +569,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const containerClass = isDetached
     ? 'w-full h-full relative flex flex-col bg-[#111b21] select-text settings-modal-drawer m-0 p-0 border-none'
-    : `fixed top-[28px] right-0 bottom-0 z-50 w-[450px] bg-[#111b21] border-l border-[#222d34] shadow-2xl flex flex-col transform transition-transform duration-300 ease-[cubic-bezier(0.1,0.9,0.2,1)] select-text settings-modal-drawer m-0 p-0 ${
-        isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none invisible'
-      }`;
+    : `fixed top-[28px] right-0 bottom-0 z-50 w-[450px] bg-[#111b21] border-l border-[#222d34] shadow-2xl flex flex-col transform transition-transform duration-300 ease-[cubic-bezier(0.1,0.9,0.2,1)] select-text settings-modal-drawer m-0 p-0 ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none invisible'
+    }`;
 
   return (
     <div
@@ -713,7 +712,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               <div className="text-sm font-bold text-[#e9edef] tracking-wide">WAllie</div>
               <div className="text-[10px] text-[#8696a0] mt-1 leading-normal max-w-[320px] mx-auto">
-                Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
+                Unofficial Electron-based WhatsApp Client for Linux with Multi-account and Extensions Support
               </div>
               {/* Dynamic Version & Build Info */}
               <div className="flex items-center justify-center mt-2">
