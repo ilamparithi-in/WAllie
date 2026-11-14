@@ -89,7 +89,10 @@ graph TD
     - **Spacers & Gaps**:
       1. **Vertical 4px Gap**: Because the row is 76px tall and `cell-frame-container` is 72px tall, the bottom 4px of each row is an unhandled empty space directly on `div[role="row"]`.
       2. **Horizontal 10px Gutters**: There is 10px of outer margin/padding on the left (65px–75px) and right (712px–722px) hitting the unhandled wrapper divs.
-    - Clicks within these empty div/span gaps do not trigger WhatsApp Web to open any chat. In portrait mode, click interception must verify that the target is inside an actual interactive chat card (`[data-testid="cell-frame-container"]`) and not an outer row gap, divider, selection checkbox, or context menu chevron, preventing unwanted transitions to an empty conversation pane.
+    - **Boundary Forwarding & Event Synchronization**:
+      - WhatsApp Web activates chats on `mousedown` (left click, `button === 0`) attached directly to `[data-testid="cell-frame-container"]`.
+      - WAllie intercepts `mousedown` (capture phase) in addition to `click` so that portrait pane switching occurs immediately even if slight pointer movement or micro-drags suppress Chromium's synthetic `click` event.
+      - If a user clicks on the 4px vertical gap or 10px outer gutters of a row, WAllie detects the chat row, verifies it is not a context menu chevron or selection checkbox, and forwards synthetic `mousedown` directly to the child `[data-testid="cell-frame-container"]`. This guarantees the chat activates on the first try from anywhere on the row card.
 - **Chat View**: Rendered in `c4` (`#main`).
 - **Back Button Placement**:
   - Header hierarchy: `#main header > div:first-child` contains:
@@ -385,5 +388,5 @@ Configurable at runtime and synchronized across IPC:
 - [x] Main screen horizontal scroll permanently locked to `0` (`lockMainScreenScroll`), completely resolving the community group column-sliding bug.
 - [x] Multi-level Communities navigation (Top-level -> Navigation Drawer -> Sub-group Chat -> Back) functioning without stuck states.
 - [x] Fullscreen profile photo & media lightbox overlays (`.app-wrapper-web > span:has(> div)`) elevated to `z-index: 1000`, cleanly sitting on top of the 64px navigation rail without cutoff.
-- [x] Chat list row div/span gap filtering: Clicks on 4px vertical gaps between chats, 10px outer gutters, selection checkboxes, and context menu triggers are filtered out so they do not trigger a spurious portrait pane transition to an empty chat area.
+- [x] Chat list row interaction & boundary forwarding: Intercepts `mousedown` (button 0) alongside `click`, and forwards boundary/gutter clicks directly to `[data-testid="cell-frame-container"]` while filtering context menus and checkboxes, ensuring chats open reliably on the first attempt without dropped transitions.
 
