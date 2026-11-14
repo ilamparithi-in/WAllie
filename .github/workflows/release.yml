@@ -41,7 +41,7 @@ jobs:
       - name: Install Linux packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends rpm libarchive-tools
+          sudo apt-get install -y --no-install-recommends rpm libarchive-tools zsync
 
       - name: Install npm dependencies
         run: npm ci

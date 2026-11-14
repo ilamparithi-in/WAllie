@@ -8,28 +8,37 @@ directories:
   output: dist-pack
   buildResources: build
 toolsets:
-  appimage: "1.0.3"
-files:
-  - dist/**/*
-  - package.json
+  appimage: 'latest'
+afterAllArtifactBuild: scripts/embed-appimage-update-info.cjs
 linux:
-  syncDesktopName: true
   category: Chat;Network;InstantMessaging;
   target:
     - target: AppImage
-      arch: [x64, arm64]
+      arch:
+        - x64
+        - arm64
     - target: deb
-      arch: [x64, arm64]
+      arch:
+        - x64
+        - arm64
     - target: rpm
-      arch: [x64, arm64]
+      arch:
+        - x64
+        - arm64
     - target: pacman
-      arch: [x64, arm64]
+      arch:
+        - x64
+        - arm64
     - target: flatpak
-      arch: [x64, arm64]
+      arch:
+        - x64
+        - arm64
     - target: snap
-      arch: [x64, arm64]
+      arch:
+        - x64
+        - arm64
 snapcraft:
-  base: "core24"
+  base: core24
   core24:
     confinement: strict
     grade: stable
@@ -45,7 +54,7 @@ snapcraft:
 flatpak:
   runtimeVersion: "26.08"
   baseVersion: "26.08"
-  artifactName: "${productName}-${version}-${arch}.${ext}"
+  artifactName: ${productName}-${version}-${arch}.${ext}
   finishArgs:
     - "--share=ipc"
     - "--socket=x11"
@@ -60,9 +69,13 @@ win:
   icon: build/icon.ico
   target:
     - target: nsis
-      arch: [x64, arm64]
+      arch:
+        - x64
+        - arm64
     - target: portable
-      arch: [x64, arm64]
+      arch:
+        - x64
+        - arm64
 nsis:
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
@@ -70,12 +83,15 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
 portable:
-  artifactName: "${productName}-${version}-portable-${arch}.${ext}"
+  artifactName: ${productName}-${version}-portable-${arch}.${ext}
 mac:
   category: public.app-category.social-networking
   target:
     - target: dmg
-      arch: [x64, arm64, universal]
+      arch:
+        - x64
+        - arm64
+        - universal
 protocols:
   - name: whatsapp
     schemes:
@@ -83,3 +99,7 @@ protocols:
   - name: wallie
     schemes:
       - wallie
+fileOptions:
+  files:
+    - dist/**/*
+    - package.json
