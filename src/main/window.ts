@@ -2,7 +2,7 @@ import { app, BrowserWindow, WebContentsView, Tray, Menu, Notification, session,
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { state } from './state';
-import { getAppIcon, getAccountById, getAccountsWithLoadedStatus, getPreloadPath, getInitialWindowSize, isAccountLoaded } from './utils';
+import { getAppIcon, getAccountById, getAccountsWithLoadedStatus, getPreloadPath, getInitialWindowSize, isAccountLoaded, getActiveWindow } from './utils';
 import { createAccountView, injectCustomCssForView, registerZoomShortcuts, registerContextMenu, handleExternalLinkClick } from './views';
 import { safeDeleteExtensionDir } from './extensions';
 import { saveAccounts, saveSettings } from './config';
@@ -441,9 +441,7 @@ export async function removeAccountLogic(id: string): Promise<boolean> {
   if (!account) return false;
 
   // Always show confirmation prompt when trying to delete
-  const parentWindow = (state.settingsWindow && !state.settingsWindow.isDestroyed() && state.settingsWindow.isVisible() && state.settingsWindow.isFocused())
-    ? state.settingsWindow
-    : (state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : (state.settingsWindow && !state.settingsWindow.isDestroyed() ? state.settingsWindow : undefined));
+  const parentWindow = getActiveWindow();
 
   const choice = await dialog.showMessageBox(parentWindow!, {
     type: 'warning',
@@ -574,6 +572,7 @@ export function openSettingsWindow(page?: string, accountId?: string) {
   const { width, height } = getInitialWindowSize(520, 720, state.mainWindow);
 
   state.settingsWindow = new BrowserWindow({
+    parent: state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined,
     width: Math.min(width, 560),
     height: Math.max(height, 600),
     minWidth: 420,

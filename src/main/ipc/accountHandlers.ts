@@ -7,6 +7,7 @@ import {
   getAccountsWithLoadedStatus,
   getAccountForWebContents,
   isAccountLoaded,
+  getActiveWindow,
 } from '../utils';
 import {
   switchActiveAccount,
@@ -235,8 +236,9 @@ export function registerAccountHandlers(): void {
         });
         console.log(`Cache cleared successfully for account: ${accountId}`);
       } else if (type === 'media') {
-        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-          const choice = await dialog.showMessageBox(state.mainWindow, {
+        const parentWindow = getActiveWindow();
+        if (parentWindow && !parentWindow.isDestroyed()) {
+          const choice = await dialog.showMessageBox(parentWindow, {
             type: 'warning',
             buttons: ['Cancel', 'Clear Data & Log Out'],
             defaultId: 0,

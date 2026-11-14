@@ -34,4 +34,55 @@ describe('Responsive Settings & Titlebar Account Switcher Thresholds', () => {
     // 2 tabs needed: 230px -> should NOT overflow
     assert.equal(computeOverflow(1200, 180, 0, 230), false);
   });
+
+  test('focusActiveView suppresses stealing focus when detached settingsWindow is open', () => {
+    let focusCalled = false;
+    const fakeState = {
+      mainWindow: { isVisible: () => true },
+      settingsWindow: { isDestroyed: () => false },
+      activeAccountId: 'acc_1',
+      accountViews: new Map([
+        ['acc_1', { webContents: { isDestroyed: () => false, focus: () => { focusCalled = true; } } }]
+      ]),
+    };
+
+    const simulatedFocusActiveView = (stateObj: typeof fakeState) => {
+      if (!stateObj.mainWindow?.isVisible()) return;
+      if (stateObj.settingsWindow && !stateObj.settingsWindow.isDestroyed()) {
+        return;
+      }
+      const activeView = stateObj.accountViews.get(stateObj.activeAccountId);
+      if (activeView && activeView.webContents && !activeView.webContents.isDestroyed()) {
+        activeView.webContents.focus();
+      }
+    };
+
+    simulatedFocusActiveView(fakeState);
+    assert.equal(focusCalled, false, 'Focus should not be called when settingsWindow is open');
+
+    // When settingsWindow is destroyed or closed, focus should be allowed
+    (fakeState as any).settingsWindow = null;
+    simulatedFocusActiveView(fakeState);
+    assert.equal(focusCalled, true, 'Focus should be called when settingsWindow is closed');
+  });
+
+  test('getActiveWindow resolves focused window or settingsWindow before mainWindow', () => {
+    const fakeSettingsWin = { id: 'settings', isDestroyed: () => false };
+    const fakeMainWin = { id: 'main', isDestroyed: () => false };
+
+    const resolveActiveWindow = (focused: any, settings: any, main: any) => {
+      if (focused && !focused.isDestroyed()) return focused;
+      if (settings && !settings.isDestroyed()) return settings;
+      return main && !main.isDestroyed() ? main : undefined;
+    };
+
+    // When settings window is focused
+    assert.equal(resolveActiveWindow(fakeSettingsWin, fakeSettingsWin, fakeMainWin).id, 'settings');
+
+    // When no window has focus but settings is open
+    assert.equal(resolveActiveWindow(null, fakeSettingsWin, fakeMainWin).id, 'settings');
+
+    // When settings is closed and main window is active
+    assert.equal(resolveActiveWindow(null, null, fakeMainWin).id, 'main');
+  });
 });

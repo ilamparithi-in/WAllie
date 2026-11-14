@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { state } from './state';
-import { getInitialWindowSize, getAppIcon, getPreloadPath } from './utils';
+import { getInitialWindowSize, getAppIcon, getPreloadPath, getActiveWindow } from './utils';
 import type {
   WhatsAppChatExport,
   ChatExportOptions,
@@ -61,8 +61,9 @@ export class ChatExporterManager {
    * Prompts user for a directory where export files will be written.
    */
   public async promptExportDirectory(defaultName?: string): Promise<string | null> {
-    if (!state.mainWindow) return null;
-    const result = await dialog.showOpenDialog(state.mainWindow, {
+    const targetWin = getActiveWindow();
+    if (!targetWin || targetWin.isDestroyed()) return null;
+    const result = await dialog.showOpenDialog(targetWin, {
       title: 'Select Destination Folder for Chat Export',
       defaultPath: defaultName ? path.join(app.getPath('downloads'), defaultName) : app.getPath('downloads'),
       properties: ['openDirectory', 'createDirectory'],
@@ -78,8 +79,9 @@ export class ChatExporterManager {
    * Prompts user to select an existing .json or .html chat export file to view.
    */
   public async promptOpenExportFile(): Promise<string | null> {
-    if (!state.mainWindow) return null;
-    const result = await dialog.showOpenDialog(state.mainWindow, {
+    const targetWin = getActiveWindow();
+    if (!targetWin || targetWin.isDestroyed()) return null;
+    const result = await dialog.showOpenDialog(targetWin, {
       title: 'Open Exported WhatsApp Chat',
       defaultPath: app.getPath('downloads'),
       filters: [

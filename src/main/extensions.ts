@@ -5,7 +5,7 @@ import AdmZip from 'adm-zip';
 import { state } from './state';
 import { saveAccounts, CHROME_VERSION, DEFAULT_USER_AGENT } from './config';
 import { ExtensionInfo } from '../shared/types';
-import { getAccountById } from './utils';
+import { getAccountById, getActiveWindow } from './utils';
 import { notificationManager } from './notifications/index';
 
 const EXTENSIONS_BASE = path.join(app.getPath('userData'), 'extensions');
@@ -173,8 +173,12 @@ export async function showExtensionPermissionWarning(
   }
 }
 
-export async function importExtension(accountId: string, importType: 'folder' | 'archive'): Promise<ExtensionInfo | null> {
-  if (!state.mainWindow) return null;
+export async function importExtension(
+  accountId: string,
+  importType: 'folder' | 'archive'
+): Promise<ExtensionInfo | null> {
+  const targetWin = getActiveWindow();
+  if (!targetWin || targetWin.isDestroyed()) return null;
 
   let properties: ('openFile' | 'openDirectory')[] = [];
   let filters: { name: string; extensions: string[] }[] = [];
@@ -186,7 +190,7 @@ export async function importExtension(accountId: string, importType: 'folder' | 
     filters = [{ name: 'Chrome Extension Archive', extensions: ['zip', 'crx'] }];
   }
 
-  const result = await dialog.showOpenDialog(state.mainWindow, {
+  const result = await dialog.showOpenDialog(targetWin, {
     title: importType === 'folder' ? 'Import Unpacked Extension Folder' : 'Import Extension ZIP/CRX File',
     properties,
     filters
@@ -241,7 +245,7 @@ export async function importExtension(accountId: string, importType: 'folder' | 
       enabled: true,
     };
 
-    const userApproved = await showExtensionPermissionWarning(state.mainWindow, manifestPath, newExtension.name);
+    const userApproved = await showExtensionPermissionWarning(targetWin, manifestPath, newExtension.name);
     if (!userApproved) {
       safeDeleteExtensionDir(targetDir);
       return null;
@@ -266,7 +270,7 @@ export async function importExtension(accountId: string, importType: 'folder' | 
         }
       }
 
-      state.mainWindow.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+      state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
       return newExtension;
     }
   } catch (err: any) {

@@ -1,7 +1,7 @@
 import { ipcMain, dialog } from 'electron';
 import { state } from '../state';
 import { saveSettings } from '../config';
-import { focusActiveView } from '../utils';
+import { focusActiveView, getActiveWindow } from '../utils';
 import {
   animateSettingsTransition,
   updateActiveViewBounds,
@@ -19,7 +19,9 @@ export function registerSettingsHandlers(): void {
   ipcMain.on('settings:toggle', (_event, isOpen: unknown) => {
     const open = Boolean(isOpen);
     animateSettingsTransition(open);
-    if (!open) focusActiveView();
+    if (!open && (!state.settingsWindow || state.settingsWindow.isDestroyed())) {
+      focusActiveView();
+    }
   });
 
   ipcMain.on('settings:open-detached', (_event, page?: unknown, accountId?: unknown) => {
@@ -122,39 +124,41 @@ export function registerSettingsHandlers(): void {
       updateActiveViewBounds();
 
       // Show native system dialog prompt for scale confirmation
-      if (newSettings.appScale !== 100 && state.mainWindow && !state.mainWindow.isDestroyed()) {
-        const targetWindow = state.mainWindow;
-        setTimeout(async () => {
-          try {
-            const result = await dialog.showMessageBox(targetWindow, {
-              type: 'question',
-              buttons: ['Keep Scale', 'Revert Scale'],
-              defaultId: 0,
-              cancelId: 1,
-              title: 'Confirm App Scale',
-              message: `App Scale changed to ${newSettings.appScale}%`,
-              detail: 'Does WAllie UI display properly at this scale level?',
-              noLink: true,
-            });
+      if (newSettings.appScale !== 100) {
+        const targetWindow = getActiveWindow();
+        if (targetWindow && !targetWindow.isDestroyed()) {
+          setTimeout(async () => {
+            try {
+              const result = await dialog.showMessageBox(targetWindow, {
+                type: 'question',
+                buttons: ['Keep Scale', 'Revert Scale'],
+                defaultId: 0,
+                cancelId: 1,
+                title: 'Confirm App Scale',
+                message: `App Scale changed to ${newSettings.appScale}%`,
+                detail: 'Does WAllie UI display properly at this scale level?',
+                noLink: true,
+              });
 
-            if (result.response !== 0) {
-              console.log(`Reverting App Scale back to ${oldScale}%`);
-              state.globalSettings!.appScale = oldScale;
-              await saveSettings(state.globalSettings!);
-              const revertedBaseScale = oldScale / 100;
-              targetWindow.webContents.setZoomFactor(revertedBaseScale);
-              targetWindow.webContents.send('settings:global-changed', state.globalSettings);
-              for (const view of state.accountViews.values()) {
-                if (view && !view.webContents.isDestroyed()) {
-                  view.webContents.setZoomFactor(revertedBaseScale);
+              if (result.response !== 0) {
+                console.log(`Reverting App Scale back to ${oldScale}%`);
+                state.globalSettings!.appScale = oldScale;
+                await saveSettings(state.globalSettings!);
+                const revertedBaseScale = oldScale / 100;
+                targetWindow.webContents.setZoomFactor(revertedBaseScale);
+                targetWindow.webContents.send('settings:global-changed', state.globalSettings);
+                for (const view of state.accountViews.values()) {
+                  if (view && !view.webContents.isDestroyed()) {
+                    view.webContents.setZoomFactor(revertedBaseScale);
+                  }
                 }
+                updateActiveViewBounds();
               }
-              updateActiveViewBounds();
+            } catch (err) {
+              console.error('Error in scale confirmation dialog:', err);
             }
-          } catch (err) {
-            console.error('Error in scale confirmation dialog:', err);
-          }
-        }, 100);
+          }, 100);
+        }
       }
     }
 

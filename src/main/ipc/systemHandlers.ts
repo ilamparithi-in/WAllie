@@ -1,9 +1,8 @@
-import { ipcMain, dialog, nativeImage, BrowserWindow } from 'electron';
+import { ipcMain, dialog, nativeImage } from 'electron';
 import fs from 'node:fs';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import { state } from '../state';
-import { parseGnomeFontName } from '../utils';
+import { parseGnomeFontName, getActiveWindow } from '../utils';
 import { resolveGoogleFont } from '../../shared/fonts';
 import { NativePromptOptions, NativePromptResult, NativeConfirmOptions } from '../../shared/types';
 import { validate } from './schemas';
@@ -18,8 +17,9 @@ const fontResolutionSchema = z.object({
 
 export function registerSystemHandlers(): void {
   ipcMain.handle('wallpaper:select-file', async () => {
-    if (!state.mainWindow || state.mainWindow.isDestroyed()) return null;
-    const result = await dialog.showOpenDialog(state.mainWindow, {
+    const parentWindow = getActiveWindow();
+    if (!parentWindow || parentWindow.isDestroyed()) return null;
+    const result = await dialog.showOpenDialog(parentWindow, {
       title: 'Choose Chat Wallpaper Image',
       filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] }],
       properties: ['openFile'],
@@ -56,8 +56,9 @@ export function registerSystemHandlers(): void {
   });
 
   ipcMain.handle('customcss:select-file', async () => {
-    if (!state.mainWindow || state.mainWindow.isDestroyed()) return null;
-    const result = await dialog.showOpenDialog(state.mainWindow, {
+    const parentWindow = getActiveWindow();
+    if (!parentWindow || parentWindow.isDestroyed()) return null;
+    const result = await dialog.showOpenDialog(parentWindow, {
       title: 'Choose Custom CSS Stylesheet',
       filters: [
         { name: 'CSS Stylesheets', extensions: ['css'] },
@@ -210,8 +211,8 @@ export function registerSystemHandlers(): void {
     return await resolveGoogleFont(family, cachedUrl);
   });
 
-  ipcMain.handle('dialog:show-prompt', async (event, options: NativePromptOptions): Promise<NativePromptResult> => {
-    const parentWindow = BrowserWindow.fromWebContents(event.sender) || state.mainWindow || undefined;
+  ipcMain.handle('dialog:show-prompt', async (_event, options: NativePromptOptions): Promise<NativePromptResult> => {
+    const parentWindow = getActiveWindow();
     const buttons = options?.buttons && options.buttons.length > 0 ? options.buttons : ['OK'];
     const result = await dialog.showMessageBox(parentWindow!, {
       type: options?.type || 'info',
@@ -231,8 +232,8 @@ export function registerSystemHandlers(): void {
     };
   });
 
-  ipcMain.handle('dialog:show-confirm', async (event, options: NativeConfirmOptions): Promise<boolean> => {
-    const parentWindow = BrowserWindow.fromWebContents(event.sender) || state.mainWindow || undefined;
+  ipcMain.handle('dialog:show-confirm', async (_event, options: NativeConfirmOptions): Promise<boolean> => {
+    const parentWindow = getActiveWindow();
     const confirmLabel = options?.confirmLabel || 'OK';
     const cancelLabel = options?.cancelLabel || 'Cancel';
     const buttons = [confirmLabel, cancelLabel];

@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { state } from './state';
-import { showAppToast, getConfigDir } from './utils';
+import { showAppToast, getConfigDir, getActiveWindow } from './utils';
 import { DownloadRecord } from '../shared/types';
 import { notificationManager } from './notifications/index';
 import { saveSettings } from './config';
@@ -502,7 +502,8 @@ export class DownloadManager extends EventEmitter {
 
   public async chooseDownloadsFolder(): Promise<string | null> {
     const current = state.globalSettings?.defaultDownloadsPath || app.getPath('downloads');
-    const result = await dialog.showOpenDialog(state.mainWindow || undefined as any, {
+    const targetWin = getActiveWindow();
+    const result = await dialog.showOpenDialog(targetWin as any, {
       title: 'Select Default Downloads Folder',
       defaultPath: current,
       properties: ['openDirectory', 'createDirectory'],
