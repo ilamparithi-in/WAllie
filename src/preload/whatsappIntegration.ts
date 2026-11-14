@@ -187,10 +187,10 @@ export function setupWhatsAppIntegration(mainWorldScript: string): void {
     const msgContainer = target.closest('[data-id], div[class*="message-in"], div[class*="message-out"], [data-testid="msg-container"]');
     if (msgContainer) {
       const isMenuOrAction = !!target.closest(
-        '[data-testid*="down-context"], [data-testid*="context"], [data-icon*="down-context"], [data-icon*="context"], [data-js-context-icon], [data-icon="chevron-down"], [data-icon="down"], [data-testid*="menu"], [aria-label*="context" i], [aria-label*="menu" i], [aria-label*="forward" i], [data-testid="msg-meta"], [data-testid*="reaction"], [data-testid="forwarded-header"], [role="menu"], [role="menuitem"]'
+        '[data-testid*="down-context"], [data-testid*="context"], [data-icon*="down-context"], [data-icon*="context"], [data-testid="context-btn"], [data-testid="icon-down-context"], [data-js-context-icon], [data-icon="chevron-down"], [data-icon="down"], [data-testid*="menu"], button[aria-label*="menu" i], [aria-label*="context" i], [aria-label*="menu" i], [aria-label*="options" i], [aria-label*="more" i], [aria-label*="forward" i], [data-testid*="forward"], [data-testid="msg-meta"], [data-testid*="reaction"], [data-testid="reaction-entry-point"], [data-testid="forwarded-header"], [data-testid="author"], [data-testid*="author"], [data-testid*="caption"], [data-testid="document-caption selectable-text"], [data-testid="tail-in"], [data-testid="tail-out"], [role="menu"], [role="menuitem"]'
       );
       const svgTitle = target.closest('svg')?.querySelector('title')?.textContent?.trim().toLowerCase();
-      const isActionSvg = !!svgTitle && ['down-context', 'chevron-down', 'down', 'ic-fast-forward', 'menu', 'context'].includes(svgTitle);
+      const isActionSvg = !!svgTitle && ['down-context', 'chevron-down', 'down', 'ic-fast-forward', 'menu', 'context', 'tail-in', 'tail-out'].includes(svgTitle);
 
       if (isMenuOrAction || isActionSvg) {
         return;
@@ -200,20 +200,34 @@ export function setupWhatsAppIntegration(mainWorldScript: string): void {
         return;
       }
 
-      const docCard = target.closest(
-        '[data-testid="document-thumb"], [data-testid*="document"], [data-testid="audio-play"], [data-testid="audio-download"], [role="button"][title*="."], [role="button"][title^="View "], [role="button"][title^="Download "]'
-      ) || (target.closest('[data-testid="msg-container"]') && msgContainer.querySelector('[data-testid*="document"], [data-icon*="document"], [data-icon="default-doc"], [title^="View "], [title^="Download "]') ? target : null);
+      // Ensure the click was strictly inside the document card / document space (the darker inner rectangle)
+      const docCard = target.closest<HTMLElement>(
+        '[data-testid="document-thumb"], [data-testid="document-thumb-details"], [data-testid="audio-play"], [data-testid="audio-download"], [role="button"][title^="Download \""], [role="button"][title^="View \""]'
+      );
       if (!docCard) {
         return;
       }
 
-      const filename = extractFilenameFromMessage(msgContainer);
-      const isDocCard = !!msgContainer.querySelector('[data-icon*="document"], [data-icon="default-doc"], [data-testid*="document"], [title^="View "], [title^="Download "]');
+      // Verify that the click coordinates fall strictly within the bounds of the document space
+      if (e.clientX !== 0 || e.clientY !== 0) {
+        const rect = docCard.getBoundingClientRect();
+        if (
+          e.clientX < rect.left ||
+          e.clientX > rect.right ||
+          e.clientY < rect.top ||
+          e.clientY > rect.bottom
+        ) {
+          return;
+        }
+      }
+
+      const filename = extractFilenameFromMessage(docCard) || extractFilenameFromMessage(msgContainer);
+      const isDocCard = !!(docCard.getAttribute('data-testid')?.includes('document') || msgContainer.querySelector('[data-icon*="document"], [data-icon="default-doc"], [data-testid="document-thumb"]'));
       const hasExtension = /\.[a-z0-9]{2,6}$/i.test(filename.trim());
 
       if (filename && (hasExtension || isDocCard)) {
         const cleanName = filename.trim();
-        const extractedSize = extractFileSizeFromMessage(msgContainer);
+        const extractedSize = extractFileSizeFromMessage(docCard) ?? extractFileSizeFromMessage(msgContainer);
 
         console.log(`[wallie] Document card clicked: "${cleanName}", approx size: ${extractedSize}`);
 
