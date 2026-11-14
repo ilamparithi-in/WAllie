@@ -179,6 +179,105 @@ async function main() {
       break;
     }
 
+    case 'record': {
+      const durationIdx = args.indexOf('--duration');
+      const durationMs = durationIdx !== -1 ? Number(args[durationIdx + 1]) : 5000;
+      const filterIdx = args.indexOf('--filter');
+      const filter = filterIdx !== -1 ? args[filterIdx + 1] : '';
+
+      console.log(`\x1b[36m[wa-bridge] Recording DOM mutations and drag events for ${durationMs}ms...\x1b[0m`);
+
+      // Script that runs in target webContents
+      const clientScript = `
+        new Promise((resolve) => {
+          const mutations = [];
+          const events = [];
+          const startTime = performance.now();
+
+          const observer = new MutationObserver((records) => {
+            const now = Math.round(performance.now() - startTime);
+            for (const r of records) {
+              const el = r.target;
+              const testId = el.getAttribute ? el.getAttribute('data-testid') : null;
+              const tagDesc = el.nodeName + (el.id ? '#' + el.id : '') + (testId ? '[' + testId + ']' : '');
+              const cls = typeof el.className === 'string' ? el.className.split(' ')[0] : '';
+              const desc = tagDesc + (cls ? '.' + cls : '');
+
+              if (${JSON.stringify(filter)} && !desc.toLowerCase().includes(${JSON.stringify(filter)})) {
+                continue;
+              }
+
+              mutations.push({
+                timeMs: now,
+                type: r.type,
+                target: desc,
+                attribute: r.attributeName || undefined,
+                addedCount: r.addedNodes.length || undefined,
+                removedCount: r.removedNodes.length || undefined,
+                added: Array.from(r.addedNodes).slice(0, 3).map(n => n.nodeName + (n.getAttribute?.('data-testid') ? '[' + n.getAttribute('data-testid') + ']' : '')),
+                removed: Array.from(r.removedNodes).slice(0, 3).map(n => n.nodeName + (n.getAttribute?.('data-testid') ? '[' + n.getAttribute('data-testid') + ']' : ''))
+              });
+              if (mutations.length > 1000) mutations.shift();
+            }
+          });
+
+          observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeOldValue: true
+          });
+
+          const eventNames = ['dragenter', 'dragleave', 'dragover', 'drop'];
+          const eventLogger = (e) => {
+            const now = Math.round(performance.now() - startTime);
+            const t = e.target;
+            const testId = t && t.getAttribute ? t.getAttribute('data-testid') : null;
+            const desc = t ? (t.nodeName + (t.id ? '#' + t.id : '') + (testId ? '[' + testId + ']' : '')) : null;
+            events.push({
+              timeMs: now,
+              type: e.type,
+              target: desc
+            });
+            if (events.length > 500) events.shift();
+          };
+
+          eventNames.forEach(name => window.addEventListener(name, eventLogger, true));
+
+          setTimeout(() => {
+            observer.disconnect();
+            eventNames.forEach(name => window.removeEventListener(name, eventLogger, true));
+
+            const targetCounts = {};
+            for (const m of mutations) {
+              targetCounts[m.target] = (targetCounts[m.target] || 0) + 1;
+            }
+            const flickering = Object.entries(targetCounts)
+              .sort((a, b) => b[1] - a[1])
+              .filter(([_, count]) => count >= 2)
+              .map(([target, count]) => ({ target, count }));
+
+            resolve({
+              durationMs: ${durationMs},
+              totalMutations: mutations.length,
+              totalEvents: events.length,
+              flickering,
+              eventsSummary: events.reduce((acc, ev) => { acc[ev.type] = (acc[ev.type] || 0) + 1; return acc; }, {}),
+              recentMutations: mutations.slice(-50),
+              recentEvents: events.slice(-50)
+            });
+          }, ${durationMs});
+        })
+      `;
+
+      const res = await request('/eval', {
+        method: 'POST',
+        body: JSON.stringify({ code: clientScript }),
+      });
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+
     case 'switch': {
       const accountId = args[1];
       if (!accountId) {
@@ -206,6 +305,7 @@ Usage:
   node scripts/wa-bridge.mjs eval '<code>'
   node scripts/wa-bridge.mjs dom ['<selector>'] [--chars N]
   node scripts/wa-bridge.mjs screenshot [savePath]
+  node scripts/wa-bridge.mjs record [--duration ms] [--filter keyword]
   node scripts/wa-bridge.mjs switch <accountId>
 `);
       break;

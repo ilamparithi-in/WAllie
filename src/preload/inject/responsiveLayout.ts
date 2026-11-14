@@ -74,7 +74,7 @@ const RESPONSIVE_CSS = `
     max-width: 100% !important;
   }
 
-  /* Middle Drawer (Call Info, Camera Capture, Attachment Preview) */
+  /* Middle Drawer (Call Info, Camera Capture, Attachment Preview, File Drag Overlay) */
   html[data-wallie-portrait="true"] [data-testid="drawer-middle"] {
     pointer-events: auto !important;
     position: absolute !important;
@@ -90,7 +90,7 @@ const RESPONSIVE_CSS = `
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     will-change: transform;
   }
-  html[data-wallie-portrait="true"] [data-testid="drawer-middle"]:not(:has(header)):not(:has(button)) {
+  html[data-wallie-portrait="true"] [data-testid="drawer-middle"]:not(:has(header)):not(:has(button)):not(:has(input[type="file"])) {
     display: none !important;
     pointer-events: none !important;
   }

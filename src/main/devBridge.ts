@@ -500,6 +500,99 @@ export function startDevBridge(): void {
           return;
         }
 
+        if (pathname === '/record') {
+          const durationMs = Math.min(Math.max(Number(payload.durationMs) || 5000, 500), 30000);
+          const filter = payload.filter ? String(payload.filter).toLowerCase() : '';
+
+          const script = `
+            new Promise((resolve) => {
+              const mutations = [];
+              const events = [];
+              const startTime = performance.now();
+
+              const observer = new MutationObserver((records) => {
+                const now = Math.round(performance.now() - startTime);
+                for (const r of records) {
+                  const el = r.target;
+                  const testId = el.getAttribute ? el.getAttribute('data-testid') : null;
+                  const tagDesc = el.nodeName + (el.id ? '#' + el.id : '') + (testId ? '[' + testId + ']' : '');
+                  const cls = typeof el.className === 'string' ? el.className.split(' ')[0] : '';
+                  const desc = tagDesc + (cls ? '.' + cls : '');
+
+                  if (${JSON.stringify(filter)} && !desc.toLowerCase().includes(${JSON.stringify(filter)})) {
+                    continue;
+                  }
+
+                  mutations.push({
+                    timeMs: now,
+                    type: r.type,
+                    target: desc,
+                    attribute: r.attributeName || undefined,
+                    addedCount: r.addedNodes.length || undefined,
+                    removedCount: r.removedNodes.length || undefined,
+                    added: Array.from(r.addedNodes).slice(0, 3).map(n => n.nodeName + (n.getAttribute?.('data-testid') ? '[' + n.getAttribute('data-testid') + ']' : '')),
+                    removed: Array.from(r.removedNodes).slice(0, 3).map(n => n.nodeName + (n.getAttribute?.('data-testid') ? '[' + n.getAttribute('data-testid') + ']' : ''))
+                  });
+                  if (mutations.length > 1000) mutations.shift();
+                }
+              });
+
+              observer.observe(document.documentElement, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeOldValue: true
+              });
+
+              const eventNames = ['dragenter', 'dragleave', 'dragover', 'drop'];
+              const eventLogger = (e) => {
+                const now = Math.round(performance.now() - startTime);
+                const t = e.target;
+                const testId = t && t.getAttribute ? t.getAttribute('data-testid') : null;
+                const desc = t ? (t.nodeName + (t.id ? '#' + t.id : '') + (testId ? '[' + testId + ']' : '')) : null;
+                events.push({
+                  timeMs: now,
+                  type: e.type,
+                  target: desc
+                });
+                if (events.length > 500) events.shift();
+              };
+
+              eventNames.forEach(name => window.addEventListener(name, eventLogger, true));
+
+              setTimeout(() => {
+                observer.disconnect();
+                eventNames.forEach(name => window.removeEventListener(name, eventLogger, true));
+
+                // Analyze frequency of mutations per target (flicker detection)
+                const targetCounts = {};
+                for (const m of mutations) {
+                  targetCounts[m.target] = (targetCounts[m.target] || 0) + 1;
+                }
+                const flickering = Object.entries(targetCounts)
+                  .sort((a, b) => b[1] - a[1])
+                  .filter(([_, count]) => count >= 2)
+                  .map(([target, count]) => ({ target, count }));
+
+                resolve({
+                  durationMs: ${durationMs},
+                  totalMutations: mutations.length,
+                  totalEvents: events.length,
+                  flickering,
+                  eventsSummary: events.reduce((acc, ev) => { acc[ev.type] = (acc[ev.type] || 0) + 1; return acc; }, {}),
+                  recentMutations: mutations.slice(-50),
+                  recentEvents: events.slice(-50)
+                });
+              }, ${durationMs});
+            })
+          `;
+
+          const result = await wc.executeJavaScript(script);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, result }, null, 2));
+          return;
+        }
+
         if (pathname === '/screenshot') {
           const image = await wc.capturePage();
           const defaultPath = path.join(app.getPath('userData'), 'wa-bridge-screenshot.png');
