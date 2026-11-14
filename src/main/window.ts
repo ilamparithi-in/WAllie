@@ -6,7 +6,7 @@ import { getAppIcon, getAccountById, getAccountsWithLoadedStatus, getPreloadPath
 import { createAccountView, injectCustomCssForView, registerZoomShortcuts, registerContextMenu, handleExternalLinkClick } from './views';
 import { safeDeleteExtensionDir } from './extensions';
 import { saveAccounts, saveSettings } from './config';
-import { TITLEBAR_HEIGHT } from '../shared/constants';
+import { TITLEBAR_HEIGHT, MACOS_TRAFFIC_LIGHT_POSITION } from '../shared/constants';
 import { DEFAULT_MIN_WINDOW_WIDTH, DEFAULT_MIN_WINDOW_HEIGHT } from '../shared/types';
 import { loadWindowState, saveWindowStateImmediate, debouncedSaveWindowState } from './windowState';
 
@@ -191,6 +191,7 @@ export function createMainWindow() {
     minHeight: unblocked ? 0 : DEFAULT_MIN_WINDOW_HEIGHT,
     frame: false,
     titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin' ? { trafficLightPosition: MACOS_TRAFFIC_LIGHT_POSITION } : {}),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#111b21' : '#f0f2f5',
     show: false,
     webPreferences: {
@@ -224,7 +225,7 @@ export function createMainWindow() {
     if (windowState.x !== undefined && windowState.y !== undefined) {
       try {
         state.mainWindow?.setPosition(windowState.x, windowState.y);
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!startMinimized) {
@@ -338,6 +339,16 @@ export function createMainWindow() {
     state.mainWindow?.webContents.send('window:maximized-changed', false);
     setTimeout(updateActiveViewBounds, 100);
     debouncedSaveWindowState(state.mainWindow);
+  });
+
+  state.mainWindow.on('enter-full-screen', () => {
+    state.mainWindow?.webContents.send('window:fullscreen-changed', true);
+    setTimeout(updateActiveViewBounds, 100);
+  });
+
+  state.mainWindow.on('leave-full-screen', () => {
+    state.mainWindow?.webContents.send('window:fullscreen-changed', false);
+    setTimeout(updateActiveViewBounds, 100);
   });
 
   state.mainWindow.on('close', (event) => {

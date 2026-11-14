@@ -5,7 +5,7 @@ import { DEFAULT_USER_AGENT, saveAccounts, saveSettings } from './config';
 import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, showAppToast, getSystemDesktopFontName } from './utils';
 import { Account } from '../shared/types';
 import { resolveGoogleFontUrl } from '../shared/fonts';
-import { VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX } from '../shared/constants';
+import { VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX, MACOS_TRAFFIC_LIGHT_POSITION } from '../shared/constants';
 import { downloadManager } from './downloads';
 import { prepareExtensionForElectron } from './extensions';
 import { createSandboxWindow } from './sandbox';
@@ -361,8 +361,8 @@ export function resetZoom(contents: Electron.WebContents) {
   try {
     const baseScale = (state.globalSettings?.appScale || 100) / 100;
     contents.setZoomFactor(baseScale);
-    contents.setVisualZoomLevelLimits(1, 1).catch(() => {});
-    contents.setVisualZoomLevelLimits(VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX).catch(() => {});
+    contents.setVisualZoomLevelLimits(1, 1).catch(() => { });
+    contents.setVisualZoomLevelLimits(VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX).catch(() => { });
     console.log(`Resetting zoom factor to baseline ${baseScale} (100%) and resetting visual zoom scale`);
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('zoom:changed', 100);
@@ -806,7 +806,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
 
   try {
     view.setBackgroundColor(isDark ? '#111b21' : '#f0f2f5');
-  } catch (e) {}
+  } catch (e) { }
 
   view.webContents.setUserAgent(DEFAULT_USER_AGENT);
   view.webContents.setZoomFactor(baseScale);
@@ -833,7 +833,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   view.webContents.on('did-navigate', (_event, url) => {
     if (url === 'about:blank' || (!isWhatsAppUrl(url) && !url.startsWith('chrome-extension://'))) {
       console.warn(`[Account ${account.id}] Navigated away to ${url}, redirecting back to WhatsApp Web`);
-      view.webContents.loadURL('https://web.whatsapp.com').catch(() => {});
+      view.webContents.loadURL('https://web.whatsapp.com').catch(() => { });
     }
   });
 
@@ -869,6 +869,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
         minHeight: 400,
         frame: false,
         titleBarStyle: 'hidden',
+        ...(process.platform === 'darwin' ? { trafficLightPosition: MACOS_TRAFFIC_LIGHT_POSITION } : {}),
         backgroundColor: nativeTheme.shouldUseDarkColors ? '#111b21' : '#f0f2f5',
         autoHideMenuBar: true,
         webPreferences: {
@@ -886,7 +887,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
 
   view.webContents.on('did-create-window', (childWindow, details) => {
     console.log(`Intercepted child window creation for URL: ${details.url}`);
-    
+
     // When a call window is created, pause media across views if not already in a call session
     if (state.callWindows.size === 0) {
       state.callWasAnswered = false;
@@ -1009,8 +1010,8 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
         themeMode: state.globalSettings?.themeMode || 'system',
         shouldUseDarkColors: nativeTheme.shouldUseDarkColors,
       });
-    } catch (e) {}
-    view.webContents.setVisualZoomLevelLimits(VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX).catch(() => {});
+    } catch (e) { }
+    view.webContents.setVisualZoomLevelLimits(VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX).catch(() => { });
     checkLoginStatus();
     injectAccountStyling(account.id, view.webContents);
   });

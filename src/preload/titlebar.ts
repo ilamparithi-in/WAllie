@@ -56,6 +56,12 @@ export const TITLEBAR_CSS = `
     padding-left: 10px;
     -webkit-app-region: no-drag;
   }
+  #custom-titlebar.titlebar-mac .titlebar-left {
+    padding-left: 78px;
+  }
+  #custom-titlebar.titlebar-mac.fullscreen .titlebar-left {
+    padding-left: 10px;
+  }
   .titlebar-left-icon {
     display: flex;
     align-items: center;
@@ -92,6 +98,9 @@ export const TITLEBAR_CSS = `
     gap: 2px;
     padding-right: 4px;
     -webkit-app-region: no-drag;
+  }
+  #custom-titlebar.titlebar-mac .titlebar-right {
+    padding-right: 8px;
   }
   .titlebar-btn {
     width: 28px;
@@ -226,8 +235,22 @@ export function injectUnifiedTitlebar(options: {
     ]
   });
 
+  const isMac = process.platform === 'darwin';
   const container = document.createElement('div');
   container.id = 'custom-titlebar';
+  if (isMac) {
+    container.classList.add('titlebar-mac');
+    ipcRenderer.invoke('window:isFullScreen').then((fs: boolean) => {
+      if (fs) container.classList.add('fullscreen');
+    }).catch(() => { });
+    ipcRenderer.on('window:fullscreen-changed', (_event: any, fs: boolean) => {
+      if (fs) {
+        container.classList.add('fullscreen');
+      } else {
+        container.classList.remove('fullscreen');
+      }
+    });
+  }
 
   const leftDiv = document.createElement('div');
   leftDiv.className = 'titlebar-left';
@@ -260,7 +283,11 @@ export function injectUnifiedTitlebar(options: {
   let maxBtn: HTMLButtonElement | null = null;
   let closeBtn: HTMLButtonElement | null = null;
 
-  options.controls.forEach((control) => {
+  const effectiveControls = isMac
+    ? options.controls.filter((c) => c === 'pin')
+    : options.controls;
+
+  effectiveControls.forEach((control) => {
     if (control === 'pin') {
       pinBtn = document.createElement('button');
       pinBtn.className = 'titlebar-btn';
@@ -269,9 +296,11 @@ export function injectUnifiedTitlebar(options: {
       pinBtn.appendChild(createPinIcon());
       rightDiv.appendChild(pinBtn);
 
-      const divider = document.createElement('div');
-      divider.className = 'titlebar-divider';
-      rightDiv.appendChild(divider);
+      if (!isMac) {
+        const divider = document.createElement('div');
+        divider.className = 'titlebar-divider';
+        rightDiv.appendChild(divider);
+      }
     } else if (control === 'min') {
       minBtn = document.createElement('button');
       minBtn.className = 'titlebar-btn';
