@@ -178,7 +178,11 @@ export function showAppToast(message: string, url?: string, skipMainWindow = fal
   }
 }
 
+import { parseGnomeFontName } from '../shared/fonts';
+export { parseGnomeFontName };
+
 let cachedDesktopFontName: string | null = null;
+let cachedDesktopMonoFontName: string | null = null;
 
 export async function getSystemDesktopFontName(): Promise<string> {
   if (cachedDesktopFontName !== null) {
@@ -189,17 +193,27 @@ export async function getSystemDesktopFontName(): Promise<string> {
     const { promisify } = await import('node:util');
     const execAsync = promisify(exec);
     const { stdout } = await execAsync('gsettings get org.gnome.desktop.interface font-name');
-    const cleaned = stdout.trim().replace(/^['"]+|['"]+$/g, '');
-    const parts = cleaned.split(/\s+/);
-    if (parts.length > 1 && !isNaN(Number(parts[parts.length - 1]))) {
-      cachedDesktopFontName = parts.slice(0, -1).join(' ');
-    } else {
-      cachedDesktopFontName = cleaned;
-    }
+    cachedDesktopFontName = parseGnomeFontName(stdout);
   } catch {
     cachedDesktopFontName = '';
   }
-  return cachedDesktopFontName;
+  return cachedDesktopFontName || '';
+}
+
+export async function getSystemDesktopMonoFontName(): Promise<string> {
+  if (cachedDesktopMonoFontName !== null) {
+    return cachedDesktopMonoFontName;
+  }
+  try {
+    const { exec } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const execAsync = promisify(exec);
+    const { stdout } = await execAsync('gsettings get org.gnome.desktop.interface monospace-font-name');
+    cachedDesktopMonoFontName = parseGnomeFontName(stdout);
+  } catch {
+    cachedDesktopMonoFontName = '';
+  }
+  return cachedDesktopMonoFontName || '';
 }
 
 /**

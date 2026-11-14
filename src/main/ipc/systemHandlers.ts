@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { state } from '../state';
+import { parseGnomeFontName } from '../utils';
 import { resolveGoogleFont } from '../../shared/fonts';
 import { NativePromptOptions, NativePromptResult, NativeConfirmOptions } from '../../shared/types';
 import { validate } from './schemas';
@@ -113,17 +114,36 @@ export function registerSystemHandlers(): void {
 
   ipcMain.handle('system:get-fonts-meta', async () => {
     try {
-      const { stdout } = await execAsync('fc-list : family variable');
-      const fontMap = new Map<string, boolean>();
+      const { stdout } = await execAsync('fc-list : family spacing variable');
+      const fontMap = new Map<string, { isVariable: boolean; isMono: boolean }>();
       stdout.split('\n').forEach((line) => {
         if (!line.trim()) return;
-        const [familiesPart, varPart] = line.split(':variable=');
-        const isVar = varPart ? varPart.trim().toLowerCase() === 'true' : false;
+        const parts = line.split(':');
+        const familiesPart = parts[0];
+        let isVar = false;
+        let isMono = false;
+
+        for (let i = 1; i < parts.length; i++) {
+          const part = parts[i].trim().toLowerCase();
+          if (part.startsWith('variable=')) {
+            isVar = part.slice(9).trim() === 'true';
+          } else if (part.startsWith('spacing=')) {
+            const spacingVal = part.slice(8).trim();
+            if (spacingVal === '100' || spacingVal === '110' || spacingVal === 'mono' || spacingVal === 'charcell') {
+              isMono = true;
+            }
+          }
+        }
+
         familiesPart.split(',').forEach((f) => {
           const trimmed = f.trim();
           if (trimmed && !trimmed.startsWith('.')) {
-            const current = fontMap.get(trimmed) || false;
-            fontMap.set(trimmed, current || isVar);
+            const current = fontMap.get(trimmed) || { isVariable: false, isMono: false };
+            const nameSuggestsMono = /\b(mono|monospace|code|console)\b/i.test(trimmed);
+            fontMap.set(trimmed, {
+              isVariable: current.isVariable || isVar,
+              isMono: current.isMono || isMono || nameSuggestsMono,
+            });
           }
         });
       });
@@ -131,24 +151,35 @@ export function registerSystemHandlers(): void {
       let desktopFontName = '';
       try {
         const { stdout: gOut } = await execAsync('gsettings get org.gnome.desktop.interface font-name');
-        const cleaned = gOut.trim().replace(/^['"]+|['"]+$/g, '');
-        const parts = cleaned.split(/\s+/);
-        if (parts.length > 1 && !isNaN(Number(parts[parts.length - 1]))) {
-          desktopFontName = parts.slice(0, -1).join(' ');
-        } else {
-          desktopFontName = cleaned;
-        }
+        desktopFontName = parseGnomeFontName(gOut);
+      } catch {
+        // Fallback
+      }
+
+      let desktopMonoFontName = '';
+      try {
+        const { stdout: gMonoOut } = await execAsync('gsettings get org.gnome.desktop.interface monospace-font-name');
+        desktopMonoFontName = parseGnomeFontName(gMonoOut);
       } catch {
         // Fallback
       }
 
       let desktopFontIsVariable = false;
       if (desktopFontName) {
-        desktopFontIsVariable = fontMap.get(desktopFontName) || false;
+        desktopFontIsVariable = fontMap.get(desktopFontName)?.isVariable || false;
+      }
+
+      let desktopMonoFontIsVariable = false;
+      if (desktopMonoFontName) {
+        desktopMonoFontIsVariable = fontMap.get(desktopMonoFontName)?.isVariable || false;
       }
 
       const fonts = Array.from(fontMap.entries())
-        .map(([name, isVariable]) => ({ name, isVariable }))
+        .map(([name, meta]) => ({
+          name,
+          isVariable: meta.isVariable,
+          isMono: meta.isMono,
+        }))
         .sort((a, b) => a.name.localeCompare(b.name));
 
       return {
@@ -157,11 +188,16 @@ export function registerSystemHandlers(): void {
           name: desktopFontName,
           isVariable: desktopFontIsVariable,
         },
+        desktopMonoFont: {
+          name: desktopMonoFontName,
+          isVariable: desktopMonoFontIsVariable,
+        },
       };
     } catch {
       return {
         fonts: [],
         desktopFont: { name: '', isVariable: false },
+        desktopMonoFont: { name: '', isVariable: false },
       };
     }
   });

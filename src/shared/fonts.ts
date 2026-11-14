@@ -101,3 +101,16 @@ export async function resolveGoogleFontUrl(family: string, cachedUrl?: string): 
   googleFontUrlCache.set(clean.toLowerCase(), fallback);
   return fallback;
 }
+
+/**
+ * Parses Linux/GNOME gsettings font strings, stripping variant brackets (e.g. [NONE]),
+ * enclosing quotes, and trailing point size numbers.
+ */
+export function parseGnomeFontName(raw: string): string {
+  const cleaned = raw.trim().replace(/^['"]+|['"]+$/g, '').replace(/\[.*?\]/g, '').trim();
+  const parts = cleaned.split(/\s+/);
+  if (parts.length > 1 && !isNaN(Number(parts[parts.length - 1]))) {
+    return parts.slice(0, -1).join(' ').trim();
+  }
+  return cleaned;
+}

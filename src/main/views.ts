@@ -2,7 +2,7 @@ import { BrowserWindow, WebContentsView, Menu, session, desktopCapturer, shell, 
 import fs from 'node:fs';
 import { state } from './state';
 import { DEFAULT_USER_AGENT, saveAccounts, saveSettings } from './config';
-import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, showAppToast, getSystemDesktopFontName } from './utils';
+import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, showAppToast, getSystemDesktopFontName, getSystemDesktopMonoFontName } from './utils';
 import { Account } from '../shared/types';
 import { resolveGoogleFontUrl } from '../shared/fonts';
 import { VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX, MACOS_TRAFFIC_LIGHT_POSITION } from '../shared/constants';
@@ -127,6 +127,7 @@ export async function buildAccountStyling(account: Account): Promise<{ fontCss: 
     preferGoogleFont = false,
     monoFontFamily = '',
     monoFontUrl = '',
+    preferGoogleMonoFont = false,
     followSystemFont = false,
     customWallpaper = '',
   } = account.settings || {};
@@ -145,44 +146,70 @@ export async function buildAccountStyling(account: Account): Promise<{ fontCss: 
           importRules.push(`@import url('${url}');`);
         }
         styleRules.push(
-          `#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: "${targetFamily}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
+          `#app, #app :not([data-icon]):not(code):not(pre):not(code *):not(pre *) {\n  font-family: "${targetFamily}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
         );
       } else {
         styleRules.push(
-          '#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}'
+          '#app, #app :not([data-icon]):not(code):not(pre):not(code *):not(pre *) {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}'
         );
       }
     } else {
       styleRules.push(
-        '#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}'
+        '#app, #app :not([data-icon]):not(code):not(pre):not(code *):not(pre *) {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}'
       );
     }
-  } else if (fontFamily && fontFamily.trim()) {
-    const family = fontFamily.trim().replace(/^['"]+|['"]+$/g, '');
-    const isGeneric = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|Segoe UI|Arial|Helvetica|Times New Roman|Courier New)$/i.test(family);
-    if (!isGeneric && !family.includes(',')) {
-      const url = await resolveGoogleFontUrl(family, fontUrl);
-      if (url) {
-        importRules.push(`@import url('${url}');`);
-      }
-    }
-    styleRules.push(
-      `#app, #app :not([data-icon]):not(code):not(pre) {\n  font-family: "${family}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
-    );
-  }
 
-  if (monoFontFamily && monoFontFamily.trim()) {
-    const mono = monoFontFamily.trim().replace(/^['"]+|['"]+$/g, '');
-    const isGenericMono = /^(monospace|ui-monospace|Courier New|Courier|Consolas|DejaVu Sans Mono|Liberation Mono)$/i.test(mono);
-    if (!isGenericMono && !mono.includes(',')) {
-      const url = await resolveGoogleFontUrl(mono, monoFontUrl);
-      if (url) {
-        importRules.push(`@import url('${url}');`);
+    const desktopMono = await getSystemDesktopMonoFontName();
+    const targetMono = monoFontFamily?.trim() || desktopMono;
+    if (targetMono) {
+      const mono = targetMono.replace(/^['"]+|['"]+$/g, '');
+      const isGenericMono = /^(monospace|ui-monospace|Courier New|Courier|Consolas|DejaVu Sans Mono|Liberation Mono)$/i.test(mono);
+      if ((preferGoogleFont || preferGoogleMonoFont) && !isGenericMono && !mono.includes(',')) {
+        const url = await resolveGoogleFontUrl(mono, monoFontUrl);
+        if (url) {
+          importRules.push(`@import url('${url}');`);
+        }
       }
+      styleRules.push(
+        `code, pre, code *, pre * {\n  font-family: "${mono}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
+      );
+    } else {
+      styleRules.push(
+        `code, pre, code *, pre * {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
+      );
     }
-    styleRules.push(
-      `code, pre {\n  font-family: "${mono}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
-    );
+  } else {
+    if (fontFamily && fontFamily.trim()) {
+      const family = fontFamily.trim().replace(/^['"]+|['"]+$/g, '');
+      const isGeneric = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|Segoe UI|Arial|Helvetica|Times New Roman|Courier New)$/i.test(family);
+      if (!isGeneric && !family.includes(',')) {
+        const url = await resolveGoogleFontUrl(family, fontUrl);
+        if (url) {
+          importRules.push(`@import url('${url}');`);
+        }
+      }
+      styleRules.push(
+        `#app, #app :not([data-icon]):not(code):not(pre):not(code *):not(pre *) {\n  font-family: "${family}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
+      );
+    }
+
+    if (monoFontFamily && monoFontFamily.trim()) {
+      const mono = monoFontFamily.trim().replace(/^['"]+|['"]+$/g, '');
+      const isGenericMono = /^(monospace|ui-monospace|Courier New|Courier|Consolas|DejaVu Sans Mono|Liberation Mono)$/i.test(mono);
+      if (!isGenericMono && !mono.includes(',')) {
+        const url = await resolveGoogleFontUrl(mono, monoFontUrl);
+        if (url) {
+          importRules.push(`@import url('${url}');`);
+        }
+      }
+      styleRules.push(
+        `code, pre, code *, pre * {\n  font-family: "${mono}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
+      );
+    } else if (fontFamily && fontFamily.trim()) {
+      styleRules.push(
+        `code, pre, code *, pre * {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;\n  font-optical-sizing: auto;\n  font-synthesis: weight style;\n}`
+      );
+    }
   }
   const fontCss = [...importRules, ...styleRules].join('\n\n');
 
