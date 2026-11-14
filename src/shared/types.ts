@@ -69,6 +69,12 @@ export interface Account {
   isLoaded?: boolean;
 }
 
+export interface AddAccountOptions {
+  name?: string;
+  emoji?: string;
+  preload?: boolean;
+}
+
 export type FileSecondClickAction = 'open' | 'showInFolder' | 'saveAs' | 'download';
 
 export interface DownloadRecord {

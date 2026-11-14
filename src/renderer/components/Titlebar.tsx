@@ -6,12 +6,14 @@ interface TitlebarProps {
   onToggleSettings: () => void;
   onOpenNotificationHistory?: () => void;
   isDisclaimerAccepted?: boolean;
+  onOpenAddAccount?: () => void;
 }
 
 export const Titlebar: React.FC<TitlebarProps> = ({
   onToggleSettings,
   onOpenNotificationHistory,
   isDisclaimerAccepted = true,
+  onOpenAddAccount,
 }) => {
   const isMac = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin';
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
@@ -234,9 +236,14 @@ export const Titlebar: React.FC<TitlebarProps> = ({
 
   const handleAddAccount = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.currentTarget.blur();
-    const newAcc = await window.electronAPI?.addAccount();
-    if (newAcc) {
-      handleSwitchTab(newAcc.id);
+    if (!isDisclaimerAccepted) return;
+    if (onOpenAddAccount) {
+      onOpenAddAccount();
+    } else {
+      const newAcc = await window.electronAPI?.addAccount();
+      if (newAcc) {
+        handleSwitchTab(newAcc.id);
+      }
     }
   };
 

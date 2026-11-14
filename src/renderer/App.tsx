@@ -6,6 +6,7 @@ import { ToastContainer } from './components/ToastContainer';
 import { DisclaimerModal } from './components/DisclaimerModal';
 import { ProtocolPromptModal } from './components/ProtocolPromptModal';
 import { AvatarZoomModal } from './components/AvatarZoomModal';
+import { AddAccountModal } from './components/AddAccountModal';
 
 import { useAccounts } from './hooks/useAccounts';
 import { useGlobalSettings } from './hooks/useGlobalSettings';
@@ -14,12 +15,12 @@ import { useDownloads } from './hooks/useDownloads';
 import { useToasts } from './hooks/useToasts';
 import { useWindowZoom } from './hooks/useWindowZoom';
 
-import type { AccountInfo } from '../preload';
+import type { AccountInfo, AddAccountOptions } from '../preload';
 import type { SettingsPageType } from './types';
 
 export const App: React.FC = () => {
   // Domain hooks
-  const { isActiveAccountLoaded } = useAccounts();
+  const { accounts, isActiveAccountLoaded } = useAccounts();
   const { globalSettings, updateGlobalSettings } = useGlobalSettings();
   const globalSettingsRef = useRef(globalSettings);
   globalSettingsRef.current = globalSettings;
@@ -32,6 +33,9 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialPage, setSettingsInitialPage] = useState<SettingsPageType | undefined>(undefined);
   const [settingsInitialAccountId, setSettingsInitialAccountId] = useState<string | undefined>(undefined);
+
+  // Add account modal state
+  const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
 
   // Disclaimer modal state
   const [showDisclaimerForce, setShowDisclaimerForce] = useState(false);
@@ -194,9 +198,21 @@ export const App: React.FC = () => {
     }
   }, [pendingUrl, isHandlingProtocol, promptAccounts, showToast]);
 
+  // Add account modal handlers
+  const handleConfirmAddAccount = useCallback(async (options: AddAccountOptions) => {
+    const newAcc = await window.electronAPI?.addAccount(options);
+    if (newAcc) {
+      showToast(`Added account ${newAcc.emoji ? newAcc.emoji + ' ' : ''}${newAcc.name}`, 'Account created successfully');
+    }
+  }, [showToast]);
+
   // IPC Event Subscriptions for window-level actions
   useEffect(() => {
     if (!window.electronAPI) return;
+
+    const unsubscribeTriggerAdd = window.electronAPI.onTriggerAddAccount?.(() => {
+      setIsAddAccountOpen(true);
+    });
 
     const unsubscribeCloseRequest = window.electronAPI.onSettingsCloseRequest(() => {
       handleCloseSettings();
@@ -257,6 +273,7 @@ export const App: React.FC = () => {
     window.electronAPI.signalProtocolReady();
 
     return () => {
+      unsubscribeTriggerAdd?.();
       unsubscribeCloseRequest?.();
       unsubscribeOpenManage?.();
       unsubscribeDetachedClosed?.();
@@ -285,6 +302,7 @@ export const App: React.FC = () => {
         onToggleSettings={handleToggleSettings}
         onOpenNotificationHistory={handleOpenNotificationHistory}
         isDisclaimerAccepted={isDisclaimerAccepted}
+        onOpenAddAccount={() => setIsAddAccountOpen(true)}
       />
 
       {/* Main Container Area: The Electron WebContentsView will overlay this area below the titlebar */}
@@ -325,6 +343,7 @@ export const App: React.FC = () => {
           setShowDisclaimerForce(true);
           window.electronAPI?.toggleDisclaimer(true);
         }}
+        onOpenAddAccount={() => setIsAddAccountOpen(true)}
       />
 
       {/* Legal Disclaimer Modal Overlay */}
@@ -345,6 +364,14 @@ export const App: React.FC = () => {
         onClose={handleCloseProtocolPrompt}
         onOpenAvatar={(url, title) => setAvatarModalData({ url, title: title || 'Group Display Picture' })}
         disableEscape={Boolean(avatarModalData)}
+      />
+
+      {/* Add Account Modal Prompt */}
+      <AddAccountModal
+        isOpen={isAddAccountOpen}
+        onClose={() => setIsAddAccountOpen(false)}
+        onConfirm={handleConfirmAddAccount}
+        accounts={accounts}
       />
 
       {/* Toast Notifications */}

@@ -1,6 +1,6 @@
 import { ipcMain, Menu, session, dialog } from 'electron';
 import { state } from '../state';
-import { saveAccounts, getAccountStorageSizes, invalidateStorageCache, createNewAccount } from '../config';
+import { saveAccounts, saveSettings, getAccountStorageSizes, invalidateStorageCache, createNewAccount } from '../config';
 import {
   getAccountById,
   focusActiveView,
@@ -14,11 +14,13 @@ import {
   unloadAccountLogic,
   loadAccountLogic,
   notifyAccountListChanged,
+  updateActiveViewBounds,
 } from '../window';
 import { injectAccountStyling } from '../views';
 import { AccountSettings, DEFAULT_ACCOUNT_SETTINGS } from '../../shared/types';
 import {
   validate,
+  addAccountOptionsSchema,
   accountIdSchema,
   accountRenameSchema,
   accountEmojiSchema,
@@ -74,13 +76,55 @@ export function registerAccountHandlers(): void {
     }
   });
 
-  ipcMain.handle('account:add', async (_event, customName?: unknown) => {
-    const validatedName = typeof customName === 'string' && customName.trim() ? customName.trim().substring(0, 100) : undefined;
-    const newAccount = createNewAccount(validatedName);
+  ipcMain.handle('account:add', async (_event, rawOptions?: unknown) => {
+    const validated = validate(addAccountOptionsSchema, rawOptions);
+    let customName: string | undefined = undefined;
+    let customEmoji: string | undefined = undefined;
+    let preload = false;
+
+    if (typeof validated === 'string') {
+      if (validated.length > 0) {
+        customName = validated;
+      }
+    } else if (validated && typeof validated === 'object') {
+      if (validated.name && validated.name.trim().length > 0) {
+        customName = validated.name.trim();
+      }
+      if (validated.emoji !== undefined) {
+        customEmoji = validated.emoji.trim();
+      }
+      if (typeof validated.preload === 'boolean') {
+        preload = validated.preload;
+      }
+    }
+
+    const newAccount = createNewAccount(customName, undefined, customEmoji);
     state.accounts.push(newAccount);
     await saveAccounts();
+
+    if (preload && state.globalSettings) {
+      const currentPreload = state.globalSettings.preloadAccountIds || [];
+      if (!currentPreload.includes(newAccount.id)) {
+        state.globalSettings.preloadAccountIds = [...currentPreload, newAccount.id];
+        await saveSettings(state.globalSettings);
+        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+          state.mainWindow.webContents.send('settings:global-changed', state.globalSettings);
+        }
+        if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+          state.settingsWindow.webContents.send('settings:global-changed', state.globalSettings);
+        }
+      }
+    }
+
     await switchActiveAccount(newAccount.id);
     return newAccount;
+  });
+
+  ipcMain.on('account:toggle-add-prompt', (_event, isOpen: unknown) => {
+    const open = Boolean(isOpen);
+    state.addAccountPromptOpen = open;
+    updateActiveViewBounds();
+    if (!open) focusActiveView();
   });
 
   ipcMain.handle('account:rename', (_event, rawId: unknown, rawName: unknown) => {
