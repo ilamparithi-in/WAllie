@@ -67,6 +67,7 @@ flatpak:
     - "--filesystem=xdg-videos"
 win:
   icon: build/icon.ico
+  verifyUpdateCodeSignature: false
   target:
     - target: nsis
       arch:
