@@ -63,6 +63,7 @@ if (process.platform === 'linux') {
 // Load initial configuration accounts and settings
 state.accounts = loadAccounts();
 state.activeAccountId = state.accounts[0].id;
+state.accountHistory = [state.accounts[0].id];
 state.globalSettings = loadSettings();
 
 // Disable hardware acceleration if config specifies before app gets ready

@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
+import { SettingsApp } from './SettingsApp';
 import './index.css';
 
 // Early theme setup to avoid color flash
@@ -18,8 +19,11 @@ if (window.electronAPI?.getThemeInfo) {
   }).catch(() => {});
 }
 
+const params = new URLSearchParams(window.location.search);
+const isSettingsWindow = params.get('window') === 'settings' || window.location.hash.includes('settings');
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    {isSettingsWindow ? <SettingsApp /> : <App />}
   </React.StrictMode>
 );

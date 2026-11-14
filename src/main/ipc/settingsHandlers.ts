@@ -7,6 +7,8 @@ import {
   updateActiveViewBounds,
   enforceWindowMinimumSize,
   initializeAccountsLoad,
+  openSettingsWindow,
+  closeSettingsWindow,
 } from '../window';
 import { applyRetentionPruning } from '../notificationHistory';
 import { applyThemeMode, getThemeInfo } from '../theme';
@@ -18,6 +20,18 @@ export function registerSettingsHandlers(): void {
     const open = Boolean(isOpen);
     animateSettingsTransition(open);
     if (!open) focusActiveView();
+  });
+
+  ipcMain.on('settings:open-detached', (_event, page?: unknown, accountId?: unknown) => {
+    openSettingsWindow(typeof page === 'string' ? page : undefined, typeof accountId === 'string' ? accountId : undefined);
+  });
+
+  ipcMain.on('settings:close-detached', () => {
+    closeSettingsWindow();
+  });
+
+  ipcMain.handle('settings:is-detached-open', () => {
+    return Boolean(state.settingsWindow && !state.settingsWindow.isDestroyed());
   });
 
   ipcMain.on('disclaimer:toggle', (_event, isOpen: unknown) => {
@@ -41,6 +55,9 @@ export function registerSettingsHandlers(): void {
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.setZoomFactor(1.0);
       state.mainWindow.webContents.send('settings:global-changed', state.globalSettings);
+    }
+    if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+      state.settingsWindow.webContents.send('settings:global-changed', state.globalSettings);
     }
     for (const view of state.accountViews.values()) {
       if (view && !view.webContents.isDestroyed()) {
@@ -87,6 +104,9 @@ export function registerSettingsHandlers(): void {
         state.mainWindow.webContents.setZoomFactor(newBaseScale);
       } catch (e) { }
       state.mainWindow.webContents.send('settings:global-changed', state.globalSettings);
+    }
+    if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+      state.settingsWindow.webContents.send('settings:global-changed', state.globalSettings);
     }
 
     if (scaleChanged) {

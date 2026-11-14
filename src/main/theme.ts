@@ -58,6 +58,18 @@ export function handleThemeUpdate() {
       }
     }
   }
+
+  if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+    try {
+      state.settingsWindow.setBackgroundColor(bgColor);
+      state.settingsWindow.webContents.send('theme:changed', {
+        themeMode,
+        shouldUseDarkColors: isDark,
+      });
+    } catch (e) {
+      console.error('[Theme] Error updating settings window theme:', e);
+    }
+  }
 }
 
 export function applyThemeMode(themeMode: 'system' | 'light' | 'dark') {

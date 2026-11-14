@@ -44,6 +44,11 @@ export const App: React.FC = () => {
   // Avatar zoom modal state
   const [avatarModalData, setAvatarModalData] = useState<{ url: string; title: string } | null>(null);
 
+  // Settings subpage tracking for popout / detaching
+  const currentSettingsStateRef = useRef<{ page?: SettingsPageType; accountId?: string }>({});
+
+  const isPortraitThreshold = () => window.innerWidth <= 900;
+
   // Prevent Chromium default behavior (navigating to file://) when files are dropped on window UI
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
@@ -66,7 +71,18 @@ export const App: React.FC = () => {
   }, []);
 
   // Settings modal handlers
-  const handleToggleSettings = useCallback(() => {
+  const handleToggleSettings = useCallback(async () => {
+    const isDetached = await window.electronAPI?.isSettingsDetachedOpen?.();
+    if (isDetached) {
+      window.electronAPI?.openDetachedSettings?.();
+      return;
+    }
+
+    if (isPortraitThreshold()) {
+      window.electronAPI?.openDetachedSettings?.(settingsInitialPage, settingsInitialAccountId);
+      return;
+    }
+
     if (isSettingsOpen) {
       window.electronAPI?.toggleSettings(false);
       requestAnimationFrame(() => {
@@ -77,13 +93,37 @@ export const App: React.FC = () => {
       setIsSettingsOpen(true);
       window.electronAPI?.toggleSettings(true);
     }
-  }, [isSettingsOpen]);
+  }, [isSettingsOpen, settingsInitialPage, settingsInitialAccountId]);
 
-  const handleOpenNotificationHistory = useCallback(() => {
+  const handleOpenNotificationHistory = useCallback(async () => {
+    const isDetached = await window.electronAPI?.isSettingsDetachedOpen?.();
+    if (isDetached || isPortraitThreshold()) {
+      window.electronAPI?.openDetachedSettings?.('notifications');
+      return;
+    }
     setSettingsInitialPage('notifications');
     setIsSettingsOpen(true);
     window.electronAPI?.toggleSettings(true);
   }, []);
+
+  const handlePopoutSettings = useCallback((page?: SettingsPageType, accountId?: string) => {
+    const targetPage = page || currentSettingsStateRef.current.page || 'main';
+    const targetAccountId = accountId || currentSettingsStateRef.current.accountId;
+    window.electronAPI?.openDetachedSettings?.(targetPage, targetAccountId);
+    window.electronAPI?.toggleSettings(false);
+    setIsSettingsOpen(false);
+  }, []);
+
+  // Detach settings to its own window when window is resized under portrait threshold (<= 900px)
+  useEffect(() => {
+    const handleResize = () => {
+      if (isSettingsOpen && window.innerWidth <= 900) {
+        handlePopoutSettings();
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isSettingsOpen, handlePopoutSettings]);
 
   const handleCloseSettings = useCallback(() => {
     window.electronAPI?.toggleSettings(false);
@@ -162,11 +202,21 @@ export const App: React.FC = () => {
       handleCloseSettings();
     });
 
-    const unsubscribeOpenManage = window.electronAPI.onOpenManageAccounts((accountId) => {
+    const unsubscribeOpenManage = window.electronAPI.onOpenManageAccounts(async (accountId) => {
+      const isDetached = await window.electronAPI?.isSettingsDetachedOpen?.();
+      if (isDetached || isPortraitThreshold()) {
+        window.electronAPI?.openDetachedSettings?.('accounts', accountId);
+        return;
+      }
       setSettingsInitialPage('accounts');
       setSettingsInitialAccountId(accountId);
       setIsSettingsOpen(true);
       window.electronAPI?.toggleSettings(true);
+    });
+
+    const unsubscribeDetachedClosed = window.electronAPI.onDetachedSettingsClosed?.(() => {
+      // Closing the detached window is equivalent to completely closing the pane, not reattaching it
+      setIsSettingsOpen(false);
     });
 
     const unsubscribeProtocol = window.electronAPI.onProtocolReceived(async (url) => {
@@ -209,6 +259,7 @@ export const App: React.FC = () => {
     return () => {
       unsubscribeCloseRequest?.();
       unsubscribeOpenManage?.();
+      unsubscribeDetachedClosed?.();
       unsubscribeProtocol?.();
       unsubscribeReopenPrompt?.();
     };
@@ -266,6 +317,10 @@ export const App: React.FC = () => {
         onClose={handleCloseSettings}
         initialPage={settingsInitialPage}
         initialAccountId={settingsInitialAccountId}
+        onPopout={handlePopoutSettings}
+        onCurrentPageChange={(page, accountId) => {
+          currentSettingsStateRef.current = { page, accountId };
+        }}
         onShowDisclaimer={() => {
           setShowDisclaimerForce(true);
           window.electronAPI?.toggleDisclaimer(true);

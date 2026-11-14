@@ -250,7 +250,7 @@ export async function injectCustomCssForView(accountId: string, webContents: Ele
 
 export function pauseAllMedia() {
   for (const view of state.accountViews.values()) {
-    if (view && !view.webContents.isDestroyed()) {
+    if (view && view.webContents && !view.webContents.isDestroyed()) {
       try {
         view.webContents.executeJavaScript(`
           (() => {
@@ -273,7 +273,7 @@ export function pauseAllMedia() {
 
 export function resumeMediaAfterCall() {
   for (const view of state.accountViews.values()) {
-    if (view && !view.webContents.isDestroyed()) {
+    if (view && view.webContents && !view.webContents.isDestroyed()) {
       try {
         view.webContents.executeJavaScript(`
           (() => {
@@ -296,7 +296,7 @@ export function resumeMediaAfterCall() {
 
 export function clearPausedMediaState() {
   for (const view of state.accountViews.values()) {
-    if (view && !view.webContents.isDestroyed()) {
+    if (view && view.webContents && !view.webContents.isDestroyed()) {
       try {
         view.webContents.executeJavaScript(`
           (() => {
@@ -964,10 +964,27 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
     }
   });
 
+  let intervalId: NodeJS.Timeout | null = null;
+
+  const cleanupInterval = () => {
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+  };
+
   const checkLoginStatus = async () => {
-    if (account.loggedIn) return;
+    if (account.loggedIn) {
+      cleanupInterval();
+      return;
+    }
 
     try {
+      if (!view || !view.webContents || view.webContents.isDestroyed()) {
+        cleanupInterval();
+        return;
+      }
+
       const isNowLoggedIn = await view.webContents.executeJavaScript(`
         (() => {
           const hasChatList = !!(
@@ -996,6 +1013,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
       if (isNowLoggedIn) {
         console.log(`Account ${account.id} successfully logged in!`);
         account.loggedIn = true;
+        cleanupInterval();
         saveAccounts();
         state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
       }
@@ -1017,13 +1035,23 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   });
   view.webContents.on('page-title-updated', checkLoginStatus);
 
-  const intervalId = setInterval(() => {
-    if (view.webContents.isDestroyed() || account.loggedIn) {
-      clearInterval(intervalId);
-      return;
+  intervalId = setInterval(() => {
+    try {
+      if (!view || !view.webContents || view.webContents.isDestroyed() || account.loggedIn) {
+        cleanupInterval();
+        return;
+      }
+      checkLoginStatus();
+    } catch {
+      cleanupInterval();
     }
-    checkLoginStatus();
   }, 8000);
+
+  try {
+    view.webContents.once('destroyed', cleanupInterval);
+  } catch { }
+
+  (view as any)._cleanup = cleanupInterval;
 
   return view;
 }

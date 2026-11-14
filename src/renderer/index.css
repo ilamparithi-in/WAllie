@@ -39,6 +39,27 @@
   background: #4a555c;
 }
 
+/* Scrollbar hiding utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+.app-titlebar {
+  overflow: hidden !important;
+}
+.app-titlebar::-webkit-scrollbar,
+.app-titlebar *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 /* Light Mode Overrides */
 html.light,
 [data-theme="light"] {
@@ -93,6 +114,38 @@ html.light .app-titlebar .group:not(.bg-\[\#202c33\]):hover,
 [data-theme="light"] .app-titlebar .group:not(.bg-\[\#202c33\]):hover {
   background-color: #e9edef !important;
   color: #111b21 !important;
+}
+
+/* Account switcher dropdown & button */
+html.light .account-switcher-dropdown,
+[data-theme="light"] .account-switcher-dropdown {
+  background-color: #ffffff !important;
+  border-color: #d1d7db !important;
+  color: #111b21 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+}
+html.light .account-switcher-dropdown .hover\:bg-\[\#111b21\]:hover,
+[data-theme="light"] .account-switcher-dropdown .hover\:bg-\[\#111b21\]:hover {
+  background-color: #f0f2f5 !important;
+}
+html.light .account-switcher-dropdown-header,
+[data-theme="light"] .account-switcher-dropdown-header {
+  border-bottom-color: #e2e8f0 !important;
+  color: #54656f !important;
+}
+html.light .account-switcher-dropdown-divider,
+[data-theme="light"] .account-switcher-dropdown-divider {
+  border-top-color: #e2e8f0 !important;
+}
+html.light .account-switcher-btn,
+[data-theme="light"] .account-switcher-btn {
+  background-color: #ffffff !important;
+  border-color: #d1d7db !important;
+  color: #111b21 !important;
+}
+html.light .account-switcher-btn:hover,
+[data-theme="light"] .account-switcher-btn:hover {
+  background-color: #f0f2f5 !important;
 }
 
 /* Titlebar Close Button (Window Controls) */
