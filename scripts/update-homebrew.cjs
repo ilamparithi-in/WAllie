@@ -86,7 +86,7 @@ async function main() {
     : `https://github.com/${REPO}/releases/download/v#{version}/WAllie-#{version}#{arch}.dmg`;
 
   const caskContent = `cask "${targetCaskArg}" do
-  arch arm: "-arm64", intel: ""
+  arch arm: "-arm64"
 
   version "${version}"
   sha256 arm:   "${armSha}",
@@ -94,7 +94,7 @@ async function main() {
 
   url "${urlDownloadPath}"
   name "WAllie"
-  desc "WhatsApp desktop client with multi-account and extensions support"
+  desc "Unofficial WhatsApp Client with multi-account and extensions"
   homepage "https://github.com/${REPO}"
 
   livecheck do
@@ -103,6 +103,7 @@ async function main() {
   end
 
   auto_updates true
+  conflicts_with cask: "wallie@nightly"
   depends_on macos: :ventura
 
   app "WAllie.app"
