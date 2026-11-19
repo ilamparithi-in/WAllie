@@ -179,8 +179,9 @@ async function fetchPageHtmlSafe(
 
 async function fetchAndProcessThumbnail(
   imageUrl: string,
-  finalUrl: string
-): Promise<{ thumbnailBase64: string; thumbnailHQBase64?: string; width: number; height: number } | null> {
+  finalUrl: string,
+  isIconMeta = false
+): Promise<{ thumbnailBase64: string; thumbnailHQBase64?: string; width?: number; height?: number } | null> {
   let imgTimeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const absoluteImageUrl = new URL(imageUrl, finalUrl).toString();
@@ -215,7 +216,44 @@ async function fetchAndProcessThumbnail(
     const origSize = img.getSize();
     if (origSize.width <= 0 || origSize.height <= 0) return null;
 
-    // 1. High-Quality Thumbnail (thumbnailHQ):
+    // Check if image is an icon / small thumbnail rather than a high-quality preview banner.
+    // An image is treated as a small icon meta if:
+    // 1. It was sourced from icon meta tags (apple-touch-icon, icon, shortcut icon, thumbnail), OR
+    // 2. Its original dimensions are smaller than standard rich card thresholds (< 200px width or < 150px height).
+    const isSmallIcon = isIconMeta || origSize.width < 200 || origSize.height < 150;
+
+    // 1. Micro Thumbnail (thumbnail / jpegThumbnail):
+    // WhatsApp requires inline protobuf thumbnails to be small (< 32KB).
+    // Native WhatsApp caps inline micro-thumbnails to ~100-140px, keeping payload size ~3-6KB.
+    let microTarget = img;
+    const MAX_MICRO_DIM = 140;
+    if (origSize.width > MAX_MICRO_DIM || origSize.height > MAX_MICRO_DIM) {
+      const microRatio = Math.min(MAX_MICRO_DIM / origSize.width, MAX_MICRO_DIM / origSize.height);
+      microTarget = img.resize({
+        width: Math.max(1, Math.round(origSize.width * microRatio)),
+        height: Math.max(1, Math.round(origSize.height * microRatio)),
+        quality: 'better',
+      });
+    }
+    let microJpegBuf = microTarget.toJPEG(70);
+    if (microJpegBuf.byteLength > 25 * 1024) {
+      microJpegBuf = microTarget.toJPEG(50);
+    }
+
+    if (microJpegBuf.byteLength === 0) {
+      return null;
+    }
+
+    if (isSmallIcon) {
+      // For small icon metas, return only the micro-thumbnail without HQ banner data or dimensions.
+      // This ensures WhatsApp Web and linked devices display the small square icon meta
+      // rather than stretching it into a blurry full-size media banner.
+      return {
+        thumbnailBase64: microJpegBuf.toString('base64'),
+      };
+    }
+
+    // 2. High-Quality Thumbnail (thumbnailHQ):
     // Max dimension of 1024px matches native WhatsApp mobile/web clients.
     // Preserves full crispness on High-DPI/desktop displays without blur or pixelation.
     // Encoded at JPEG quality 85 for sharp rendering and clean edges.
@@ -232,25 +270,7 @@ async function fetchAndProcessThumbnail(
     const hqJpegBuf = hqTarget.toJPEG(85);
     const finalSize = hqTarget.getSize();
 
-    // 2. Micro Thumbnail (thumbnail / jpegThumbnail):
-    // WhatsApp requires inline protobuf thumbnails to be small (< 32KB).
-    // Native WhatsApp caps inline micro-thumbnails to ~100-140px, keeping payload size ~3-6KB.
-    let microTarget = hqTarget;
-    const MAX_MICRO_DIM = 140;
-    if (finalSize.width > MAX_MICRO_DIM || finalSize.height > MAX_MICRO_DIM) {
-      const microRatio = Math.min(MAX_MICRO_DIM / finalSize.width, MAX_MICRO_DIM / finalSize.height);
-      microTarget = hqTarget.resize({
-        width: Math.max(1, Math.round(finalSize.width * microRatio)),
-        height: Math.max(1, Math.round(finalSize.height * microRatio)),
-        quality: 'better',
-      });
-    }
-    let microJpegBuf = microTarget.toJPEG(70);
-    if (microJpegBuf.byteLength > 25 * 1024) {
-      microJpegBuf = microTarget.toJPEG(50);
-    }
-
-    if (hqJpegBuf.byteLength > 0 && microJpegBuf.byteLength > 0) {
+    if (hqJpegBuf.byteLength > 0) {
       return {
         thumbnailBase64: microJpegBuf.toString('base64'),
         thumbnailHQBase64: hqJpegBuf.toString('base64'),
@@ -258,7 +278,10 @@ async function fetchAndProcessThumbnail(
         height: finalSize.height,
       };
     }
-    return null;
+
+    return {
+      thumbnailBase64: microJpegBuf.toString('base64'),
+    };
   } catch {
     return null;
   } finally {
@@ -363,15 +386,21 @@ export async function fetchLinkPreview(urlStr: string): Promise<LinkPreviewData 
       host.includes('tiktok.com');
 
     // --- Universal Image Discovery ---
-    let imageUrl =
+    const ogImage =
       extractMetaContent(html, 'og:image:secure_url') ||
       extractMetaContent(html, 'og:image') ||
       extractMetaContent(html, 'twitter:image', true) ||
       extractMetaContent(html, 'twitter:image:src', true) ||
-      extractLinkHref(html, 'image_src') ||
-      extractMetaContent(html, 'thumbnail', true) ||
+      extractLinkHref(html, 'image_src');
+
+    const iconImage =
       extractLinkHref(html, 'apple-touch-icon') ||
-      extractLinkHref(html, 'icon');
+      extractMetaContent(html, 'thumbnail', true) ||
+      extractLinkHref(html, 'icon') ||
+      extractLinkHref(html, 'shortcut icon');
+
+    const imageUrl = ogImage || iconImage;
+    const isIconMeta = !ogImage && Boolean(iconImage);
 
     let thumbnailBase64: string | undefined;
     let thumbnailHQBase64: string | undefined;
@@ -379,65 +408,70 @@ export async function fetchLinkPreview(urlStr: string): Promise<LinkPreviewData 
     let thumbnailHeight: number | undefined;
 
     if (imageUrl) {
-        // If media fails to download or process, retry immediately up to 3 times
-        const MAX_MEDIA_RETRIES = 3;
-        let thumbnailResult: {
-          thumbnailBase64: string;
-          thumbnailHQBase64?: string;
-          width: number;
-          height: number;
-        } | null = null;
+      // If media fails to download or process, retry immediately up to 3 times
+      const MAX_MEDIA_RETRIES = 3;
+      let thumbnailResult: {
+        thumbnailBase64: string;
+        thumbnailHQBase64?: string;
+        width?: number;
+        height?: number;
+      } | null = null;
 
-          for (let attempt = 0; attempt <= MAX_MEDIA_RETRIES; attempt++) {
-            thumbnailResult = await fetchAndProcessThumbnail(imageUrl, finalUrl);
-            if (thumbnailResult) {
-              break;
-            }
-          }
-
-          if (thumbnailResult) {
-            thumbnailBase64 = thumbnailResult.thumbnailBase64;
-            thumbnailHQBase64 = thumbnailResult.thumbnailHQBase64;
-            thumbnailWidth = thumbnailResult.width;
-            thumbnailHeight = thumbnailResult.height;
-          }
-        }
-
-        const result: LinkPreviewData = {
-          url: urlStr,
-          title,
-          description,
-          thumbnailBase64,
-          thumbnailHQBase64,
-          thumbnailWidth,
-          thumbnailHeight,
-          previewType: isVideo ? 'video' : 'none',
-        };
-
-          // Store in LRU cache.
-          // If the page has an image specified but media failed to download even after retrying,
-          // do NOT cache the picture-less result so future requests can retry fetching the media.
-          if (!imageUrl || thumbnailBase64) {
-            if (PREVIEW_CACHE.size >= CACHE_MAX_SIZE) {
-              const oldestKey = PREVIEW_CACHE.keys().next().value;
-              if (oldestKey) PREVIEW_CACHE.delete(oldestKey);
-            }
-            PREVIEW_CACHE.set(urlStr, { data: result, timestamp: Date.now(), ttl: CACHE_TTL_MS });
-          }
-
-          return result;
-        } catch {
-          return null;
+      for (let attempt = 0; attempt <= MAX_MEDIA_RETRIES; attempt++) {
+        thumbnailResult = await fetchAndProcessThumbnail(imageUrl, finalUrl, isIconMeta);
+        if (thumbnailResult) {
+          break;
         }
       }
+
+      if (thumbnailResult) {
+        thumbnailBase64 = thumbnailResult.thumbnailBase64;
+        thumbnailHQBase64 = thumbnailResult.thumbnailHQBase64;
+        thumbnailWidth = thumbnailResult.width;
+        thumbnailHeight = thumbnailResult.height;
+      }
+    }
+
+    const result: LinkPreviewData = {
+      url: urlStr,
+      title,
+      description,
+      thumbnailBase64,
+      thumbnailHQBase64,
+      thumbnailWidth,
+      thumbnailHeight,
+      previewType: isVideo ? 'video' : 'none',
+    };
+
+    // Store in LRU cache.
+    // If the page has an image specified but media failed to download even after retrying,
+    // do NOT cache the picture-less result so future requests can retry fetching the media.
+    if (!imageUrl || thumbnailBase64) {
+      if (PREVIEW_CACHE.size >= CACHE_MAX_SIZE) {
+        const oldestKey = PREVIEW_CACHE.keys().next().value;
+        if (oldestKey) PREVIEW_CACHE.delete(oldestKey);
+      }
+      PREVIEW_CACHE.set(urlStr, { data: result, timestamp: Date.now(), ttl: CACHE_TTL_MS });
+    }
+
+    return result;
+  } catch {
+    return null;
+  }
+}
 
 export function clearLinkPreviewCache(): { clearedCount: number } {
-        const clearedCount = PREVIEW_CACHE.size;
-        PREVIEW_CACHE.clear();
-        return { clearedCount };
-      }
+  const clearedCount = PREVIEW_CACHE.size;
+  PREVIEW_CACHE.clear();
+  for (const view of state.accountViews.values()) {
+    try {
+      view.webContents.send('link-preview:clear-cache');
+    } catch {}
+  }
+  return { clearedCount };
+}
 
-      export function getLinkPreviewCacheSize(): number {
-        return PREVIEW_CACHE.size;
-      }
+export function getLinkPreviewCacheSize(): number {
+  return PREVIEW_CACHE.size;
+}
 

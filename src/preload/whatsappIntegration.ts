@@ -448,6 +448,10 @@ export function setupWhatsAppIntegration(mainWorldScript: string): void {
     }
   });
 
+  ipcRenderer.on('link-preview:clear-cache', () => {
+    window.postMessage({ type: 'wallie:clear-link-preview-cache' }, '*');
+  });
+
   // Inject the custom Notification class into the Main World (worldId 0)
   webFrame.executeJavaScriptInIsolatedWorld(0, [{
     code: mainWorldScript,
