@@ -11,6 +11,7 @@ import {
   X,
   Sparkles,
 } from 'lucide-react';
+import { Modal } from '../Modal';
 
 interface ChatItem {
   jid: string;
@@ -381,138 +382,130 @@ export const ChatExporterSettingsPage: React.FC<ChatExporterSettingsPageProps> =
       </div>
 
       {/* Timeframe & Calendar Popup Modal */}
-      {isTimeframeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#202c33] border border-[#2c3943] rounded-2xl shadow-2xl w-full max-w-md p-6 flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-[#2c3943]">
-              <div className="flex items-center gap-2.5">
-                <Calendar className="w-5 h-5 text-[#00a884]" />
-                <h3 className="font-bold text-sm text-[#e9edef]">Select Export Timeframe</h3>
-              </div>
-              <button
-                onClick={() => setIsTimeframeModalOpen(false)}
-                className="text-[#8696a0] hover:text-[#e9edef] p-1 rounded hover:bg-[#111b21]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="text-xs text-[#8696a0] leading-relaxed">
-              Exporting{' '}
-              <strong className="text-[#e9edef]">
-                {targetExportChats.length === 1
-                  ? targetExportChats[0].title
-                  : `${targetExportChats.length} chats`}
-              </strong>
-              . Choose how far back into the timeline to harvest messages:
-            </div>
-
-            <div className="space-y-3">
-              {/* Option 1: Entire Available History */}
-              <label
-                onClick={() => setExportScope('all')}
-                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                  exportScope === 'all'
-                    ? 'bg-[#111b21] border-[#00a884]'
-                    : 'bg-[#182229] border-[#222d34] hover:border-[#374248]'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="exportScope"
-                  checked={exportScope === 'all'}
-                  onChange={() => setExportScope('all')}
-                  className="mt-0.5 text-[#00a884] focus:ring-[#00a884]"
-                />
-                <div>
-                  <div className="font-semibold text-xs text-[#e9edef]">Entire available history</div>
-                  <div className="text-[10px] text-[#8696a0] mt-0.5">
-                    Extracts all messages backwards until reaching the very top of loaded conversation history.
-                  </div>
-                </div>
-              </label>
-
-              {/* Option 2: Back to specific Calendar Date */}
-              <label
-                onClick={() => setExportScope('custom')}
-                className={`flex flex-col gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
-                  exportScope === 'custom'
-                    ? 'bg-[#111b21] border-[#00a884]'
-                    : 'bg-[#182229] border-[#222d34] hover:border-[#374248]'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="radio"
-                    name="exportScope"
-                    checked={exportScope === 'custom'}
-                    onChange={() => setExportScope('custom')}
-                    className="mt-0.5 text-[#00a884] focus:ring-[#00a884]"
-                  />
-                  <div>
-                    <div className="font-semibold text-xs text-[#e9edef]">Export messages back to date:</div>
-                    <div className="text-[10px] text-[#8696a0] mt-0.5">
-                      Halts traversal as soon as messages prior to this date boundary are reached.
-                    </div>
-                  </div>
-                </div>
-
-                {exportScope === 'custom' && (
-                  <div className="pl-7 pt-1">
-                    <input
-                      type="date"
-                      max={todayIso}
-                      value={customDate}
-                      onChange={(e) => setCustomDate(e.target.value)}
-                      className="bg-[#202c33] border border-[#374248] text-[#e9edef] text-xs rounded-lg px-3 py-1.5 focus:border-[#00a884] outline-none"
-                    />
-                  </div>
-                )}
-              </label>
-            </div>
-
-            {/* Guidance Notices */}
-            <div className="bg-[#00a884]/10 border border-[#00a884]/25 rounded-xl p-3 text-[11px] text-[#aebac1] space-y-1 leading-relaxed">
-              <div className="text-[#00a884] font-semibold flex items-center gap-1.5 text-xs mb-1">
-                <span>ℹ️</span> <span>Export Guidance</span>
-              </div>
-              <div>• Keep the chat open and keep monitoring the exporter.</div>
-              <div>• If the exporter does not fetch older messages, you may try it manually.</div>
-              <div>• If the exporter misses some media, you may manually download it.</div>
-              <div>• Export can be cancelled at any time; if it is frozen on a file just press skip file.</div>
-              <div>• Sometimes it may take 2 or more exports for it to be complete.</div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#2c3943]">
-              <button
-                type="button"
-                onClick={() => setIsTimeframeModalOpen(false)}
-                className="px-4 py-2 rounded-lg text-xs font-semibold text-[#8696a0] hover:text-[#e9edef] hover:bg-[#111b21] transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmExport}
-                disabled={isStartingExport}
-                className="px-4 py-2 rounded-lg bg-[#00a884] hover:bg-[#00c298] text-[#111b21] text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
-              >
-                {isStartingExport ? (
-                  <>
-                    <div className="w-3.5 h-3.5 rounded-full border-2 border-[#111b21] border-t-transparent animate-spin" />
-                    <span>Preparing...</span>
-                  </>
-                ) : (
-                  <>
-                    <FolderOpen className="w-4 h-4" />
-                    <span>Choose Folder & Start Export</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+      <Modal
+        id="chat-exporter-timeframe"
+        isOpen={isTimeframeModalOpen}
+        onClose={() => setIsTimeframeModalOpen(false)}
+        disableClose={isStartingExport}
+        backdropClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+        className="bg-[#202c33] border border-[#2c3943] rounded-2xl shadow-2xl w-full max-w-md p-6 flex flex-col gap-5 overflow-hidden"
+        headerIcon={<Calendar className="w-5 h-5 text-[#00a884]" />}
+        title="Select Export Timeframe"
+      >
+        <div className="text-xs text-[#8696a0] leading-relaxed">
+          Exporting{' '}
+          <strong className="text-[#e9edef]">
+            {targetExportChats.length === 1
+              ? targetExportChats[0].title
+              : `${targetExportChats.length} chats`}
+          </strong>
+          . Choose how far back into the timeline to harvest messages:
         </div>
-      )}
+
+        <div className="space-y-3">
+          {/* Option 1: Entire Available History */}
+          <label
+            onClick={() => setExportScope('all')}
+            className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+              exportScope === 'all'
+                ? 'bg-[#111b21] border-[#00a884]'
+                : 'bg-[#182229] border-[#222d34] hover:border-[#374248]'
+            }`}
+          >
+            <input
+              type="radio"
+              name="exportScope"
+              checked={exportScope === 'all'}
+              onChange={() => setExportScope('all')}
+              className="mt-0.5 text-[#00a884] focus:ring-[#00a884]"
+            />
+            <div>
+              <div className="font-semibold text-xs text-[#e9edef]">Entire available history</div>
+              <div className="text-[10px] text-[#8696a0] mt-0.5">
+                Extracts all messages backwards until reaching the very top of loaded conversation history.
+              </div>
+            </div>
+          </label>
+
+          {/* Option 2: Back to specific Calendar Date */}
+          <label
+            onClick={() => setExportScope('custom')}
+            className={`flex flex-col gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+              exportScope === 'custom'
+                ? 'bg-[#111b21] border-[#00a884]'
+                : 'bg-[#182229] border-[#222d34] hover:border-[#374248]'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <input
+                type="radio"
+                name="exportScope"
+                checked={exportScope === 'custom'}
+                onChange={() => setExportScope('custom')}
+                className="mt-0.5 text-[#00a884] focus:ring-[#00a884]"
+              />
+              <div>
+                <div className="font-semibold text-xs text-[#e9edef]">Export messages back to date:</div>
+                <div className="text-[10px] text-[#8696a0] mt-0.5">
+                  Halts traversal as soon as messages prior to this date boundary are reached.
+                </div>
+              </div>
+            </div>
+
+            {exportScope === 'custom' && (
+              <div className="pl-7 pt-1">
+                <input
+                  type="date"
+                  max={todayIso}
+                  value={customDate}
+                  onChange={(e) => setCustomDate(e.target.value)}
+                  className="bg-[#202c33] border border-[#374248] text-[#e9edef] text-xs rounded-lg px-3 py-1.5 focus:border-[#00a884] outline-none"
+                />
+              </div>
+            )}
+          </label>
+        </div>
+
+        {/* Guidance Notices */}
+        <div className="bg-[#00a884]/10 border border-[#00a884]/25 rounded-xl p-3 text-[11px] text-[#aebac1] space-y-1 leading-relaxed">
+          <div className="text-[#00a884] font-semibold flex items-center gap-1.5 text-xs mb-1">
+            <span>ℹ️</span> <span>Export Guidance</span>
+          </div>
+          <div>• Keep the chat open and keep monitoring the exporter.</div>
+          <div>• If the exporter does not fetch older messages, you may try it manually.</div>
+          <div>• If the exporter misses some media, you may manually download it.</div>
+          <div>• Export can be cancelled at any time; if it is frozen on a file just press skip file.</div>
+          <div>• Sometimes it may take 2 or more exports for it to be complete.</div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#2c3943]">
+          <button
+            type="button"
+            onClick={() => setIsTimeframeModalOpen(false)}
+            className="px-4 py-2 rounded-lg text-xs font-semibold text-[#8696a0] hover:text-[#e9edef] hover:bg-[#111b21] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirmExport}
+            disabled={isStartingExport}
+            className="px-4 py-2 rounded-lg bg-[#00a884] hover:bg-[#00c298] text-[#111b21] text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+          >
+            {isStartingExport ? (
+              <>
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-[#111b21] border-t-transparent animate-spin" />
+                <span>Preparing...</span>
+              </>
+            ) : (
+              <>
+                <FolderOpen className="w-4 h-4" />
+                <span>Choose Folder & Start Export</span>
+              </>
+            )}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -24,24 +24,20 @@ export { getInitialWindowSize };
 export function applyActiveViewBoundsImmediately(aView: WebContentsView) {
   if (!state.mainWindow || state.mainWindow.isDestroyed() || !aView) return;
   const [w, h] = state.mainWindow.getContentSize();
-  if (state.disclaimerOpen || state.protocolPromptOpen) {
-    aView.setVisible(false);
-  } else {
-    const scaleFactor = (state.globalSettings?.appScale || 100) / 100;
-    const scaledTitlebarHeight = Math.round(TITLEBAR_HEIGHT * scaleFactor);
-    const scaledDrawerWidth = Math.round(state.settingsDrawerWidth * scaleFactor);
-    const vWidth = w - scaledDrawerWidth;
+  const scaleFactor = (state.globalSettings?.appScale || 100) / 100;
+  const scaledTitlebarHeight = Math.round(TITLEBAR_HEIGHT * scaleFactor);
+  const scaledDrawerWidth = Math.round(state.settingsDrawerWidth * scaleFactor);
+  const vWidth = w - scaledDrawerWidth;
 
-    aView.setVisible(true);
-    aView.setBounds({
-      x: 0,
-      y: scaledTitlebarHeight,
-      width: Math.max(0, vWidth),
-      height: Math.max(0, h - scaledTitlebarHeight),
-    });
-    if (aView.webContents && !aView.webContents.isDestroyed()) {
-      aView.webContents.invalidate();
-    }
+  aView.setVisible(true);
+  aView.setBounds({
+    x: 0,
+    y: scaledTitlebarHeight,
+    width: Math.max(0, vWidth),
+    height: Math.max(0, h - scaledTitlebarHeight),
+  });
+  if (aView.webContents && !aView.webContents.isDestroyed()) {
+    aView.webContents.invalidate();
   }
 }
 
@@ -553,77 +549,15 @@ export function notifyAccountListChanged() {
   }
 }
 
-export function openSettingsWindow(page?: string, accountId?: string) {
-  if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
-    if (page) {
-      state.settingsWindow.webContents.send('settings:navigate', { page, accountId });
-    }
-    state.settingsWindow.show();
-    state.settingsWindow.focus();
-    return;
-  }
-
-  // If the drawer in the main window was open, close it cleanly
-  if (state.settingsOpen) {
-    animateSettingsTransition(false);
-    state.mainWindow?.webContents.send('settings:close-drawer');
-  }
-
-  const { width, height } = getInitialWindowSize(520, 720, state.mainWindow);
-
-  state.settingsWindow = new BrowserWindow({
-    parent: state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined,
-    width: Math.min(width, 560),
-    height: Math.max(height, 600),
-    minWidth: 420,
-    minHeight: 480,
-    title: 'Configure WAllie',
-    icon: getAppIcon(),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#111b21' : '#ffffff',
-    autoHideMenuBar: true,
-    show: false,
-    webPreferences: {
-      preload: getPreloadPath(),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      webSecurity: true,
-      allowRunningInsecureContent: false,
-    } as any,
-  });
-
-  state.settingsWindow.on('page-title-updated', (e) => {
-    e.preventDefault();
-  });
-
-  state.settingsWindow.removeMenu();
-  registerContextMenu(state.settingsWindow.webContents);
-
-  const queryParams = new URLSearchParams();
-  queryParams.set('window', 'settings');
-  if (page) queryParams.set('page', page);
-  if (accountId) queryParams.set('accountId', accountId);
-
-  if (process.env.VITE_DEV_SERVER_URL) {
-    state.settingsWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}?${queryParams.toString()}`);
-  } else {
-    state.settingsWindow.loadFile(path.join(__dirname, '../renderer/index.html'), {
-      search: queryParams.toString(),
-    });
-  }
-
-  state.settingsWindow.once('ready-to-show', () => {
-    state.settingsWindow?.show();
-    state.settingsWindow?.focus();
-  });
-
-  state.settingsWindow.on('closed', () => {
-    state.settingsWindow = null;
-    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-      state.mainWindow.webContents.send('settings:detached-closed');
-    }
-  });
-}
+export {
+  openAuxiliaryWindow,
+  closeAuxiliaryWindow,
+  openSettingsWindow,
+  openAddAccountWindow,
+  openDisclaimerWindow,
+  openProtocolPromptWindow,
+  openAvatarZoomWindow,
+} from './auxiliaryWindows';
 
 export function closeSettingsWindow() {
   if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {

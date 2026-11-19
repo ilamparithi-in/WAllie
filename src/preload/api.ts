@@ -75,6 +75,7 @@ export interface ElectronAPI {
   getActiveAccountId: () => Promise<string>;
   switchAccount: (id: string) => void;
   addAccount: (optionsOrName?: string | AddAccountOptions) => Promise<AccountInfo>;
+  openAddAccountWindow?: () => void;
   toggleAddAccountPrompt?: (isOpen: boolean) => void;
   onTriggerAddAccount?: (callback: () => void) => () => void;
   removeAccount: (id: string) => Promise<boolean>;
@@ -104,6 +105,10 @@ export interface ElectronAPI {
   closeDetachedSettings: () => void;
   isSettingsDetachedOpen: () => Promise<boolean>;
   toggleDisclaimer: (isOpen: boolean) => void;
+  openDisclaimerWindow?: (firstLaunch?: boolean) => void;
+  openProtocolPromptWindow?: (url: string) => void;
+  openAvatarZoomWindow?: (url: string, title?: string) => void;
+  toggleModal?: (isOpen: boolean, modalId?: string) => void;
   resetZoom: () => void;
   resetAppScale: () => void;
   triggerZoomStep: (direction: 'in' | 'out') => void;
@@ -220,6 +225,7 @@ export const api: ElectronAPI = {
   getActiveAccountId: () => ipcRenderer.invoke('account:get-active-id'),
   switchAccount: (id) => ipcRenderer.send('account:switch', id),
   addAccount: (optionsOrName) => ipcRenderer.invoke('account:add', optionsOrName),
+  openAddAccountWindow: () => ipcRenderer.send('account:open-add-window'),
   toggleAddAccountPrompt: (isOpen) => ipcRenderer.send('account:toggle-add-prompt', isOpen),
   removeAccount: (id) => ipcRenderer.invoke('account:remove', id),
   renameAccount: (id, name) => ipcRenderer.invoke('account:rename', id, name),
@@ -250,6 +256,10 @@ export const api: ElectronAPI = {
   closeDetachedSettings: () => ipcRenderer.send('settings:close-detached'),
   isSettingsDetachedOpen: () => ipcRenderer.invoke('settings:is-detached-open'),
   toggleDisclaimer: (isOpen) => ipcRenderer.send('disclaimer:toggle', isOpen),
+  openDisclaimerWindow: (firstLaunch) => ipcRenderer.send('disclaimer:open-window', firstLaunch),
+  openProtocolPromptWindow: (url) => ipcRenderer.send('protocol:open-window', url),
+  openAvatarZoomWindow: (url, title) => ipcRenderer.send('avatar:open-window', url, title),
+  toggleModal: (isOpen, modalId) => ipcRenderer.send('modal:toggle', { isOpen, id: modalId }),
   resetZoom: () => ipcRenderer.send('zoom:reset'),
   resetAppScale: () => ipcRenderer.send('settings:reset-app-scale'),
   triggerZoomStep: (direction) => ipcRenderer.send('zoom:trigger-step', direction),

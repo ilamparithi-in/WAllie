@@ -16,6 +16,7 @@ import {
   loadAccountLogic,
   notifyAccountListChanged,
   updateActiveViewBounds,
+  openAddAccountWindow,
 } from '../window';
 import { injectAccountStyling } from '../views';
 import { AccountSettings, DEFAULT_ACCOUNT_SETTINGS } from '../../shared/types';
@@ -121,11 +122,25 @@ export function registerAccountHandlers(): void {
     return newAccount;
   });
 
+  ipcMain.on('account:open-add-window', () => {
+    openAddAccountWindow();
+  });
+
   ipcMain.on('account:toggle-add-prompt', (_event, isOpen: unknown) => {
     const open = Boolean(isOpen);
     state.addAccountPromptOpen = open;
+    if (open) {
+      state.activeModals.add('add-account');
+    } else {
+      state.activeModals.delete('add-account');
+    }
     updateActiveViewBounds();
-    if (!open) focusActiveView();
+    const isAnyModalOpen =
+      (state.activeModals && state.activeModals.size > 0) ||
+      state.disclaimerOpen ||
+      state.protocolPromptOpen ||
+      state.addAccountPromptOpen;
+    if (!isAnyModalOpen) focusActiveView();
   });
 
   ipcMain.handle('account:rename', (_event, rawId: unknown, rawName: unknown) => {
@@ -395,7 +410,7 @@ export function registerAccountHandlers(): void {
       {
         label: '+ Add Account',
         click: () => {
-          state.mainWindow?.webContents.send('account:trigger-add');
+          openAddAccountWindow();
         },
       },
     ]);
