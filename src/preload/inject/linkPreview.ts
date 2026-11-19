@@ -17,11 +17,34 @@ export function initStandaloneLinkPreview(): void {
       const hooked = async function (this: any, e: any, _q: any) {
         if (window.__wallie_ipc?.fetchLinkPreview && e && e.url) {
           try {
+            // 1. WhatsApp Web in-memory preview cache lookup
+            let previewCache: Map<string, any> | undefined;
+            if (typeof window.require === 'function') {
+              try {
+                const linkPreviewCache = window.require('WAWebLinkPreviewCache');
+                const chatGetters = window.require('WAWebChatGetters');
+                const stateUtils = window.require('WAWebStateUtils');
+                const unproxiedChat = _q && stateUtils?.unproxy ? stateUtils.unproxy(_q) : _q;
+                const isNewsletter =
+                  unproxiedChat && chatGetters?.getIsNewsletter ? chatGetters.getIsNewsletter(unproxiedChat) : false;
+                previewCache = isNewsletter
+                  ? linkPreviewCache?.getNewsletterPreviewCache?.()
+                  : linkPreviewCache?.getPreviewCache?.();
+              } catch {}
+            }
+
+            if (previewCache?.has(e.url)) {
+              return previewCache.get(e.url);
+            }
+
             const preview = await window.__wallie_ipc.fetchLinkPreview(e.url);
             if (preview && (preview.title || preview.description)) {
               let mmsData: Record<string, any> = {};
-              const hqBase64 = preview.thumbnailHQBase64 || preview.thumbnailBase64;
+              const hqBase64 = preview.thumbnailHQBase64;
 
+              // Only perform WhatsApp MMS CDN upload if we have a high-quality banner image.
+              // Small icon metas (favicons, apple-touch-icons, micro-thumbnails) do not use MMS
+              // and must remain as small inline icon metas to avoid stretching into blurry full-size cards.
               if (hqBase64 && typeof window.require === 'function') {
                 try {
                   const opaqueData = window.require('WAWebMediaOpaqueData');
@@ -75,7 +98,7 @@ export function initStandaloneLinkPreview(): void {
                 }
               }
 
-              return {
+              const result = {
                 url: e.url,
                 data: {
                   matchedText: e.url,
@@ -86,11 +109,15 @@ export function initStandaloneLinkPreview(): void {
                   isLoading: false,
                   thumbnailHQ: hqBase64 || undefined,
                   thumbnail: preview.thumbnailBase64 || undefined,
-                  thumbnailHeight: preview.thumbnailHeight || undefined,
-                  thumbnailWidth: preview.thumbnailWidth || undefined,
+                  thumbnailHeight: hqBase64 ? preview.thumbnailHeight : undefined,
+                  thumbnailWidth: hqBase64 ? preview.thumbnailWidth : undefined,
                   ...mmsData,
                 },
               };
+
+              // Cache the resolved preview so subsequent typing/composer checks return instantly
+              previewCache?.set(e.url, result);
+              return result;
             }
           } catch (err) {
             console.warn('[wallie] Standalone link preview error, falling back:', err);
@@ -113,4 +140,17 @@ export function initStandaloneLinkPreview(): void {
     }, 500);
     setTimeout(() => clearInterval(interval), 60000);
   }
+
+  // Listen for cache flush events from Settings
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'wallie:clear-link-preview-cache') {
+      try {
+        if (typeof window.require === 'function') {
+          const linkPreviewCache = window.require('WAWebLinkPreviewCache');
+          linkPreviewCache?.getPreviewCache?.()?.clear?.();
+          linkPreviewCache?.getNewsletterPreviewCache?.()?.clear?.();
+        }
+      } catch {}
+    }
+  });
 }

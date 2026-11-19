@@ -131,17 +131,17 @@ By spying on `sendPeerDataOperationRequest` and intercepting raw responses from 
 
 To achieve persistent, high-definition preview banners without relying on the mobile device, WAllie implements a dual-thumbnail generation architecture combined with direct WhatsApp MMS CDN uploading.
 
-### A. Dual-Thumbnail Generation (`src/main/linkPreview.ts`)
+### A. Dual-Thumbnail Generation & Small Icon Meta Handling (`src/main/linkPreview.ts`)
 
-When WAllie fetches OpenGraph images on the desktop, it processes the image buffer through two distinct pipelines:
+When WAllie fetches OpenGraph images on the desktop, it differentiates between high-definition preview media (e.g., `og:image`, `twitter:image`, `image_src`) and small icon metadata (e.g., `apple-touch-icon`, `icon`, `shortcut icon`, or images with dimensions smaller than standard card thresholds: width < 200px or height < 150px):
 
 ```
                       Raw Image Buffer
                              │
             ┌────────────────┴────────────────┐
             ▼                                 ▼
-   High-Quality Thumbnail             Micro-Thumbnail
-   (For High-DPI & MMS)             (Inline Protobuf)
+   High-Quality Thumbnail             Micro-Thumbnail / Small Icon
+   (Full-Size Media Banners)          (Small Icon Meta & Protobuf)
    - Max Dimension: 1024px           - Max Dimension: 140px
    - JPEG Quality: 85                - JPEG Quality: 70
    - Output: ~40–70 KB               - Output: ~2–5 KB (< 25 KB budget)
@@ -149,26 +149,50 @@ When WAllie fetches OpenGraph images on the desktop, it processes the image buff
 ```
 
 1. **High-Quality Thumbnail (`thumbnailHQBase64`)**:
+   - Only created for full-sized media banners (width $\ge 200\text{ px}$, height $\ge 150\text{ px}$, not from icon metadata).
    - Resized using Chromium's `nativeImage` to a maximum dimension of 1024px (matching WhatsApp's native mobile HQ budget).
    - Compressed at JPEG quality 85 for sharp rendering and clean text edges.
    - Captures exact width and height for aspect-ratio preservation.
-2. **Micro Thumbnail (`thumbnailBase64`)**:
+2. **Micro Thumbnail / Small Icon Meta (`thumbnailBase64`)**:
+   - For links with only small icon metadata (e.g. Google Drive, favicons) or undersized images, `thumbnailHQBase64`, `thumbnailWidth`, and `thumbnailHeight` are omitted.
    - Downscaled to $\le 140\text{ px}$ at JPEG quality 70.
    - Strictly bounded under 25 KB to guarantee compliance with WhatsApp's 32 KB inline protobuf frame limit.
+   - Because `thumbnailHQ`, `thumbnailDirectPath`, and dimensions are omitted, WhatsApp evaluates `displayHighQualityLinkPreview(msg)` as `false`, rendering the item authentically as a small square icon on the left rather than stretching it into a blurry full-size card.
 
-### B. Injected MMS Upload Pipeline (`src/preload/inject/linkPreview.ts`)
+### B. Injected MMS Upload Pipeline & WhatsApp Preview Cache (`src/preload/inject/linkPreview.ts`)
 
-When `WAWebLinkPreviewChatAction.getLinkPreview` is invoked by WhatsApp Web's composer, WAllie intercepts the call and runs the MMS upload:
+When `WAWebLinkPreviewChatAction.getLinkPreview` is invoked by WhatsApp Web's composer, WAllie intercepts the call, integrates with WhatsApp Web's in-memory `WAWebLinkPreviewCache`, and selectively runs the MMS upload:
 
 ```typescript
 const hooked = async function (this: any, e: any, _q: any) {
   if (window.__wallie_ipc?.fetchLinkPreview && e && e.url) {
     try {
+      // 1. WhatsApp Web in-memory preview cache lookup
+      let previewCache: Map<string, any> | undefined;
+      if (typeof window.require === 'function') {
+        try {
+          const linkPreviewCache = window.require('WAWebLinkPreviewCache');
+          const chatGetters = window.require('WAWebChatGetters');
+          const stateUtils = window.require('WAWebStateUtils');
+          const unproxiedChat = _q && stateUtils?.unproxy ? stateUtils.unproxy(_q) : _q;
+          const isNewsletter =
+            unproxiedChat && chatGetters?.getIsNewsletter ? chatGetters.getIsNewsletter(unproxiedChat) : false;
+          previewCache = isNewsletter
+            ? linkPreviewCache?.getNewsletterPreviewCache?.()
+            : linkPreviewCache?.getPreviewCache?.();
+        } catch {}
+      }
+
+      if (previewCache?.has(e.url)) {
+        return previewCache.get(e.url);
+      }
+
       const preview = await window.__wallie_ipc.fetchLinkPreview(e.url);
       if (preview && (preview.title || preview.description)) {
         let mmsData: Record<string, any> = {};
-        const hqBase64 = preview.thumbnailHQBase64 || preview.thumbnailBase64;
+        const hqBase64 = preview.thumbnailHQBase64;
 
+        // Only upload to WhatsApp MMS CDN if a genuine HQ banner exists
         if (hqBase64 && typeof window.require === 'function') {
           try {
             const opaqueData = window.require('WAWebMediaOpaqueData');
@@ -213,7 +237,7 @@ const hooked = async function (this: any, e: any, _q: any) {
           }
         }
 
-        return {
+        const result = {
           url: e.url,
           data: {
             matchedText: e.url,
@@ -224,11 +248,14 @@ const hooked = async function (this: any, e: any, _q: any) {
             isLoading: false,
             thumbnailHQ: hqBase64 || undefined,
             thumbnail: preview.thumbnailBase64 || undefined,
-            thumbnailHeight: preview.thumbnailHeight || undefined,
-            thumbnailWidth: preview.thumbnailWidth || undefined,
+            thumbnailHeight: hqBase64 ? preview.thumbnailHeight : undefined,
+            thumbnailWidth: hqBase64 ? preview.thumbnailWidth : undefined,
             ...mmsData,
           },
         };
+
+        previewCache?.set(e.url, result);
+        return result;
       }
     } catch (err) {
       console.warn('[wallie] Standalone link preview error, falling back:', err);
