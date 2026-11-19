@@ -1,50 +1,115 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import {
+  extractMetaContent,
+  extractLinkHref,
+  extractTitle,
+  escapeRegex,
+} from '../src/shared/htmlMetadata.ts';
+
+describe('HTML Metadata Parsing & Entity Decoding', () => {
+  test('correctly extracts meta descriptions containing single quotes / apostrophes without truncation', () => {
+    const html = `
+      <html>
+        <head>
+          <meta name="description" content="We're here to get you informed on everything you need to know about CurseForge, including helpful guides and troubleshooting articles to back you up when you get in a pickle">
+          <meta property="og:description" content="We're here to get you informed on everything you need to know about CurseForge, including helpful guides and troubleshooting articles to back you up when you get in a pickle">
+          <meta name="twitter:description" content="We're here to get you informed on everything you need to know about CurseForge, including helpful guides and troubleshooting articles to back you up when you get in a pickle">
+        </head>
+      </html>
+    `;
+    const expected = "We're here to get you informed on everything you need to know about CurseForge, including helpful guides and troubleshooting articles to back you up when you get in a pickle";
+    assert.equal(extractMetaContent(html, 'og:description'), expected);
+    assert.equal(extractMetaContent(html, 'description', true), expected);
+    assert.equal(extractMetaContent(html, 'twitter:description', true), expected);
+  });
+
+  test('handles double quotes inside single-quoted content and vice versa', () => {
+    const html = `
+      <html>
+        <head>
+          <meta property="og:title" content='He said "Welcome to WAllie" and smiled'>
+          <meta property="og:description" content="It's a wonderful day for Linux!">
+        </head>
+      </html>
+    `;
+    assert.equal(extractMetaContent(html, 'og:title'), 'He said "Welcome to WAllie" and smiled');
+    assert.equal(extractMetaContent(html, 'og:description'), "It's a wonderful day for Linux!");
+  });
+
+  test('extracts meta attributes when content appears before property or name', () => {
+    const html = `
+      <html>
+        <head>
+          <meta content="Reversed attribute order: it's working properly" property="og:description">
+          <meta content="Reversed name order: don't worry" name="description">
+        </head>
+      </html>
+    `;
+    assert.equal(extractMetaContent(html, 'og:description'), "Reversed attribute order: it's working properly");
+    assert.equal(extractMetaContent(html, 'description', true), "Reversed name order: don't worry");
+  });
+
+  test('decodes numeric and named HTML entities in meta content', () => {
+    const html = `
+      <html>
+        <head>
+          <meta property="og:title" content="Tom &amp; Jerry&#39;s &quot;Adventures&quot; &lt;Classic&gt;">
+        </head>
+      </html>
+    `;
+    assert.equal(extractMetaContent(html, 'og:title'), 'Tom & Jerry\'s "Adventures" <Classic>');
+  });
+
+  test('extractTitle extracts and decodes document title', () => {
+    const html = `
+      <html>
+        <head>
+          <title>Exporting Modpacks: CurseForge support</title>
+        </head>
+      </html>
+    `;
+    assert.equal(extractTitle(html), 'Exporting Modpacks: CurseForge support');
+  });
+
+  test('prefers specific document title when og:title is merely identical to site_name', () => {
+    const html = `
+      <html>
+        <head>
+          <title>Exporting Modpacks: CurseForge support</title>
+          <meta property="og:site_name" content="CurseForge Support">
+          <meta property="og:title" content="CurseForge Support">
+        </head>
+      </html>
+    `;
+    const ogTitle = extractMetaContent(html, 'og:title');
+    const docTitle = extractTitle(html);
+    const siteName = extractMetaContent(html, 'og:site_name');
+
+    let title = ogTitle || docTitle;
+    if (
+      siteName &&
+      title &&
+      docTitle &&
+      title.toLowerCase() === siteName.toLowerCase() &&
+      docTitle.toLowerCase() !== siteName.toLowerCase()
+    ) {
+      title = docTitle;
+    }
+
+    if (title && siteName) {
+      const escapedSite = escapeRegex(siteName);
+      const cleaned = title.replace(new RegExp(`\\s*[\\|\\-\\•\\:]\\s*${escapedSite}$`, 'i'), '').trim();
+      if (cleaned) {
+        title = cleaned;
+      }
+    }
+
+    assert.equal(title, 'Exporting Modpacks');
+  });
+});
 
 describe('Link Preview Discovery & Icon Meta Discrimination', () => {
-  function decodeHtmlEntities(str: string): string {
-    if (!str) return '';
-    return str
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&')
-      .replace(/&#039;/g, "'")
-      .replace(/&apos;/g, "'")
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&#x2F;/gi, '/')
-      .replace(/&#(\d+);/g, (_, dec) => {
-        try {
-          return String.fromCharCode(parseInt(dec, 10));
-        } catch {
-          return '';
-        }
-      });
-  }
-
-  function extractMetaContent(html: string, propertyName: string, isName = false): string | null {
-    const attr = isName ? 'name' : 'property';
-    const r1 = new RegExp(`<meta\\s+[^>]*?${attr}=["']${propertyName}["'][^>]*?content=["']([^"']*)["']`, 'i');
-    const m1 = html.match(r1);
-    if (m1 && m1[1]) return decodeHtmlEntities(m1[1].trim());
-
-    const r2 = new RegExp(`<meta\\s+[^>]*?content=["']([^"']*)["'][^>]*?${attr}=["']${propertyName}["']`, 'i');
-    const m2 = html.match(r2);
-    if (m2 && m2[1]) return decodeHtmlEntities(m2[1].trim());
-
-    return null;
-  }
-
-  function extractLinkHref(html: string, relType: string): string | null {
-    const r1 = new RegExp(`<link\\s+[^>]*?rel=["'][^"']*?${relType}[^"']*?["'][^>]*?href=["']([^"']*)["']`, 'i');
-    const m1 = html.match(r1);
-    if (m1 && m1[1]) return decodeHtmlEntities(m1[1].trim());
-
-    const r2 = new RegExp(`<link\\s+[^>]*?href=["']([^"']*)["'][^>]*?rel=["'][^"']*?${relType}[^"']*?["']`, 'i');
-    const m2 = html.match(r2);
-    if (m2 && m2[1]) return decodeHtmlEntities(m2[1].trim());
-
-    return null;
-  }
 
   function discoverImageSources(html: string) {
     const ogImage =

@@ -2,6 +2,7 @@ import { nativeImage } from 'electron';
 import { state } from './state';
 import type { LinkPreviewData } from '../shared/types';
 import { isSafeHttpUrl, resolveAndValidateHost } from './urlUtils';
+import { extractMetaContent, extractLinkHref, extractTitle, escapeRegex } from '../shared/htmlMetadata.ts';
 
 const PREVIEW_CACHE = new Map<string, { data: LinkPreviewData; timestamp: number; ttl: number }>();
 const CACHE_MAX_SIZE = 200;
@@ -12,59 +13,6 @@ const CRAWLER_USER_AGENT = 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://di
 const FALLBACK_CRAWLER_USER_AGENT = 'WhatsApp/2.24.6.77 A';
 const BROWSER_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36';
-
-function decodeHtmlEntities(str: string): string {
-  if (!str) return '';
-  return str
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&#039;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&#x2F;/gi, '/')
-    .replace(/&#(\d+);/g, (_, dec) => {
-      try {
-        return String.fromCharCode(parseInt(dec, 10));
-      } catch {
-        return '';
-      }
-    });
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function extractMetaContent(html: string, propertyName: string, isName = false): string | null {
-  const attr = isName ? 'name' : 'property';
-  const r1 = new RegExp(`<meta\\s+[^>]*?${attr}=["']${propertyName}["'][^>]*?content=["']([^"']*)["']`, 'i');
-  const m1 = html.match(r1);
-  if (m1 && m1[1]) return decodeHtmlEntities(m1[1].trim());
-
-  const r2 = new RegExp(`<meta\\s+[^>]*?content=["']([^"']*)["'][^>]*?${attr}=["']${propertyName}["']`, 'i');
-  const m2 = html.match(r2);
-  if (m2 && m2[1]) return decodeHtmlEntities(m2[1].trim());
-
-  return null;
-}
-
-function extractLinkHref(html: string, relType: string): string | null {
-  const r1 = new RegExp(`<link\\s+[^>]*?rel=["'][^"']*?${relType}[^"']*?["'][^>]*?href=["']([^"']*)["']`, 'i');
-  const m1 = html.match(r1);
-  if (m1 && m1[1]) return decodeHtmlEntities(m1[1].trim());
-
-  const r2 = new RegExp(`<link\\s+[^>]*?href=["']([^"']*)["'][^>]*?rel=["'][^"']*?${relType}[^"']*?["']`, 'i');
-  const m2 = html.match(r2);
-  if (m2 && m2[1]) return decodeHtmlEntities(m2[1].trim());
-
-  return null;
-}
-
-function extractTitle(html: string): string | null {
-  const m = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-  return m && m[1] ? decodeHtmlEntities(m[1].trim()) : null;
-}
 
 /**
  * Universal safe multi-hop redirect follower.
@@ -334,22 +282,37 @@ export async function fetchLinkPreview(urlStr: string): Promise<LinkPreviewData 
     const { finalUrl, html } = pageData;
 
     // --- Universal Title Extraction ---
-    let title =
-      extractMetaContent(html, 'og:title') ||
-      extractMetaContent(html, 'twitter:title', true) ||
-      extractTitle(html);
+    const ogTitle = extractMetaContent(html, 'og:title');
+    const twTitle = extractMetaContent(html, 'twitter:title', true);
+    const docTitle = extractTitle(html);
 
     // Dynamic brand cleaning using the site's own og:site_name (no hardcoded domain names)
     const siteName =
       extractMetaContent(html, 'og:site_name') ||
       extractMetaContent(html, 'application-name', true);
 
+    let title = ogTitle || twTitle || docTitle;
+
+    // If og:title or twitter:title is just the site name itself, prefer document title if it contains richer info
+    if (
+      siteName &&
+      title &&
+      docTitle &&
+      title.toLowerCase() === siteName.toLowerCase() &&
+      docTitle.toLowerCase() !== siteName.toLowerCase()
+    ) {
+      title = docTitle;
+    }
+
     if (title && siteName) {
       const escapedSite = escapeRegex(siteName);
       // Clean prefix e.g. "From the ... on <SiteName>: Real Title"
       title = title.replace(new RegExp(`^From the\\s+.*?\\s+on\\s+${escapedSite}:\\s*`, 'i'), '').trim();
-      // Clean suffix e.g. "Real Title - <SiteName>" or "Real Title | <SiteName>"
-      title = title.replace(new RegExp(`\\s*[\\|\\-\\•\\:]\\s*${escapedSite}$`, 'i'), '').trim();
+      // Clean suffix e.g. "Real Title - <SiteName>" or "Real Title | <SiteName>" or "Real Title: <SiteName>"
+      const cleaned = title.replace(new RegExp(`\\s*[\\|\\-\\•\\:]\\s*${escapedSite}$`, 'i'), '').trim();
+      if (cleaned) {
+        title = cleaned;
+      }
     }
 
     // --- Universal Description Extraction ---

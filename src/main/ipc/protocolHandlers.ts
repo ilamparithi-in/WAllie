@@ -5,6 +5,7 @@ import { updateActiveViewBounds, switchActiveAccount } from '../window';
 import { clearPausedMediaState } from '../views';
 import { fetchLinkPreview, clearLinkPreviewCache, getLinkPreviewCacheSize } from '../linkPreview';
 import { GroupInviteDetails } from '../../shared/types';
+import { extractMetaContent } from '../../shared/htmlMetadata.ts';
 import {
   validate,
   accountIdSchema,
@@ -14,17 +15,6 @@ import {
 import { z } from 'zod';
 
 const groupInviteCache = new Map<string, GroupInviteDetails>();
-
-function decodeHtmlEntities(str: string): string {
-  return str
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, '/');
-}
 
 async function fetchGroupInviteDetails(code: string): Promise<GroupInviteDetails | null> {
   const cleanCode = code.trim();
@@ -54,35 +44,22 @@ async function fetchGroupInviteDetails(code: string): Promise<GroupInviteDetails
 
     const html = await res.text();
 
-    const titleMatch =
-      html.match(/<meta\s+property=["']og:title["']\s+content=["'](.*?)["']/i) ||
-      html.match(/<meta\s+content=["'](.*?)["']\s+property=["']og:title["']/i);
-
-    const imageMatch =
-      html.match(/<meta\s+property=["']og:image["']\s+content=["'](.*?)["']/i) ||
-      html.match(/<meta\s+content=["'](.*?)["']\s+property=["']og:image["']/i);
-
-    const descMatch =
-      html.match(/<meta\s+property=["']og:description["']\s+content=["'](.*?)["']/i) ||
-      html.match(/<meta\s+content=["'](.*?)["']\s+property=["']og:description["']/i);
-
-    const rawTitle = titleMatch ? titleMatch[1].trim() : '';
-    const rawImage = imageMatch ? imageMatch[1].trim() : '';
-    const rawDesc = descMatch ? descMatch[1].trim() : '';
+    const rawTitle = extractMetaContent(html, 'og:title') || '';
+    const rawImage = extractMetaContent(html, 'og:image') || '';
+    const rawDesc = extractMetaContent(html, 'og:description') || '';
 
     let name: string | undefined;
     if (rawTitle && rawTitle.toLowerCase() !== 'whatsapp group invite') {
-      name = decodeHtmlEntities(rawTitle);
+      name = rawTitle;
     }
 
     let iconUrl: string | undefined;
     if (rawImage) {
-      const decodedUrl = decodeHtmlEntities(rawImage);
-      iconUrl = decodedUrl;
+      iconUrl = rawImage;
       try {
         const imgController = new AbortController();
         const imgTimeout = setTimeout(() => imgController.abort(), 3000);
-        const imgRes = await fetch(decodedUrl, {
+        const imgRes = await fetch(rawImage, {
           signal: imgController.signal,
           headers: { 'User-Agent': DEFAULT_USER_AGENT },
         });
@@ -93,13 +70,13 @@ async function fetchGroupInviteDetails(code: string): Promise<GroupInviteDetails
           iconUrl = `data:${mime};base64,${Buffer.from(buf).toString('base64')}`;
         }
       } catch {
-        // Fall back to original decodedUrl if pre-fetch fails
+        // Fall back to original rawImage if pre-fetch fails
       }
     }
 
     let description: string | undefined;
     if (rawDesc && rawDesc.toLowerCase() !== 'whatsapp group invite') {
-      description = decodeHtmlEntities(rawDesc);
+      description = rawDesc;
     }
 
     const result: GroupInviteDetails = {
