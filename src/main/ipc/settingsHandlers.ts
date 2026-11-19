@@ -9,6 +9,9 @@ import {
   initializeAccountsLoad,
   openSettingsWindow,
   closeSettingsWindow,
+  openDisclaimerWindow,
+  openProtocolPromptWindow,
+  openAvatarZoomWindow,
 } from '../window';
 import { applyRetentionPruning } from '../notificationHistory';
 import { applyThemeMode, getThemeInfo } from '../theme';
@@ -36,18 +39,83 @@ export function registerSettingsHandlers(): void {
     return Boolean(state.settingsWindow && !state.settingsWindow.isDestroyed());
   });
 
+  ipcMain.on('disclaimer:open-window', (_event, firstLaunch?: unknown) => {
+    openDisclaimerWindow(Boolean(firstLaunch));
+  });
+
+  ipcMain.on('protocol:open-window', (_event, url: unknown) => {
+    if (typeof url === 'string') {
+      openProtocolPromptWindow(url);
+    }
+  });
+
+  ipcMain.on('avatar:open-window', (_event, url: unknown, title?: unknown) => {
+    if (typeof url === 'string') {
+      openAvatarZoomWindow(url, typeof title === 'string' ? title : undefined);
+    }
+  });
+
   ipcMain.on('disclaimer:toggle', (_event, isOpen: unknown) => {
     const open = Boolean(isOpen);
     state.disclaimerOpen = open;
+    if (open) {
+      state.activeModals.add('disclaimer');
+    } else {
+      state.activeModals.delete('disclaimer');
+    }
     updateActiveViewBounds();
-    if (!open) focusActiveView();
+    const isAnyModalOpen =
+      (state.activeModals && state.activeModals.size > 0) ||
+      state.disclaimerOpen ||
+      state.protocolPromptOpen ||
+      state.addAccountPromptOpen;
+    if (!isAnyModalOpen) focusActiveView();
   });
 
   ipcMain.on('protocol:toggle-prompt', (_event, isOpen: unknown) => {
     const open = Boolean(isOpen);
     state.protocolPromptOpen = open;
+    if (open) {
+      state.activeModals.add('protocol-prompt');
+    } else {
+      state.activeModals.delete('protocol-prompt');
+    }
     updateActiveViewBounds();
-    if (!open) focusActiveView();
+    const isAnyModalOpen =
+      (state.activeModals && state.activeModals.size > 0) ||
+      state.disclaimerOpen ||
+      state.protocolPromptOpen ||
+      state.addAccountPromptOpen;
+    if (!isAnyModalOpen) focusActiveView();
+  });
+
+  ipcMain.on('modal:toggle', (_event, payload: unknown) => {
+    let isOpen = false;
+    let modalId = 'default';
+    if (typeof payload === 'boolean') {
+      isOpen = payload;
+    } else if (payload && typeof payload === 'object') {
+      isOpen = Boolean((payload as any).isOpen);
+      if (typeof (payload as any).id === 'string' && (payload as any).id.trim()) {
+        modalId = (payload as any).id.trim();
+      }
+    }
+
+    if (isOpen) {
+      state.activeModals.add(modalId);
+    } else {
+      state.activeModals.delete(modalId);
+    }
+
+    updateActiveViewBounds();
+    const isAnyModalOpen =
+      (state.activeModals && state.activeModals.size > 0) ||
+      state.disclaimerOpen ||
+      state.protocolPromptOpen ||
+      state.addAccountPromptOpen;
+    if (!isAnyModalOpen) {
+      focusActiveView();
+    }
   });
 
   ipcMain.on('settings:reset-app-scale', async () => {

@@ -197,6 +197,11 @@ function attachSessionNetwork(sess: Electron.Session, partitionName?: string) {
 }
 
 function getTargetWebContents(accountId?: string) {
+  if (accountId === 'main' || accountId === 'renderer') {
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      return { accountId: 'main', webContents: state.mainWindow.webContents };
+    }
+  }
   const targetId = accountId || state.activeAccountId;
   const view = state.accountViews.get(targetId);
   if (!view || view.webContents.isDestroyed()) {
@@ -307,6 +312,13 @@ export function startDevBridge(): void {
             networkLogsCount: networkLogs.length,
           },
           activeAccountId: state.activeAccountId,
+          activeModals: Array.from(state.activeModals || []),
+          isAnyModalOpen: Boolean(
+            (state.activeModals && state.activeModals.size > 0) ||
+            state.disclaimerOpen ||
+            state.protocolPromptOpen ||
+            state.addAccountPromptOpen
+          ),
           accounts: state.accounts.map(a => ({
             id: a.id,
             name: a.name,

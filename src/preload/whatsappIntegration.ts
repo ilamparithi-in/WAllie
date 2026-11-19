@@ -202,7 +202,7 @@ export function setupWhatsAppIntegration(mainWorldScript: string): void {
 
       // Ensure the click was strictly inside the document card / document space (the darker inner rectangle)
       const docCard = target.closest<HTMLElement>(
-        '[data-testid="document-thumb"], [data-testid="document-thumb-details"], [data-testid="audio-play"], [data-testid="audio-download"], [role="button"][title^="Download \""], [role="button"][title^="View \""]'
+        '[data-testid="document-thumb"], [data-testid="document-thumb-details"], [data-testid="audio-play"], [data-testid="audio-download"], [role="button"][title^="Download "], [role="button"][title^="View "]'
       );
       if (!docCard) {
         return;

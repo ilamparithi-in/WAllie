@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, RotateCcw } from 'lucide-react';
+import { Modal } from './Modal';
 
 interface AvatarZoomModalProps {
   data: { url: string; title: string } | null;
@@ -7,7 +8,6 @@ interface AvatarZoomModalProps {
 }
 
 export const AvatarZoomModal: React.FC<AvatarZoomModalProps> = ({ data, onClose }) => {
-  const [isClosing, setIsClosing] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -18,38 +18,11 @@ export const AvatarZoomModal: React.FC<AvatarZoomModalProps> = ({ data, onClose 
   // Reset zoom & pan when opening new modal
   useEffect(() => {
     if (data) {
-      setIsClosing(false);
       setZoom(1);
       setPan({ x: 0, y: 0 });
       dragDistanceRef.current = 0;
     }
   }, [data]);
-
-  const handleClose = () => {
-    if (isClosing) return;
-    setIsClosing(true);
-    setTimeout(() => {
-      onClose();
-      setIsClosing(false);
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
-      dragDistanceRef.current = 0;
-    }, 180);
-  };
-
-  // Keyboard Escape handler
-  useEffect(() => {
-    if (!data) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        handleClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [data, isClosing]);
 
   // Non-passive wheel listener for smooth zooming
   useEffect(() => {
@@ -71,15 +44,16 @@ export const AvatarZoomModal: React.FC<AvatarZoomModalProps> = ({ data, onClose 
     return () => el.removeEventListener('wheel', onWheel);
   }, [data]);
 
-  if (!data && !isClosing) return null;
+  if (!data) return null;
   const currentData = data;
-  if (!currentData) return null;
 
   return (
-    <div
-      className={`fixed inset-0 z-[70] bg-black/90 backdrop-blur-md select-none overflow-hidden ${
-        isClosing ? 'modal-fade-exit' : 'modal-fade-enter'
-      }`}
+    <Modal
+      id="avatar-zoom"
+      isOpen={Boolean(data)}
+      onClose={onClose}
+      customCard
+      backdropClassName="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md select-none overflow-hidden"
     >
       {/* Top header bar */}
       <div
@@ -111,7 +85,7 @@ export const AvatarZoomModal: React.FC<AvatarZoomModalProps> = ({ data, onClose 
             </button>
           )}
           <button
-            onClick={handleClose}
+            onClick={onClose}
             className="p-1.5 text-[#8696a0] hover:text-[#e9edef] rounded-lg bg-[#202c33] hover:bg-[#2a3942] border border-[#2c3943] transition-colors"
             title="Close (Esc)"
           >
@@ -125,7 +99,7 @@ export const AvatarZoomModal: React.FC<AvatarZoomModalProps> = ({ data, onClose 
         ref={imageViewportRef}
         onClick={(e) => {
           if (e.target === e.currentTarget && dragDistanceRef.current < 5) {
-            handleClose();
+            onClose();
           }
         }}
         onMouseDown={(e) => {
@@ -172,7 +146,6 @@ export const AvatarZoomModal: React.FC<AvatarZoomModalProps> = ({ data, onClose 
           className="max-h-[calc(100vh-4rem)] max-w-[calc(100vw-2rem)] object-contain shadow-2xl pointer-events-auto select-none rounded-lg"
         />
       </div>
-    </div>
+    </Modal>
   );
 };
-

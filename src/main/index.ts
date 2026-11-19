@@ -9,6 +9,7 @@ import { createMainWindow, createTray } from './window';
 import { saveWindowStateImmediate } from './windowState';
 import { checkForWebStoreUpdates } from './extensions';
 import { initTheme } from './theme';
+import { startDevBridge } from './devBridge';
 
 // Memory & CPU Optimization flags & Touchpad / Pinch Gestures
 app.commandLine.appendSwitch('enable-pinch');
@@ -144,9 +145,7 @@ if (gotTheLock) {
     // Dev bridge is strictly gated: never bundled in production, disabled in standard dev,
     // and only compiled/activated when explicitly launched via `npm run dev:bridge`
     if (typeof __ENABLE_DEV_BRIDGE__ !== 'undefined' && __ENABLE_DEV_BRIDGE__) {
-      import('./devBridge').then(({ startDevBridge }) => {
-        startDevBridge();
-      });
+      startDevBridge();
     }
 
     app.on('activate', () => {

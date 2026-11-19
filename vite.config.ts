@@ -56,6 +56,11 @@ export default defineConfig({
             emptyOutDir: true,
             sourcemap: true,
             minify: false,
+            rollupOptions: {
+              output: {
+                inlineDynamicImports: true,
+              },
+            },
           },
         },
       },

@@ -125,9 +125,11 @@ async function main() {
     }
 
     case 'query': {
+      const targetIdx = args.indexOf('--target') !== -1 ? args.indexOf('--target') : args.indexOf('--account');
+      const accountId = targetIdx !== -1 ? args[targetIdx + 1] : undefined;
       const selector = args[1];
       if (!selector) {
-        console.error('Usage: node scripts/wa-bridge.mjs query <css-selector> [--limit N] [--html]');
+        console.error('Usage: node scripts/wa-bridge.mjs query <css-selector> [--limit N] [--html] [--target <id|main>]');
         process.exit(1);
       }
       const limitArgIdx = args.indexOf('--limit');
@@ -136,44 +138,58 @@ async function main() {
 
       const res = await request('/query', {
         method: 'POST',
-        body: JSON.stringify({ selector, limit, includeHtml }),
+        body: JSON.stringify({ selector, limit, includeHtml, accountId }),
       });
       console.log(JSON.stringify(res, null, 2));
       break;
     }
 
     case 'eval': {
-      const code = args.slice(1).join(' ');
+      const targetIdx = args.indexOf('--target') !== -1 ? args.indexOf('--target') : args.indexOf('--account');
+      const accountId = targetIdx !== -1 ? args[targetIdx + 1] : undefined;
+      const filteredArgs = [];
+      for (let i = 1; i < args.length; i++) {
+        if (args[i] === '--target' || args[i] === '--account') {
+          i++; // skip next
+          continue;
+        }
+        filteredArgs.push(args[i]);
+      }
+      const code = filteredArgs.join(' ');
       if (!code) {
-        console.error('Usage: node scripts/wa-bridge.mjs eval <code>');
+        console.error('Usage: node scripts/wa-bridge.mjs eval <code> [--target <id|main>]');
         process.exit(1);
       }
       const res = await request('/eval', {
         method: 'POST',
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, accountId }),
       });
       console.log(JSON.stringify(res, null, 2));
       break;
     }
 
     case 'dom': {
+      const targetIdx = args.indexOf('--target') !== -1 ? args.indexOf('--target') : args.indexOf('--account');
+      const accountId = targetIdx !== -1 ? args[targetIdx + 1] : undefined;
       const selector = args[1] && !args[1].startsWith('--') ? args[1] : 'html';
       const maxCharsIdx = args.indexOf('--chars');
       const maxChars = maxCharsIdx !== -1 ? Number(args[maxCharsIdx + 1]) : 500000;
 
       const res = await request('/dom', {
         method: 'POST',
-        body: JSON.stringify({ selector, maxChars, stripBlobs: true }),
+        body: JSON.stringify({ selector, maxChars, stripBlobs: true, accountId }),
       });
       console.log(JSON.stringify(res, null, 2));
       break;
     }
 
     case 'screenshot': {
-      const savePath = args[1];
+      const targetIdx = args.indexOf('--target') !== -1 ? args.indexOf('--target') : args.indexOf('--account');
+      const accountId = targetIdx !== -1 ? args[targetIdx + 1] : undefined;
+      const savePath = args[1] && !args[1].startsWith('--') ? args[1] : undefined;
       const res = await request('/screenshot', {
         method: 'POST',
-        body: JSON.stringify({ savePath }),
+        body: JSON.stringify({ savePath, accountId }),
       });
       console.log(JSON.stringify(res, null, 2));
       break;

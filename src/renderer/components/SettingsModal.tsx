@@ -67,8 +67,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
 
   const handleOpenAddAccount = () => {
-    if (isDetached) {
-      setIsAddAccountModalOpen(true);
+    if (window.electronAPI?.openAddAccountWindow) {
+      window.electronAPI.openAddAccountWindow();
     } else if (onOpenAddAccount) {
       onOpenAddAccount();
     } else {

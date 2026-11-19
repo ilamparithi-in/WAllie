@@ -3,10 +3,6 @@ import { Titlebar } from './components/Titlebar';
 import { SettingsModal } from './components/SettingsModal';
 import { DownloadsTracker } from './components/DownloadsTracker';
 import { ToastContainer } from './components/ToastContainer';
-import { DisclaimerModal } from './components/DisclaimerModal';
-import { ProtocolPromptModal } from './components/ProtocolPromptModal';
-import { AvatarZoomModal } from './components/AvatarZoomModal';
-import { AddAccountModal } from './components/AddAccountModal';
 
 import { useAccounts } from './hooks/useAccounts';
 import { useGlobalSettings } from './hooks/useGlobalSettings';
@@ -15,13 +11,12 @@ import { useDownloads } from './hooks/useDownloads';
 import { useToasts } from './hooks/useToasts';
 import { useWindowZoom } from './hooks/useWindowZoom';
 
-import type { AccountInfo, AddAccountOptions } from '../preload';
 import type { SettingsPageType } from './types';
 
 export const App: React.FC = () => {
   // Domain hooks
-  const { accounts, isActiveAccountLoaded } = useAccounts();
-  const { globalSettings, updateGlobalSettings } = useGlobalSettings();
+  const { isActiveAccountLoaded } = useAccounts();
+  const { globalSettings } = useGlobalSettings();
   const globalSettingsRef = useRef(globalSettings);
   globalSettingsRef.current = globalSettings;
   useTheme();
@@ -29,24 +24,10 @@ export const App: React.FC = () => {
   const { toasts, showToast, dismissToast } = useToasts();
   useWindowZoom(globalSettings);
 
-  // Settings modal state
+  // Settings modal drawer state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialPage, setSettingsInitialPage] = useState<SettingsPageType | undefined>(undefined);
   const [settingsInitialAccountId, setSettingsInitialAccountId] = useState<string | undefined>(undefined);
-
-  // Add account modal state
-  const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
-
-  // Disclaimer modal state
-  const [showDisclaimerForce, setShowDisclaimerForce] = useState(false);
-
-  // Protocol handling state
-  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
-  const [promptAccounts, setPromptAccounts] = useState<AccountInfo[]>([]);
-  const [isHandlingProtocol, setIsHandlingProtocol] = useState(false);
-
-  // Avatar zoom modal state
-  const [avatarModalData, setAvatarModalData] = useState<{ url: string; title: string } | null>(null);
 
   // Settings subpage tracking for popout / detaching
   const currentSettingsStateRef = useRef<{ page?: SettingsPageType; accountId?: string }>({});
@@ -138,80 +119,24 @@ export const App: React.FC = () => {
     });
   }, []);
 
-  // Disclaimer handlers
-  const handleAcceptDisclaimer = useCallback(async () => {
-    if (!globalSettings) return;
-    const success = await updateGlobalSettings({
-      ...globalSettings,
-      disclaimerAccepted: true,
-    });
-    if (success) {
-      setShowDisclaimerForce(false);
-      window.electronAPI?.toggleDisclaimer(false);
+  // Legal Disclaimer initial check
+  useEffect(() => {
+    if (globalSettings && globalSettings.disclaimerAccepted === false) {
+      window.electronAPI?.openDisclaimerWindow?.(true);
     }
-  }, [globalSettings, updateGlobalSettings]);
+  }, [globalSettings]);
 
-  const handleDeclineDisclaimer = useCallback(() => {
-    window.electronAPI?.closeWindow();
-  }, []);
-
-  const handleCloseDisclaimerForce = useCallback(() => {
-    setShowDisclaimerForce(false);
-    window.electronAPI?.toggleDisclaimer(false);
-  }, []);
-
-  // Protocol URL prompt handlers
-  const handleCloseProtocolPrompt = useCallback((isCancelled = true) => {
-    if (isCancelled && pendingUrl) {
-      showToast('Opening link cancelled', pendingUrl);
-    }
-    setPendingUrl(null);
-    window.electronAPI?.toggleProtocolPrompt(false);
-  }, [pendingUrl, showToast]);
-
+  // Protocol URL prompt reopen handler
   const handleReopenPrompt = useCallback(async (url: string) => {
-    const accs = await window.electronAPI.getAccounts();
-    const loggedInAccs = accs.filter((a) => a.loggedIn);
-    const promptList = loggedInAccs.length > 0 ? loggedInAccs : accs;
-    setPromptAccounts(promptList);
-    setPendingUrl(url);
-    window.electronAPI?.toggleProtocolPrompt(true);
+    window.electronAPI?.openProtocolPromptWindow?.(url);
   }, []);
-
-  const handleSelectProtocolAccount = useCallback(async (accountId: string) => {
-    if (!pendingUrl || isHandlingProtocol) return;
-    const urlToOpen = pendingUrl;
-    const targetAccount = promptAccounts.find((a) => a.id === accountId);
-    setIsHandlingProtocol(true);
-    try {
-      const res = await window.electronAPI.handleProtocolUrl(accountId, urlToOpen);
-      if (res && res.success) {
-        showToast(`Opening link in ${targetAccount?.name || 'account'}...`, urlToOpen);
-        setPendingUrl(null);
-        window.electronAPI?.toggleProtocolPrompt(false);
-      } else if (res && res.cancelled) {
-        showToast('Opening link cancelled', urlToOpen);
-        console.log('User cancelled page unload. Keeping pending URL prompt open.');
-      }
-    } finally {
-      setIsHandlingProtocol(false);
-    }
-  }, [pendingUrl, isHandlingProtocol, promptAccounts, showToast]);
-
-  // Add account modal handlers
-  const handleConfirmAddAccount = useCallback(async (options: AddAccountOptions) => {
-    const newAcc = await window.electronAPI?.addAccount(options);
-    if (newAcc) {
-      showToast(`Added account ${newAcc.emoji ? newAcc.emoji + ' ' : ''}${newAcc.name}`, 'Account created successfully');
-    }
-  }, [showToast]);
 
   // IPC Event Subscriptions for window-level actions
   useEffect(() => {
     if (!window.electronAPI) return;
 
     const unsubscribeTriggerAdd = window.electronAPI.onTriggerAddAccount?.(() => {
-      setIsAddAccountOpen(true);
+      window.electronAPI?.openAddAccountWindow?.();
     });
 
     const unsubscribeCloseRequest = window.electronAPI.onSettingsCloseRequest(() => {
@@ -249,21 +174,14 @@ export const App: React.FC = () => {
             showToast(`Opening link in ${targetAcc.name}...`, url);
           } else if (res && res.cancelled) {
             showToast('Opening link cancelled', url);
-            const loggedInAccs = accs.filter((a) => a.loggedIn);
-            setPromptAccounts(loggedInAccs.length > 0 ? loggedInAccs : accs);
-            setPendingUrl(url);
-            window.electronAPI.toggleProtocolPrompt(true);
+            window.electronAPI?.openProtocolPromptWindow?.(url);
           }
           return;
         }
       }
 
       // Default behavior ("Ask Everytime"):
-      const loggedInAccs = accs.filter((a) => a.loggedIn);
-      const promptList = loggedInAccs.length > 0 ? loggedInAccs : accs;
-      setPromptAccounts(promptList);
-      setPendingUrl(url);
-      window.electronAPI.toggleProtocolPrompt(true);
+      window.electronAPI?.openProtocolPromptWindow?.(url);
     });
 
     const unsubscribeReopenPrompt = window.electronAPI.onProtocolReopenPrompt?.((url) => {
@@ -293,7 +211,6 @@ export const App: React.FC = () => {
   }
 
   const isDisclaimerAccepted = !!globalSettings.disclaimerAccepted;
-  const showDisclaimerOverlay = !isDisclaimerAccepted || showDisclaimerForce;
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#111b21] overflow-hidden select-none">
@@ -302,7 +219,7 @@ export const App: React.FC = () => {
         onToggleSettings={handleToggleSettings}
         onOpenNotificationHistory={handleOpenNotificationHistory}
         isDisclaimerAccepted={isDisclaimerAccepted}
-        onOpenAddAccount={() => setIsAddAccountOpen(true)}
+        onOpenAddAccount={() => window.electronAPI?.openAddAccountWindow?.()}
       />
 
       {/* Main Container Area: The Electron WebContentsView will overlay this area below the titlebar */}
@@ -340,38 +257,9 @@ export const App: React.FC = () => {
           currentSettingsStateRef.current = { page, accountId };
         }}
         onShowDisclaimer={() => {
-          setShowDisclaimerForce(true);
-          window.electronAPI?.toggleDisclaimer(true);
+          window.electronAPI?.openDisclaimerWindow?.(false);
         }}
-        onOpenAddAccount={() => setIsAddAccountOpen(true)}
-      />
-
-      {/* Legal Disclaimer Modal Overlay */}
-      <DisclaimerModal
-        isOpen={showDisclaimerOverlay}
-        isFirstLaunch={!isDisclaimerAccepted}
-        onAccept={handleAcceptDisclaimer}
-        onDecline={handleDeclineDisclaimer}
-        onClose={handleCloseDisclaimerForce}
-      />
-
-      {/* Custom Protocol Account Switcher Prompt */}
-      <ProtocolPromptModal
-        pendingUrl={pendingUrl}
-        accounts={promptAccounts}
-        isHandlingProtocol={isHandlingProtocol}
-        onSelectAccount={handleSelectProtocolAccount}
-        onClose={handleCloseProtocolPrompt}
-        onOpenAvatar={(url, title) => setAvatarModalData({ url, title: title || 'Group Display Picture' })}
-        disableEscape={Boolean(avatarModalData)}
-      />
-
-      {/* Add Account Modal Prompt */}
-      <AddAccountModal
-        isOpen={isAddAccountOpen}
-        onClose={() => setIsAddAccountOpen(false)}
-        onConfirm={handleConfirmAddAccount}
-        accounts={accounts}
+        onOpenAddAccount={() => window.electronAPI?.openAddAccountWindow?.()}
       />
 
       {/* Toast Notifications */}
@@ -379,12 +267,6 @@ export const App: React.FC = () => {
         toasts={toasts}
         onDismiss={dismissToast}
         onReopen={handleReopenPrompt}
-      />
-
-      {/* Nested Avatar / Display Picture Zoom Modal */}
-      <AvatarZoomModal
-        data={avatarModalData}
-        onClose={() => setAvatarModalData(null)}
       />
     </div>
   );
