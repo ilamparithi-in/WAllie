@@ -18,18 +18,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: 'npm'
 
       - name: Cache Electron & Builder Binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/electron
@@ -59,7 +59,7 @@ jobs:
         run: node scripts/build-package.cjs --linux AppImage deb rpm pacman --x64 --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-linux
           path: |
@@ -76,18 +76,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: 'npm'
 
       - name: Cache Electron & Builder Binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/AppData/Local/electron/Cache
@@ -112,7 +112,7 @@ jobs:
         run: node scripts/build-package.cjs --win --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-win
           path: dist-pack/*.exe
@@ -124,18 +124,18 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: 'npm'
 
       - name: Cache Electron & Builder Binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/Library/Caches/electron
@@ -160,7 +160,7 @@ jobs:
         run: node scripts/build-package.cjs --mac --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-mac
           path: dist-pack/*.dmg
@@ -172,18 +172,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: 'npm'
 
       - name: Cache Electron & Builder Binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/electron
@@ -208,7 +208,7 @@ jobs:
         run: node scripts/build-package.cjs --linux snap --x64 --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-snap-x64
           path: dist-pack/*.snap
@@ -220,18 +220,18 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: 'npm'
 
       - name: Cache Electron & Builder Binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/electron
@@ -256,7 +256,7 @@ jobs:
         run: node scripts/build-package.cjs --linux snap --arm64 --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-snap-arm64
           path: dist-pack/*.snap
@@ -268,18 +268,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: 'npm'
 
       - name: Cache Electron & Builder Binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/electron
@@ -289,7 +289,7 @@ jobs:
             Linux-electron-cache-
 
       - name: Cache Flatpak Runtime
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.local/share/flatpak
           key: Linux-x64-flatpak-${{ hashFiles('electron-builder.yml') }}-26.08
@@ -316,7 +316,7 @@ jobs:
         run: node scripts/build-package.cjs --linux flatpak --x64 --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-flatpak-x64
           path: dist-pack/*.flatpak
@@ -328,18 +328,18 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: 'npm'
 
       - name: Cache Electron & Builder Binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/electron
@@ -349,7 +349,7 @@ jobs:
             Linux-arm64-electron-cache-
 
       - name: Cache Flatpak Runtime
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.local/share/flatpak
           key: Linux-arm64-flatpak-${{ hashFiles('electron-builder.yml') }}-26.08
@@ -376,7 +376,7 @@ jobs:
         run: node scripts/build-package.cjs --linux flatpak --arm64 --publish never
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wallie-release-flatpak-arm64
           path: dist-pack/*.flatpak
@@ -394,12 +394,12 @@ jobs:
       HAS_HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist-pack
           merge-multiple: true
@@ -434,7 +434,7 @@ jobs:
           release: candidate,stable
 
       - name: Create Official GitHub Release & Upload Assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: WAllie ${{ github.ref_name }}
           draft: false
