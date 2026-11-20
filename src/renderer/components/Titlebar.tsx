@@ -35,8 +35,6 @@ export const Titlebar: React.FC<TitlebarProps> = ({
   // Overflow and Dropdown state
   const [isDropdownMode, setIsDropdownMode] = useState<boolean>(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
-  const [isExtMenuOpen, setIsExtMenuOpen] = useState<boolean>(false);
-  const extMenuRef = useRef<HTMLDivElement>(null);
   const triggerButtonRef = useRef<HTMLButtonElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const rightSectionRef = useRef<HTMLDivElement>(null);
@@ -217,16 +215,6 @@ export const Titlebar: React.FC<TitlebarProps> = ({
     }
   }, [editingId]);
 
-  useEffect(() => {
-    if (!isExtMenuOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (extMenuRef.current && !extMenuRef.current.contains(e.target as Node)) {
-        setIsExtMenuOpen(false);
-      }
-    };
-    window.addEventListener('mousedown', handleClickOutside);
-    return () => window.removeEventListener('mousedown', handleClickOutside);
-  }, [isExtMenuOpen]);
 
   const handleMinimize = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.currentTarget.blur();
@@ -572,7 +560,13 @@ export const Titlebar: React.FC<TitlebarProps> = ({
                 <div className="relative">
                   <button
                     onClick={(e) => {
-                      setIsExtMenuOpen(!isExtMenuOpen);
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      window.electronAPI?.showExtensionDropdownMenu?.(activeId, {
+                        x: Math.round(rect.left),
+                        y: Math.round(rect.top),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height),
+                      });
                       e.currentTarget.blur();
                     }}
                     onMouseDown={(e) => e.preventDefault()}
@@ -583,40 +577,6 @@ export const Titlebar: React.FC<TitlebarProps> = ({
                   >
                     <Puzzle className="w-3.5 h-3.5" />
                   </button>
-                  {isExtMenuOpen && (
-                    <div
-                      ref={extMenuRef}
-                      className="absolute right-0 top-full mt-1 w-56 bg-[#202c33] border border-[#2a3942] rounded-lg shadow-2xl py-1 z-50 text-[11px]"
-                      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                    >
-                      <div className="px-3 py-1.5 text-[10px] font-semibold text-[#8696a0] uppercase tracking-wider border-b border-[#2a3942]">
-                        Extensions
-                      </div>
-                      {popupExtensions.map((ext) => (
-                        <button
-                          key={ext.id}
-                          onClick={(e) => {
-                            setIsExtMenuOpen(false);
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            window.electronAPI?.openExtensionPopup(activeId, ext.id, {
-                              x: rect.left,
-                              y: rect.top,
-                              width: rect.width,
-                              height: rect.height,
-                            });
-                          }}
-                          className="w-full text-left px-3 py-2 hover:bg-[#182229] text-[#e9edef] flex items-center gap-2 transition-colors cursor-pointer"
-                        >
-                          {ext.iconDataUrl ? (
-                            <img src={ext.iconDataUrl} alt="" className="w-3.5 h-3.5 object-contain rounded shrink-0" />
-                          ) : (
-                            <Puzzle className="w-3.5 h-3.5 text-[#00a884] shrink-0" />
-                          )}
-                          <span className="truncate flex-1">{ext.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               ) : (
                 popupExtensions.map((ext) => (
