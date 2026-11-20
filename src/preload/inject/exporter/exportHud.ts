@@ -75,7 +75,7 @@ export function showOrUpdateExportHUD(state: {
     <div id="wallie-export-card" style="position: fixed; top: 72px; left: calc(50% - 225px); pointer-events: auto; background: #1f2c34; border: 1px solid #2a3942; border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.65); padding: 20px 24px; width: 450px; max-width: 90vw; display: flex; flex-direction: column; gap: 14px;">
       <div id="wallie-hud-header" style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2a3942; padding-bottom: 10px; cursor: grab; user-select: none;">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-weight: 600; font-size: 13px; color: #00a884;">WAllie Chat Exporter</span>
+          <span style="font-weight: 600; font-size: 13px; color: #00a884;">Chat Exporter</span>
           <span style="font-size: 10px; color: #8696a0;">(drag to reposition)</span>
         </div>
         <span id="wallie-hud-badge" style="font-size: 11px; background: #111b21; border: 1px solid #2a3942; padding: 2px 8px; border-radius: 12px; color: #8696a0;">Chat 1 of 1</span>

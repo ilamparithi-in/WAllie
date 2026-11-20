@@ -6,7 +6,12 @@ export interface ExtensionInfo {
   version: string;
   path: string;
   enabled: boolean;
-  source?: 'webstore' | 'developer';
+  source?: 'webstore' | 'developer' | 'builtin';
+  isBuiltIn?: boolean;
+  hasPopup?: boolean;
+  popupPath?: string;
+  iconDataUrl?: string;
+  pinnedInTitlebar?: boolean;
 }
 
 export interface AccountSettings {

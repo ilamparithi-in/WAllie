@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Minus, Square, Copy, X, Settings, Plus, RotateCw, Code, Bell, ChevronDown } from 'lucide-react';
+import { Minus, Square, Copy, X, Settings, Plus, RotateCw, Code, Bell, ChevronDown, Puzzle } from 'lucide-react';
 import type { AccountInfo } from '../../preload';
 
 interface TitlebarProps {
@@ -35,6 +35,8 @@ export const Titlebar: React.FC<TitlebarProps> = ({
   // Overflow and Dropdown state
   const [isDropdownMode, setIsDropdownMode] = useState<boolean>(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const [isExtMenuOpen, setIsExtMenuOpen] = useState<boolean>(false);
+  const extMenuRef = useRef<HTMLDivElement>(null);
   const triggerButtonRef = useRef<HTMLButtonElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const rightSectionRef = useRef<HTMLDivElement>(null);
@@ -215,6 +217,17 @@ export const Titlebar: React.FC<TitlebarProps> = ({
     }
   }, [editingId]);
 
+  useEffect(() => {
+    if (!isExtMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (extMenuRef.current && !extMenuRef.current.contains(e.target as Node)) {
+        setIsExtMenuOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => window.removeEventListener('mousedown', handleClickOutside);
+  }, [isExtMenuOpen]);
+
   const handleMinimize = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.currentTarget.blur();
     window.electronAPI?.minimizeWindow();
@@ -277,6 +290,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({
 
   const showTrafficLightSpacer = isMac && !isFullScreen;
   const activeAccount = accounts.find((a) => a.id === activeId);
+  const popupExtensions = activeAccount?.extensions?.filter((e) => e.enabled && e.hasPopup) || [];
 
   return (
     <header
@@ -550,6 +564,88 @@ export const Titlebar: React.FC<TitlebarProps> = ({
               >
                 <Bell className="w-3.5 h-3.5" />
               </button>
+            )}
+
+            {/* Extension Action Icons (individual when wide, or collapsed into Puzzle icon when narrow) */}
+            {popupExtensions.length > 0 && (
+              isDropdownMode ? (
+                <div className="relative">
+                  <button
+                    onClick={(e) => {
+                      setIsExtMenuOpen(!isExtMenuOpen);
+                      e.currentTarget.blur();
+                    }}
+                    onMouseDown={(e) => e.preventDefault()}
+                    tabIndex={-1}
+                    title="Active Extensions"
+                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                    className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors focus:outline-none cursor-pointer"
+                  >
+                    <Puzzle className="w-3.5 h-3.5" />
+                  </button>
+                  {isExtMenuOpen && (
+                    <div
+                      ref={extMenuRef}
+                      className="absolute right-0 top-full mt-1 w-56 bg-[#202c33] border border-[#2a3942] rounded-lg shadow-2xl py-1 z-50 text-[11px]"
+                      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                    >
+                      <div className="px-3 py-1.5 text-[10px] font-semibold text-[#8696a0] uppercase tracking-wider border-b border-[#2a3942]">
+                        Extensions
+                      </div>
+                      {popupExtensions.map((ext) => (
+                        <button
+                          key={ext.id}
+                          onClick={(e) => {
+                            setIsExtMenuOpen(false);
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            window.electronAPI?.openExtensionPopup(activeId, ext.id, {
+                              x: rect.left,
+                              y: rect.top,
+                              width: rect.width,
+                              height: rect.height,
+                            });
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-[#182229] text-[#e9edef] flex items-center gap-2 transition-colors cursor-pointer"
+                        >
+                          {ext.iconDataUrl ? (
+                            <img src={ext.iconDataUrl} alt="" className="w-3.5 h-3.5 object-contain rounded shrink-0" />
+                          ) : (
+                            <Puzzle className="w-3.5 h-3.5 text-[#00a884] shrink-0" />
+                          )}
+                          <span className="truncate flex-1">{ext.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                popupExtensions.map((ext) => (
+                  <button
+                    key={ext.id}
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      window.electronAPI?.openExtensionPopup(activeId, ext.id, {
+                        x: rect.left,
+                        y: rect.top,
+                        width: rect.width,
+                        height: rect.height,
+                      });
+                      e.currentTarget.blur();
+                    }}
+                    onMouseDown={(e) => e.preventDefault()}
+                    tabIndex={-1}
+                    title={ext.name}
+                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                    className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors focus:outline-none cursor-pointer"
+                  >
+                    {ext.iconDataUrl ? (
+                      <img src={ext.iconDataUrl} alt={ext.name} className="w-3.5 h-3.5 object-contain rounded" />
+                    ) : (
+                      <Puzzle className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                ))
+              )
             )}
 
             {/* Settings Button */}

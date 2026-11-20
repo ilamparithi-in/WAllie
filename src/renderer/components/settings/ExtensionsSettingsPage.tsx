@@ -241,8 +241,12 @@ export const ExtensionsSettingsPage: React.FC<ExtensionsSettingsPageProps> = ({
               className="flex items-center justify-between p-3 bg-[#182229] border border-[#222d34] rounded-lg hover:border-[#374248] transition-colors gap-3"
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="w-8 h-8 rounded bg-[#202c33] flex items-center justify-center text-[#00a884] shrink-0">
-                  <Puzzle className="w-4 h-4" />
+                <div className="w-8 h-8 rounded bg-[#202c33] flex items-center justify-center text-[#00a884] shrink-0 overflow-hidden">
+                  {ext.iconDataUrl ? (
+                    <img src={ext.iconDataUrl} alt="" className="w-5 h-5 object-contain" />
+                  ) : (
+                    <Puzzle className="w-4 h-4" />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-xs text-[#e9edef] truncate" title={ext.name}>
@@ -251,7 +255,11 @@ export const ExtensionsSettingsPage: React.FC<ExtensionsSettingsPageProps> = ({
                   <div className="text-[10px] text-[#8696a0] mt-1 flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-[#aebac1]">v{ext.version}</span>
                     <span className="text-[#374248]">•</span>
-                    {ext.source === 'webstore' ? (
+                    {ext.isBuiltIn ? (
+                      <span className="text-[9px] bg-[#53bdeb]/15 text-[#53bdeb] border border-[#53bdeb]/20 px-1.5 py-0.5 rounded font-semibold select-none whitespace-nowrap">
+                        Built-in
+                      </span>
+                    ) : ext.source === 'webstore' ? (
                       <span className="text-[9px] bg-[#00a884]/15 text-[#00a884] border border-[#00a884]/20 px-1.5 py-0.5 rounded font-semibold select-none whitespace-nowrap">
                         Web Store
                       </span>
@@ -276,7 +284,25 @@ export const ExtensionsSettingsPage: React.FC<ExtensionsSettingsPageProps> = ({
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2.5 shrink-0">
+                {ext.hasPopup && ext.enabled && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      window.electronAPI?.openExtensionPopup(selectedAccountId, ext.id, {
+                        x: rect.left,
+                        y: rect.top,
+                        width: rect.width,
+                        height: rect.height,
+                      });
+                    }}
+                    className="px-2 py-1 bg-[#202c33] hover:bg-[#2a3942] text-[#e9edef] rounded text-[10px] font-medium transition-colors border border-[#374248] cursor-pointer flex items-center gap-1"
+                    title="Open extension popup options"
+                  >
+                    <span>Options</span>
+                  </button>
+                )}
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
@@ -286,13 +312,22 @@ export const ExtensionsSettingsPage: React.FC<ExtensionsSettingsPageProps> = ({
                   />
                   <div className="w-7 h-4 bg-[#202c33] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#8696a0] after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#00a884] peer-checked:after:bg-[#111b21] peer-checked:after:border-[#00a884]"></div>
                 </label>
-                <button
-                  onClick={() => handleRemoveExtension(ext.id)}
-                  className="p-1.5 rounded hover:bg-[#202c33] text-[#8696a0] hover:text-[#ea4335] transition-colors"
-                  title="Delete extension"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                {ext.isBuiltIn ? (
+                  <div
+                    className="p-1.5 text-[#374248] cursor-not-allowed select-none"
+                    title="Built-in extensions cannot be deleted"
+                  >
+                    <X className="w-3.5 h-3.5 opacity-30" />
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleRemoveExtension(ext.id)}
+                    className="p-1.5 rounded hover:bg-[#202c33] text-[#8696a0] hover:text-[#ea4335] transition-colors cursor-pointer"
+                    title="Delete extension"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           ))

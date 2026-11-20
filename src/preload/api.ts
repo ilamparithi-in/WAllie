@@ -95,6 +95,7 @@ export interface ElectronAPI {
   importExtension: (accountId: string, importType: 'folder' | 'archive') => Promise<ExtensionInfo | null>;
   toggleExtension: (accountId: string, extensionId: string, enabled: boolean) => Promise<boolean>;
   removeExtension: (accountId: string, extensionId: string) => Promise<boolean>;
+  openExtensionPopup: (accountId: string, extensionId: string, anchorBounds?: { x: number; y: number; width: number; height: number }) => Promise<boolean>;
   openWebStore: (accountId: string) => void;
   installWebStoreExtension: (accountId: string, urlOrId: string) => Promise<ExtensionInfo | null>;
   checkExtensionUpdates: (accountId?: string) => Promise<{ updatedCount: number; updatedList: string[] }>;
@@ -247,6 +248,7 @@ export const api: ElectronAPI = {
   importExtension: (accountId, importType) => ipcRenderer.invoke('extension:import', accountId, importType),
   toggleExtension: (accountId, extensionId, enabled) => ipcRenderer.invoke('extension:toggle', accountId, extensionId, enabled),
   removeExtension: (accountId, extensionId) => ipcRenderer.invoke('extension:remove', accountId, extensionId),
+  openExtensionPopup: (accountId, extensionId, anchorBounds) => ipcRenderer.invoke('extension:open-popup', accountId, extensionId, anchorBounds),
   openWebStore: (accountId) => ipcRenderer.send('webstore:open', accountId),
   installWebStoreExtension: (accountId, urlOrId) => ipcRenderer.invoke('extension:install-webstore', accountId, urlOrId),
   checkExtensionUpdates: (accountId) => ipcRenderer.invoke('extension:check-updates', accountId),

@@ -311,6 +311,9 @@ function ensureStyleSheet(): void {
 export function setPortraitViewState(view: PortraitViewState): void {
   const previousState = currentViewState;
   currentViewState = view;
+  try {
+    window.dispatchEvent(new CustomEvent('wa-portrait-view-change', { detail: { view } }));
+  } catch {}
   if (isPortraitActive && document.documentElement) {
     const currentStateAttr = document.documentElement.getAttribute('data-portrait-view');
     document.documentElement.setAttribute('data-portrait-view', view);

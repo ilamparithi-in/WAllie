@@ -19,6 +19,7 @@ export const state = {
   settingsDrawerWidth: 0,
   settingsWindow: null as BrowserWindow | null,
   auxiliaryWindows: new Map<string, BrowserWindow>(),
+  activeExtensionPopup: null as BrowserWindow | null,
   callWindows: new Set<BrowserWindow>(),
   callWasAnswered: false,
   sandboxWindows: new Set<BrowserWindow>(),
