@@ -64,6 +64,7 @@ export interface ElectronAPI {
   closeWindow: () => void;
   isMaximized: () => Promise<boolean>;
   isFullScreen: () => Promise<boolean>;
+  toggleFullScreen: () => void;
   resetWindowSize: () => Promise<boolean>;
   toggleAlwaysOnTop: () => void;
   getAlwaysOnTop: () => Promise<boolean>;
@@ -220,6 +221,7 @@ export const api: ElectronAPI = {
   closeWindow: () => ipcRenderer.send('window:close'),
   isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
   isFullScreen: () => ipcRenderer.invoke('window:isFullScreen'),
+  toggleFullScreen: () => ipcRenderer.send('window:toggle-fullscreen'),
   resetWindowSize: () => ipcRenderer.invoke('window:reset-size'),
   toggleAlwaysOnTop: () => ipcRenderer.send('window:toggle-always-on-top'),
   getAlwaysOnTop: () => ipcRenderer.invoke('window:get-always-on-top'),

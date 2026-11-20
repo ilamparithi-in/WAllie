@@ -10,6 +10,7 @@ import { VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX, MACOS_TRAFFIC_LIGHT_POSITION } from '
 import { downloadManager } from './downloads';
 import { prepareExtensionForElectron, syncBuiltinExtensionsForAccount, openExtensionAuxiliaryWindow } from './extensions';
 import { createSandboxWindow } from './sandbox';
+import { updateActiveViewBounds } from './window';
 
 export const OLED_THEME_CSS = `
 /* OLED Dark Theme overrides */
@@ -647,6 +648,20 @@ export function registerZoomShortcuts(webContents: Electron.WebContents) {
       const isShift = input.shift;
       const isAlt = input.alt;
 
+      if (input.key === 'F11' || input.key === 'f11') {
+        event.preventDefault();
+        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+          state.mainWindow.setFullScreen(!state.mainWindow.isFullScreen());
+        }
+        return;
+      }
+
+      if (input.key === 'Escape' && !state.isHtmlFullScreen && state.mainWindow?.isFullScreen()) {
+        event.preventDefault();
+        state.mainWindow.setFullScreen(false);
+        return;
+      }
+
       // Intercept devtools keyboard shortcut for the active account in focus (not Wallie)
       const key = input.key ? input.key.toLowerCase() : '';
       const isDevToolsShortcut =
@@ -870,6 +885,19 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
 
   registerZoomShortcuts(view.webContents);
   registerContextMenu(view.webContents);
+
+  view.webContents.on('enter-html-full-screen', () => {
+    state.isHtmlFullScreen = true;
+    state.mainWindow?.webContents.send('window:fullscreen-changed', true);
+    updateActiveViewBounds();
+  });
+
+  view.webContents.on('leave-html-full-screen', () => {
+    state.isHtmlFullScreen = false;
+    const isWinFs = state.mainWindow?.isFullScreen() ?? false;
+    state.mainWindow?.webContents.send('window:fullscreen-changed', isWinFs);
+    updateActiveViewBounds();
+  });
 
   // Link Delegation: Intercept external link clicks
   view.webContents.on('will-navigate', (event, url) => {

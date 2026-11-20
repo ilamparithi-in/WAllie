@@ -28,6 +28,17 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialPage, setSettingsInitialPage] = useState<SettingsPageType | undefined>(undefined);
   const [settingsInitialAccountId, setSettingsInitialAccountId] = useState<string | undefined>(undefined);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
+  useEffect(() => {
+    window.electronAPI?.isFullScreen?.().then(setIsFullScreen);
+    const unsubscribeFullScreen = window.electronAPI?.onFullScreenChanged?.((fsState) => {
+      setIsFullScreen(fsState);
+    });
+    return () => {
+      unsubscribeFullScreen?.();
+    };
+  }, []);
 
   // Settings subpage tracking for popout / detaching
   const currentSettingsStateRef = useRef<{ page?: SettingsPageType; accountId?: string }>({});
@@ -215,12 +226,14 @@ export const App: React.FC = () => {
   return (
     <div className="h-screen w-screen flex flex-col bg-[#111b21] overflow-hidden select-none">
       {/* Custom Titlebar (28px) */}
-      <Titlebar
-        onToggleSettings={handleToggleSettings}
-        onOpenNotificationHistory={handleOpenNotificationHistory}
-        isDisclaimerAccepted={isDisclaimerAccepted}
-        onOpenAddAccount={() => window.electronAPI?.openAddAccountWindow?.()}
-      />
+      {!isFullScreen && (
+        <Titlebar
+          onToggleSettings={handleToggleSettings}
+          onOpenNotificationHistory={handleOpenNotificationHistory}
+          isDisclaimerAccepted={isDisclaimerAccepted}
+          onOpenAddAccount={() => window.electronAPI?.openAddAccountWindow?.()}
+        />
+      )}
 
       {/* Main Container Area: The Electron WebContentsView will overlay this area below the titlebar */}
       <main className="flex-1 w-full relative bg-[#111b21]">

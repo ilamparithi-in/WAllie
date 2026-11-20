@@ -51,7 +51,14 @@ export function registerWindowHandlers(): void {
 
   ipcMain.handle('window:isFullScreen', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender) || state.mainWindow;
-    return win?.isFullScreen() ?? false;
+    return (win?.isFullScreen() || state.isHtmlFullScreen) ?? false;
+  });
+
+  ipcMain.on('window:toggle-fullscreen', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) || state.mainWindow;
+    if (win && !win.isDestroyed()) {
+      win.setFullScreen(!win.isFullScreen());
+    }
   });
 
   ipcMain.handle('window:reset-size', async (event) => {
