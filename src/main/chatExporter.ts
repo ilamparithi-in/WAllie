@@ -318,7 +318,7 @@ export class ChatExporterManager {
       height,
       minWidth: 480,
       minHeight: 500,
-      title: `WAllie Chat Viewer — ${path.basename(filePath)}`,
+      title: `Chat Viewer — ${path.basename(filePath)}`,
       icon: getAppIcon(),
       webPreferences: {
         preload: getPreloadPath(),
@@ -716,7 +716,7 @@ export class ChatExporterManager {
     <div class="avatar" id="chatAvatar"></div>
     <div class="header-info">
       <div class="header-title" id="chatTitle">WhatsApp Chat</div>
-      <div class="header-sub" id="chatSubtitle">Exported with WAllie</div>
+      <div class="header-sub" id="chatSubtitle">Exported Chat</div>
     </div>
     <input type="text" class="search-box" id="searchBox" placeholder="Search in chat..." />
   </header>

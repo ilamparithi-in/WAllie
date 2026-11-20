@@ -1,5 +1,6 @@
 import { BrowserWindow, WebContentsView, Menu, session, desktopCapturer, shell, dialog, clipboard, nativeTheme } from 'electron';
 import fs from 'node:fs';
+import path from 'node:path';
 import { state } from './state';
 import { DEFAULT_USER_AGENT, saveAccounts, saveSettings } from './config';
 import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, showAppToast, getSystemDesktopFontName, getSystemDesktopMonoFontName } from './utils';
@@ -7,7 +8,7 @@ import { Account } from '../shared/types';
 import { resolveGoogleFontUrl } from '../shared/fonts';
 import { VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX, MACOS_TRAFFIC_LIGHT_POSITION } from '../shared/constants';
 import { downloadManager } from './downloads';
-import { prepareExtensionForElectron } from './extensions';
+import { prepareExtensionForElectron, syncBuiltinExtensionsForAccount, openExtensionAuxiliaryWindow } from './extensions';
 import { createSandboxWindow } from './sandbox';
 
 export const OLED_THEME_CSS = `
@@ -791,6 +792,8 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
     });
   }
 
+  syncBuiltinExtensionsForAccount(account);
+
   if (account.extensions && account.extensions.length > 0) {
     for (const ext of account.extensions) {
       if (ext.enabled) {
@@ -798,10 +801,15 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
           try {
             prepareExtensionForElectron(ext.path);
             console.log(`Loading extension for account ${account.id}: ${ext.name} from ${ext.path}`);
-            if (accountSession.extensions) {
-              await accountSession.extensions.loadExtension(ext.path);
-            } else {
-              await accountSession.loadExtension(ext.path);
+            const isAlreadyLoaded = accountSession.getAllExtensions().some(
+              (e) => path.resolve(e.path) === path.resolve(ext.path)
+            );
+            if (!isAlreadyLoaded) {
+              if (accountSession.extensions) {
+                await accountSession.extensions.loadExtension(ext.path);
+              } else {
+                await accountSession.loadExtension(ext.path);
+              }
             }
           } catch (err) {
             console.error(`Failed to load extension ${ext.name} from ${ext.path}:`, err);
@@ -880,6 +888,14 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   // Link Delegation: Intercept target="_blank" window openings
   view.webContents.setWindowOpenHandler((details) => {
     const url = details.url;
+
+    // Extension internal pages (options, dashboards, companion tabs)
+    // Opened in a dedicated window using this account's session (proper context sharing, no cross-account leakage)
+    if (url.startsWith('chrome-extension://')) {
+      openExtensionAuxiliaryWindow(url, account.id);
+      return { action: 'deny' };
+    }
+
     if (!isWhatsAppUrl(url)) {
       if (url.startsWith('http://') || url.startsWith('https://')) {
         handleExternalLinkClick(url);

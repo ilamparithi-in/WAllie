@@ -7,6 +7,9 @@ publish:
 directories:
   output: dist-pack
   buildResources: build
+extraResources:
+  - from: dist/builtin-extensions
+    to: builtin-extensions
 toolsets:
   appimage: 'latest'
 afterAllArtifactBuild: scripts/embed-appimage-update-info.cjs

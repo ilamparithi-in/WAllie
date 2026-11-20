@@ -7,7 +7,7 @@ import { NOTIFICATION_HISTORY_FILE } from './notificationHistory';
 import { registerIpcHandlers } from './ipc';
 import { createMainWindow, createTray } from './window';
 import { saveWindowStateImmediate } from './windowState';
-import { checkForWebStoreUpdates } from './extensions';
+import { checkForWebStoreUpdates, syncAllAccountsBuiltinExtensions } from './extensions';
 import { initTheme } from './theme';
 import { startDevBridge } from './devBridge';
 
@@ -106,7 +106,7 @@ if (!gotTheLock) {
 registerIpcHandlers();
 
 if (gotTheLock) {
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     initTheme();
 
     // Register custom protocol clients
@@ -123,6 +123,10 @@ if (gotTheLock) {
 
     // Content Security Policy for the main renderer window (React UI) and sandbox toolbar
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      if (details.url.startsWith('chrome-extension://')) {
+        callback({ responseHeaders: details.responseHeaders });
+        return;
+      }
       const isSandbox = details.url.includes('sandbox');
       const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
       const scriptSrc = isDev ? "'self' 'unsafe-inline'" : "'self'";
@@ -137,6 +141,10 @@ if (gotTheLock) {
           ]
         }
       });
+    });
+
+    await syncAllAccountsBuiltinExtensions().catch((err) => {
+      console.warn('Failed to sync builtin extensions on launch:', err);
     });
 
     createMainWindow();

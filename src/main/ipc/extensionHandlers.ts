@@ -6,6 +6,7 @@ import {
   toggleExtension,
   removeExtension,
   checkForWebStoreUpdates,
+  openExtensionPopup,
 } from '../extensions';
 import { getAccountById, getPreloadPath } from '../utils';
 import { getInitialWindowSize } from '../window';
@@ -87,6 +88,13 @@ export function registerExtensionHandlers(): void {
       extensionId: rawExtensionId,
     });
     return await removeExtension(accountId, extensionId);
+  });
+
+  ipcMain.handle('extension:open-popup', async (_event, rawAccountId: unknown, rawExtensionId: unknown, rawAnchorBounds?: unknown) => {
+    const accountId = validate(accountIdSchema, rawAccountId);
+    const extensionId = typeof rawExtensionId === 'string' ? rawExtensionId.trim() : '';
+    const anchorBounds = rawAnchorBounds && typeof rawAnchorBounds === 'object' ? (rawAnchorBounds as any) : undefined;
+    return await openExtensionPopup(accountId, extensionId, anchorBounds);
   });
 
   ipcMain.handle('extension:check-updates', async (_event, rawAccountId?: unknown) => {

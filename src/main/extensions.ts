@@ -1,14 +1,417 @@
-import { app, dialog, session, BrowserWindow } from 'electron';
+import { app, dialog, session, BrowserWindow, nativeTheme, nativeImage } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import AdmZip from 'adm-zip';
 import { state } from './state';
 import { saveAccounts, CHROME_VERSION, DEFAULT_USER_AGENT } from './config';
-import { ExtensionInfo } from '../shared/types';
-import { getAccountById, getActiveWindow } from './utils';
+import { ExtensionInfo, Account } from '../shared/types';
+import { getAccountById, getActiveWindow, getAppIcon, getInitialWindowSize } from './utils';
 import { notificationManager } from './notifications/index';
+import { registerContextMenu } from './views';
 
 const EXTENSIONS_BASE = path.join(app.getPath('userData'), 'extensions');
+
+export function getExtensionIconPath(extDir: string, manifest: any): string | null {
+  const icons = manifest?.icons || manifest?.action?.default_icon || manifest?.browser_action?.default_icon;
+
+  let iconRel: string | null = null;
+  if (typeof icons === 'string') {
+    iconRel = icons;
+  } else if (typeof icons === 'object' && icons !== null) {
+    const preferredOrder = ['48', '32', '128', '16', '64', '256'];
+    for (const size of preferredOrder) {
+      if (icons[size]) {
+        iconRel = icons[size];
+        break;
+      }
+    }
+    if (!iconRel) {
+      const keys = Object.keys(icons);
+      if (keys.length > 0) iconRel = icons[keys[0]];
+    }
+  }
+
+  if (iconRel) {
+    const fullPath = path.join(extDir, iconRel);
+    if (fs.existsSync(fullPath)) return fullPath;
+  }
+
+  const fallbacks = [
+    'icons/icon-48.png',
+    'icons/icon-32.png',
+    'icons/icon-16.png',
+    'icons/icon-128.png',
+    'icons/icon.png',
+    'icons/icon.svg',
+    'icon.png',
+    'icon.svg',
+  ];
+  for (const fb of fallbacks) {
+    const fullPath = path.join(extDir, fb);
+    if (fs.existsSync(fullPath)) return fullPath;
+  }
+
+  return null;
+}
+
+export function getExtensionIconDataUrl(extDir: string, manifest: any): string | undefined {
+  try {
+    const iconPath = getExtensionIconPath(extDir, manifest);
+    if (!iconPath) return undefined;
+
+    const ext = path.extname(iconPath).toLowerCase();
+    const mime = ext === '.svg' ? 'image/svg+xml' : 'image/png';
+    const buffer = fs.readFileSync(iconPath);
+    return `data:${mime};base64,${buffer.toString('base64')}`;
+  } catch {
+    return undefined;
+  }
+}
+
+export function getBuiltinExtensionsDir(): string {
+  if (app.isPackaged) {
+    const resourcesPath = path.join(process.resourcesPath, 'builtin-extensions');
+    if (fs.existsSync(resourcesPath)) return resourcesPath;
+  }
+  const projectRootDist = path.join(app.getAppPath(), 'dist/builtin-extensions');
+  if (fs.existsSync(projectRootDist)) return projectRootDist;
+  const devPath = path.resolve(__dirname, '../../dist/builtin-extensions');
+  if (fs.existsSync(devPath)) return devPath;
+  return path.resolve(__dirname, '../builtin-extensions');
+}
+
+export function syncBuiltinExtensionsForAccount(account: Account): boolean {
+  const builtinDir = getBuiltinExtensionsDir();
+  if (!fs.existsSync(builtinDir)) return false;
+
+  let modified = false;
+  try {
+    const entries = fs.readdirSync(builtinDir, { withFileTypes: true });
+    if (!account.extensions) {
+      account.extensions = [];
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const extDir = path.join(builtinDir, entry.name);
+      const manifestPath = path.join(extDir, 'manifest.json');
+      if (!fs.existsSync(manifestPath)) continue;
+
+      try {
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        const extId = `builtin_${entry.name}`;
+        const hasPopup = Boolean(manifest.action?.default_popup || manifest.browser_action?.default_popup);
+        const popupPath = manifest.action?.default_popup || manifest.browser_action?.default_popup || '';
+        const iconDataUrl = getExtensionIconDataUrl(extDir, manifest);
+
+        const existing = account.extensions.find(
+          (e) => e.id === extId || path.resolve(e.path) === path.resolve(extDir)
+        );
+
+        if (existing) {
+          existing.isBuiltIn = true;
+          existing.source = 'builtin';
+          existing.path = extDir;
+          existing.name = manifest.name || existing.name;
+          existing.version = manifest.version || existing.version;
+          existing.hasPopup = hasPopup;
+          existing.popupPath = popupPath;
+          existing.iconDataUrl = iconDataUrl;
+          if (existing.pinnedInTitlebar === undefined) existing.pinnedInTitlebar = true;
+        } else {
+          account.extensions.push({
+            id: extId,
+            name: manifest.name || entry.name,
+            version: manifest.version || '1.0.0',
+            path: extDir,
+            enabled: true,
+            source: 'builtin',
+            isBuiltIn: true,
+            hasPopup,
+            popupPath,
+            iconDataUrl,
+            pinnedInTitlebar: true,
+          });
+          modified = true;
+        }
+      } catch (err) {
+        console.warn(`[extensions] Failed to parse builtin extension in ${extDir}:`, err);
+      }
+    }
+  } catch (err) {
+    console.warn('[extensions] Failed to read builtin extensions directory:', err);
+  }
+
+  return modified;
+}
+
+export async function syncAllAccountsBuiltinExtensions(): Promise<void> {
+  let anyModified = false;
+  for (const account of state.accounts) {
+    const mod = syncBuiltinExtensionsForAccount(account);
+    if (mod) anyModified = true;
+  }
+  if (anyModified) {
+    await saveAccounts();
+    state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+  }
+}
+
+export function openExtensionAuxiliaryWindow(
+  url: string,
+  accountId: string,
+  title?: string
+): BrowserWindow | null {
+  const account = getAccountById(accountId);
+  if (!account) return null;
+
+  const accountSession = session.fromPartition(account.partition);
+  const winKey = `ext_tab_${accountId}_${encodeURIComponent(url)}`;
+
+  const existingWin = state.auxiliaryWindows.get(winKey);
+  if (existingWin && !existingWin.isDestroyed()) {
+    existingWin.show();
+    existingWin.focus();
+    return existingWin;
+  }
+
+  const { width: initW, height: initH } = getInitialWindowSize(880, 640, state.mainWindow);
+
+  const newWin = new BrowserWindow({
+    modal: false,
+    width: initW,
+    height: initH,
+    minWidth: 400,
+    minHeight: 320,
+    resizable: true,
+    title: title || 'Extension Tab',
+    icon: getAppIcon(),
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#111b21' : '#ffffff',
+    show: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      session: accountSession, // STRICT multi-account session context isolation!
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+    },
+  });
+
+  state.auxiliaryWindows.set(winKey, newWin);
+  newWin.removeMenu();
+  registerContextMenu(newWin.webContents);
+
+  // If this extension tab opens further tabs, keep them isolated in this same accountSession
+  newWin.webContents.setWindowOpenHandler((details) => {
+    openExtensionAuxiliaryWindow(details.url, accountId, title);
+    return { action: 'deny' };
+  });
+
+  newWin.on('closed', () => {
+    state.auxiliaryWindows.delete(winKey);
+  });
+
+  newWin.once('ready-to-show', () => {
+    newWin.show();
+    newWin.focus();
+  });
+
+  newWin.loadURL(url).catch((err) => {
+    console.warn(`[extensions] Failed to load URL ${url} in extension auxiliary window:`, err);
+  });
+
+  return newWin;
+}
+
+export async function openExtensionPopup(
+  accountId: string,
+  extensionId: string,
+  _anchorBounds?: { x: number; y: number; width: number; height: number }
+): Promise<boolean> {
+  const account = getAccountById(accountId);
+  if (!account || !account.extensions) return false;
+
+  const ext = account.extensions.find((e) => e.id === extensionId);
+  if (!ext || !ext.enabled) return false;
+
+  const accountSession = session.fromPartition(account.partition);
+  const loadedExts = accountSession.getAllExtensions();
+  const matched = loadedExts.find((e) => path.resolve(e.path) === path.resolve(ext.path));
+  if (!matched) {
+    console.warn(`Extension ${ext.name} is not loaded in session for account ${accountId}`);
+    return false;
+  }
+
+  const manifestPath = path.join(ext.path, 'manifest.json');
+  if (!fs.existsSync(manifestPath)) return false;
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const popupRel = manifest.action?.default_popup || manifest.browser_action?.default_popup;
+  if (!popupRel) {
+    console.warn(`Extension ${ext.name} has no popup configured`);
+    return false;
+  }
+
+  const popupUrl = `chrome-extension://${matched.id}/${popupRel}`;
+  const winKey = `ext_popup_${accountId}_${extensionId}`;
+
+  const existingWin = state.auxiliaryWindows.get(winKey);
+  if (existingWin && !existingWin.isDestroyed()) {
+    existingWin.show();
+    existingWin.focus();
+    return true;
+  }
+
+  const iconPath = getExtensionIconPath(ext.path, manifest);
+  let winIcon = getAppIcon();
+  if (iconPath) {
+    try {
+      const extImg = nativeImage.createFromPath(iconPath);
+      if (!extImg.isEmpty()) {
+        winIcon = extImg;
+      }
+    } catch {}
+  }
+
+  // useContentSize ensures the popout window content area matches the extension's popup size.
+  const initContentWidth = 380;
+  const initContentHeight = 520;
+
+  const parentWin = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined;
+
+  const popupWin = new BrowserWindow({
+    parent: parentWin,
+    modal: false,
+    useContentSize: true,
+    width: initContentWidth,
+    height: initContentHeight,
+    minWidth: 320,
+    minHeight: 250,
+    maxWidth: 800,
+    maxHeight: 650,
+    resizable: true,
+    title: ext.name,
+    icon: winIcon,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#111b21' : '#ffffff',
+    show: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      session: accountSession,
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+    },
+  });
+
+  state.auxiliaryWindows.set(winKey, popupWin);
+  popupWin.removeMenu();
+  registerContextMenu(popupWin.webContents);
+
+  // Auto-size content to fit the extension popup if the extension has custom dimensions
+  popupWin.webContents.on('did-finish-load', async () => {
+    try {
+      if (popupWin.isDestroyed()) return;
+
+      // Provide polyfills in the extension popup window context so chrome.tabs.create and
+      // chrome.runtime.openOptionsPage spawn new windows in the same accountSession
+      await popupWin.webContents.executeJavaScript(`
+        if (typeof chrome !== 'undefined') {
+          if (!chrome.tabs) chrome.tabs = {};
+          if (!chrome.tabs.create) {
+            chrome.tabs.create = function(opts, cb) {
+              var u = opts && opts.url ? opts.url : 'about:blank';
+              window.open(u, '_blank');
+              if (typeof cb === 'function') cb({ id: 1, url: u });
+              return Promise.resolve({ id: 1, url: u });
+            };
+          }
+          if (!chrome.runtime.openOptionsPage) {
+            chrome.runtime.openOptionsPage = function(cb) {
+              var m = chrome.runtime.getManifest();
+              var opt = m.options_page || (m.options_ui && m.options_ui.page);
+              if (opt) {
+                window.open(chrome.runtime.getURL(opt), '_blank');
+                if (typeof cb === 'function') cb();
+                return Promise.resolve();
+              }
+            };
+          }
+        }
+      `);
+
+      // Inject sleek scrollbar styles and enforce horizontal overflow prevention across all extensions
+      await popupWin.webContents.insertCSS(`
+        html {
+          overflow-x: hidden !important;
+        }
+        ::-webkit-scrollbar {
+          width: 6px !important;
+          height: 6px !important;
+        }
+        ::-webkit-scrollbar-track {
+          background: transparent !important;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: rgba(134, 150, 160, 0.3) !important;
+          border-radius: 3px !important;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: rgba(134, 150, 160, 0.5) !important;
+        }
+      `);
+
+      const dims = await popupWin.webContents.executeJavaScript(`
+        ({
+          w: Math.max(
+            document.documentElement ? document.documentElement.scrollWidth : 0,
+            document.body ? document.body.scrollWidth : 0,
+            document.documentElement ? document.documentElement.offsetWidth : 0,
+            document.body ? document.body.offsetWidth : 0,
+            360
+          ),
+          h: Math.max(
+            document.documentElement ? document.documentElement.scrollHeight : 0,
+            document.body ? document.body.scrollHeight : 0,
+            document.documentElement ? document.documentElement.offsetHeight : 0,
+            document.body ? document.body.offsetHeight : 0,
+            300
+          )
+        })
+      `);
+      if (dims && dims.w && dims.h && !popupWin.isDestroyed()) {
+        // Enforce Chrome's standard maximum popup dimensions (max 800w x 600h)
+        const targetW = Math.min(Math.max(Math.round(dims.w), 360), 800);
+        const targetH = Math.min(Math.max(Math.round(dims.h), 300), 600);
+        popupWin.setContentSize(targetW, targetH);
+      }
+    } catch (_) {}
+  });
+
+  // Intercept any new window or tab opened from this popup
+  // Spawns a dedicated auxiliary window in the SAME accountSession (no leakage)
+  popupWin.webContents.setWindowOpenHandler((details) => {
+    openExtensionAuxiliaryWindow(details.url, accountId, ext.name);
+    return { action: 'deny' };
+  });
+
+  popupWin.on('closed', () => {
+    state.auxiliaryWindows.delete(winKey);
+    if (state.activeExtensionPopup === popupWin) {
+      state.activeExtensionPopup = null;
+    }
+  });
+
+  popupWin.once('ready-to-show', () => {
+    popupWin.show();
+    popupWin.focus();
+  });
+
+  await popupWin.loadURL(popupUrl);
+  return true;
+}
 
 export function safeDeleteExtensionDir(extPath: string): void {
   const resolved = path.resolve(extPath);
@@ -64,6 +467,21 @@ if (typeof self !== 'undefined') {
       get: function(_id, _opts, cb) { var c = typeof _opts === 'function' ? _opts : cb; if (typeof c === 'function') c(null); },
       getAll: function(_opts, cb) { var c = typeof _opts === 'function' ? _opts : cb; if (typeof c === 'function') c([]); },
       getCurrent: function(_opts, cb) { var c = typeof _opts === 'function' ? _opts : cb; if (typeof c === 'function') c(null); },
+    };
+  }
+  if (!self.chrome.tabs) {
+    self.chrome.tabs = {
+      create: function(opts, cb) {
+        if (typeof self.clients !== 'undefined' && self.clients.openWindow) {
+          self.clients.openWindow(opts && opts.url ? opts.url : 'about:blank');
+        }
+        if (typeof cb === 'function') cb({ id: 1, url: opts && opts.url });
+        return Promise.resolve({ id: 1, url: opts && opts.url });
+      },
+      query: function(_queryInfo, cb) { if (typeof cb === 'function') cb([]); return Promise.resolve([]); },
+      get: function(_tabId, cb) { if (typeof cb === 'function') cb(null); return Promise.resolve(null); },
+      update: function(_tabId, _updateProps, cb) { if (typeof cb === 'function') cb(null); return Promise.resolve(null); },
+      remove: function(_tabIds, cb) { if (typeof cb === 'function') cb(); return Promise.resolve(); },
     };
   }
   if (!self.chrome.identity) {
@@ -236,6 +654,9 @@ export async function importExtension(
 
     const manifestContent = fs.readFileSync(manifestPath, 'utf8');
     const manifest = JSON.parse(manifestContent);
+    const hasPopup = Boolean(manifest.action?.default_popup || manifest.browser_action?.default_popup);
+    const popupPath = manifest.action?.default_popup || manifest.browser_action?.default_popup || '';
+    const iconDataUrl = getExtensionIconDataUrl(targetDir, manifest);
 
     const newExtension: ExtensionInfo = {
       id: extId,
@@ -243,6 +664,10 @@ export async function importExtension(
       version: manifest.version || '1.0.0',
       path: targetDir,
       enabled: true,
+      hasPopup,
+      popupPath,
+      iconDataUrl,
+      pinnedInTitlebar: true,
     };
 
     const userApproved = await showExtensionPermissionWarning(targetWin, manifestPath, newExtension.name);
@@ -327,6 +752,9 @@ export async function installWebStoreExtension(accountId: string, urlOrId: strin
 
     const manifestContent = fs.readFileSync(manifestPath, 'utf8');
     const manifest = JSON.parse(manifestContent);
+    const hasPopup = Boolean(manifest.action?.default_popup || manifest.browser_action?.default_popup);
+    const popupPath = manifest.action?.default_popup || manifest.browser_action?.default_popup || '';
+    const iconDataUrl = getExtensionIconDataUrl(targetDir, manifest);
 
     const newExtension: ExtensionInfo = {
       id: extensionId,
@@ -334,7 +762,11 @@ export async function installWebStoreExtension(accountId: string, urlOrId: strin
       version: manifest.version || '1.0.0',
       path: targetDir,
       enabled: true,
-      source: 'webstore'
+      source: 'webstore',
+      hasPopup,
+      popupPath,
+      iconDataUrl,
+      pinnedInTitlebar: true,
     };
 
     if (state.mainWindow) {
@@ -435,6 +867,10 @@ export async function removeExtension(accountId: string, extensionId: string): P
   if (extIndex === -1) return false;
 
   const ext = account.extensions[extIndex];
+  if (ext.isBuiltIn) {
+    console.warn(`Refusing to remove built-in extension: ${ext.name}`);
+    return false;
+  }
 
   const view = state.accountViews.get(accountId);
   if (view) {

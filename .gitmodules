@@ -1,0 +1,6 @@
+[submodule "extensions/link-preview"]
+	path = extensions/link-preview
+	url = https://github.com/ilamparithi-in/WAllie-RElinked.git
+[submodule "extensions/responsive-layout"]
+	path = extensions/responsive-layout
+	url = https://github.com/ilamparithi-in/WAllie-REsponsive.git
