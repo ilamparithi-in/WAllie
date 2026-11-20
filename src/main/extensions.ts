@@ -230,7 +230,8 @@ export async function openExtensionPopup(
   extensionId: string,
   _anchorBounds?: { x: number; y: number; width: number; height: number }
 ): Promise<boolean> {
-  const account = getAccountById(accountId);
+  const targetAccountId = (accountId && accountId.trim()) ? accountId : state.activeAccountId;
+  const account = getAccountById(targetAccountId);
   if (!account || !account.extensions) return false;
 
   const ext = account.extensions.find((e) => e.id === extensionId);
@@ -240,7 +241,7 @@ export async function openExtensionPopup(
   const loadedExts = accountSession.getAllExtensions();
   const matched = loadedExts.find((e) => path.resolve(e.path) === path.resolve(ext.path));
   if (!matched) {
-    console.warn(`Extension ${ext.name} is not loaded in session for account ${accountId}`);
+    console.warn(`Extension ${ext.name} is not loaded in session for account ${targetAccountId}`);
     return false;
   }
 
@@ -254,7 +255,7 @@ export async function openExtensionPopup(
   }
 
   const popupUrl = `chrome-extension://${matched.id}/${popupRel}`;
-  const winKey = `ext_popup_${accountId}_${extensionId}`;
+  const winKey = `ext_popup_${targetAccountId}_${extensionId}`;
 
   const existingWin = state.auxiliaryWindows.get(winKey);
   if (existingWin && !existingWin.isDestroyed()) {

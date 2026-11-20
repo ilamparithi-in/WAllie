@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Palette, Type, Image as ImageIcon, Trash2, Upload, Monitor, Code, Check, Loader2, AlertCircle, X, Info, Sun, Moon } from 'lucide-react';
+import { Palette, Type, Image as ImageIcon, Trash2, Upload, Monitor, Code, Check, Loader2, AlertCircle, X, Info, Sun, Moon, ExternalLink } from 'lucide-react';
 import type { AccountInfo, SystemFontInfo } from '../../../preload';
 import { resolveGoogleFont, resolveGoogleFontUrl } from '../../../shared/fonts';
 
@@ -20,7 +20,6 @@ interface ThemeSettingsPageProps {
   onTogglePreferGoogleFont: (enabled: boolean) => void;
   preferGoogleMonoFont: boolean;
   onTogglePreferGoogleMonoFont: (enabled: boolean) => void;
-  customWallpaper: string;
   systemFonts: string[];
   systemFontsMeta: SystemFontInfo[];
   desktopFont: { name: string; isVariable: boolean };
@@ -28,8 +27,6 @@ interface ThemeSettingsPageProps {
   onUpdateFont: (font: string, fontUrl?: string) => void;
   onUpdateMonoFont: (monoFont: string, monoFontUrl?: string) => void;
   onToggleFollowSystemFont: (enabled: boolean) => void;
-  onSelectWallpaper: () => Promise<void>;
-  onClearWallpaper: () => void;
   onImportCustomCss: () => Promise<void>;
   onClearCustomCss: () => void;
 }
@@ -401,7 +398,6 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
   onTogglePreferGoogleFont,
   preferGoogleMonoFont,
   onTogglePreferGoogleMonoFont,
-  customWallpaper,
   systemFonts,
   systemFontsMeta,
   desktopFont,
@@ -409,8 +405,6 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
   onUpdateFont,
   onUpdateMonoFont,
   onToggleFollowSystemFont,
-  onSelectWallpaper,
-  onClearWallpaper,
   onImportCustomCss,
   onClearCustomCss,
 }) => {
@@ -859,58 +853,39 @@ export const ThemeSettingsPage: React.FC<ThemeSettingsPageProps> = ({
         </div>
       </div>
 
-      {/* Chat Wallpaper Section */}
-      <div className="p-3.5 bg-[#182229] border border-[#222d34] rounded-lg space-y-3 flex-shrink-0">
+      {/* Chat Wallpaper Section (Delegated to WAllie - REsponsive) */}
+      <div className="p-3.5 bg-[#182229] border border-[#222d34] rounded-lg space-y-2.5 flex-shrink-0">
         <div className="flex items-center justify-between border-b border-[#222d34] pb-2">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-[#e9edef]">
             <ImageIcon className="w-3.5 h-3.5 text-[#00a884]" />
             <span>Chat Pane Wallpaper</span>
           </div>
-          <span className="text-[10px] text-[#8696a0]">Applied to active conversation (#main)</span>
+          <span className="text-[9px] bg-[#53bdeb]/15 text-[#53bdeb] border border-[#53bdeb]/20 px-1.5 py-0.5 rounded font-semibold select-none">
+            WAllie - REsponsive
+          </span>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3.5">
-          {/* Wallpaper Thumbnail Preview */}
-          <div
-            className="w-24 h-20 rounded-md border border-[#222d34] bg-[#111b21] flex items-center justify-center relative overflow-hidden shrink-0 shadow-inner"
-            style={{
-              backgroundImage: customWallpaper ? `url("${customWallpaper}")` : undefined,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-[10px] text-[#8696a0] leading-relaxed flex-1">
+            Custom chat pane wallpaper and scaling are configured per-account via the <strong className="text-[#e9edef]">WAllie - REsponsive</strong> extension. Click below to launch the extension options.
+          </p>
+          <button
+            type="button"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              window.electronAPI?.openExtensionPopup?.(selectedAccountId, 'builtin_responsive-layout', {
+                x: Math.round(rect.left),
+                y: Math.round(rect.top),
+                width: Math.round(rect.width),
+                height: Math.round(rect.height),
+              });
             }}
+            className="px-3.5 py-1.5 bg-[#202c33] hover:bg-[#2a3942] text-[#e9edef] hover:text-[#00a884] rounded text-xs font-medium border border-[#374248] transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
           >
-            {!customWallpaper ? (
-              <span className="text-[9px] text-[#8696a0] text-center px-1">Default Pattern</span>
-            ) : (
-              <div className="absolute inset-0 bg-black/30 flex items-end p-1">
-                <span className="text-[9px] text-white bg-black/60 px-1 rounded font-medium">Custom</span>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2 flex-grow min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={onSelectWallpaper}
-                className="px-3.5 py-1.5 bg-[#00a884] hover:bg-[#02906f] text-[#111b21] font-semibold rounded text-xs inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 shadow-sm"
-              >
-                <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-                <span>Choose Image...</span>
-              </button>
-              {customWallpaper && (
-                <button
-                  onClick={onClearWallpaper}
-                  className="px-3 py-1.5 bg-[#202c33] hover:bg-[#ef4444]/20 hover:text-[#ef4444] text-[#aebac1] border border-[#222d34] rounded text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-                >
-                  <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>Clear Wallpaper</span>
-                </button>
-              )}
-            </div>
-            <p className="text-[10px] text-[#8696a0] leading-normal">
-              Supports JPEG, PNG, and WebP. Automatically downscaled to 1920px max JPEG at 82% quality to keep WhatsApp Web fast.
-            </p>
-          </div>
+            <ImageIcon className="w-3.5 h-3.5 text-[#00a884]" />
+            <span>Configure Wallpaper...</span>
+            <ExternalLink className="w-3 h-3 opacity-70" />
+          </button>
         </div>
       </div>
 

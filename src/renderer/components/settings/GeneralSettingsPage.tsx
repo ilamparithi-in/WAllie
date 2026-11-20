@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell, History } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell, History, Smartphone } from 'lucide-react';
 import type { GlobalSettings, AccountInfo } from '../../../preload';
 import { SettingsToggle } from './common';
 
@@ -316,26 +316,35 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
             />
           </div>
 
-          <div className="p-2 rounded hover:bg-[#182229] transition-colors space-y-2">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-[#e9edef] text-[11px]">Responsive Layout (Portrait Mode)</div>
-                <div className="text-[10px] text-[#8696a0]">
-                  Single-pane layout for narrow or portrait displays with smooth sliding transitions
-                </div>
-              </div>
+          <div className="p-2.5 rounded bg-[#182229] border border-[#222d34] flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <select
-                  value={globalSettings?.responsiveLayoutMode ?? 'auto'}
-                  onChange={(e) => handleToggleGlobalSetting('responsiveLayoutMode', e.target.value)}
-                  className="bg-[#202c33] text-[#e9edef] text-xs px-2 py-1 rounded border border-[#2c3943] focus:border-[#00a884] focus:outline-none cursor-pointer"
-                >
-                  <option value="auto">Auto (Responsive)</option>
-                  <option value="portrait">Always Portrait</option>
-                  <option value="disabled">Always Landscape (Disabled)</option>
-                </select>
+                <span className="font-medium text-[#e9edef] text-[11px]">Responsive Layout (Portrait Mode)</span>
+                <span className="text-[9px] bg-[#53bdeb]/15 text-[#53bdeb] border border-[#53bdeb]/20 px-1.5 py-0.5 rounded font-semibold select-none">
+                  WAllie - REsponsive
+                </span>
+              </div>
+              <div className="text-[10px] text-[#8696a0] mt-0.5 leading-relaxed">
+                Adaptive single-pane layout for narrow split-screen or portrait windows, chat header back navigation, and wallpaper.
               </div>
             </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                window.electronAPI?.openExtensionPopup?.(accounts?.[0]?.id || '', 'builtin_responsive-layout', {
+                  x: Math.round(rect.left),
+                  y: Math.round(rect.top),
+                  width: Math.round(rect.width),
+                  height: Math.round(rect.height),
+                });
+              }}
+              className="px-3 py-1.5 bg-[#202c33] hover:bg-[#2a3942] text-[#e9edef] hover:text-[#00a884] rounded text-xs font-medium border border-[#374248] transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-[#00a884]" />
+              <span>Configure Extension...</span>
+              <ExternalLink className="w-3 h-3 opacity-70" />
+            </button>
           </div>
         </div>
 

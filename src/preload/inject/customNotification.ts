@@ -1,7 +1,12 @@
 import './types';
 import { norm, isChatOpen } from './chatNavigation';
 import { decodeHtmlEntities } from '../../shared/notificationFormatting';
-import { setPortraitViewState } from './responsiveLayout';
+
+function notifyPortraitView(view: 'chat' | 'list' | 'info'): void {
+  try {
+    window.dispatchEvent(new CustomEvent('wa-portrait-view-change', { detail: { view } }));
+  } catch {}
+}
 
 export const activeNotificationCallbacks = new Map<string, () => void>();
 
@@ -100,7 +105,7 @@ export class CustomNotification extends EventTarget {
 
     if (this.tag) {
       activeNotificationCallbacks.set(this.tag, () => {
-        setPortraitViewState('chat');
+        notifyPortraitView('chat');
         if (this.onclick) this.onclick();
         this.dispatchEvent(new Event('click'));
       });

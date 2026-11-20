@@ -20,9 +20,7 @@ import './types';
 import { activeNotificationCallbacks, initCustomNotification, initAnchorDownloadHandler } from './customNotification';
 import { initChatNavigation } from './chatNavigation';
 import { initDragDropStabilizer } from './dragDrop';
-import { initStandaloneLinkPreview } from './linkPreview';
 import { initChatExporter } from './chatExporter';
-import { initResponsiveLayout } from './responsiveLayout';
 
 (() => {
   if ((window as any).__wallie_main_world_initialized) {
@@ -34,7 +32,5 @@ import { initResponsiveLayout } from './responsiveLayout';
   initAnchorDownloadHandler();
   initChatNavigation(activeNotificationCallbacks);
   initDragDropStabilizer();
-  initStandaloneLinkPreview();
   initChatExporter();
-  initResponsiveLayout();
 })();
