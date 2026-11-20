@@ -882,6 +882,21 @@ export async function toggleExtensionPin(accountId: string, extensionId: string,
   return true;
 }
 
+export async function setAccountShowExtensionsButton(accountId: string, show: boolean): Promise<boolean> {
+  const account = getAccountById(accountId);
+  if (!account) return false;
+
+  account.showExtensionsButton = show;
+  await saveAccounts();
+
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+    }
+  }
+  return true;
+}
+
 export async function removeExtension(accountId: string, extensionId: string): Promise<boolean> {
   const account = getAccountById(accountId);
   if (!account || !account.extensions) return false;

@@ -522,6 +522,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const handleToggleAccountShowExtensionsButton = async (accountId: string, show: boolean) => {
+    try {
+      await window.electronAPI.setAccountShowExtensionsButton(accountId, show);
+      setAccounts((prev) =>
+        prev.map((acc) => (acc.id === accountId ? { ...acc, showExtensionsButton: show } : acc))
+      );
+    } catch (err) {
+      console.error('Toggle account show extensions button error:', err);
+    }
+  };
+
   const handleRemoveExtension = async (extId: string) => {
     if (!selectedAccountId) return;
     try {
@@ -862,6 +873,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     handleToggleExtension={handleToggleExtension}
                     handleToggleExtensionPin={handleToggleExtensionPin}
                     handleRemoveExtension={handleRemoveExtension}
+                    onToggleShowExtensionsButton={handleToggleAccountShowExtensionsButton}
                   />
                 )}
 

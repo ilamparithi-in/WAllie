@@ -82,6 +82,7 @@ export interface Account {
   unreadCount: number;
   loggedIn: boolean;
   extensions: ExtensionInfo[];
+  showExtensionsButton?: boolean;
   emoji?: string;
   settings?: AccountSettings;
   isLoaded?: boolean;

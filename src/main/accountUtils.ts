@@ -40,6 +40,7 @@ export function createNewAccount(
     unreadCount: 0,
     loggedIn: false,
     extensions: [],
+    showExtensionsButton: true,
     emoji: typeof emoji === 'string' ? emoji.trim().substring(0, 32) : '',
     settings: getDefaultAccountSettings(),
   };
