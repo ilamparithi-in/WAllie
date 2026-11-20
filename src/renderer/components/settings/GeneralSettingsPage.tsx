@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell, History, Smartphone } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell, History, Sliders } from 'lucide-react';
 import type { GlobalSettings, AccountInfo } from '../../../preload';
 import { SettingsToggle } from './common';
 
@@ -316,16 +316,16 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
             />
           </div>
 
-          <div className="p-2.5 rounded bg-[#182229] border border-[#222d34] flex items-center justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-[#e9edef] text-[11px]">Responsive Layout (Portrait Mode)</span>
-                <span className="text-[9px] bg-[#53bdeb]/15 text-[#53bdeb] border border-[#53bdeb]/20 px-1.5 py-0.5 rounded font-semibold select-none">
-                  WAllie - REsponsive
+          <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+            <div className="flex-1 min-w-0 pr-2">
+              <div className="font-medium text-[#e9edef] text-[11px] flex items-center gap-2">
+                <span>Responsive Layout (Portrait Mode)</span>
+                <span className="text-[9px] bg-[#53bdeb]/15 text-[#53bdeb] border border-[#53bdeb]/20 px-1.5 py-0.5 rounded font-semibold select-none whitespace-nowrap">
+                  Extension
                 </span>
               </div>
-              <div className="text-[10px] text-[#8696a0] mt-0.5 leading-relaxed">
-                Adaptive single-pane layout for narrow split-screen or portrait windows, chat header back navigation, and wallpaper.
+              <div className="text-[10px] text-[#8696a0]">
+                Adaptive single-pane layout for narrow or portrait windows and chat header back navigation
               </div>
             </div>
             <button
@@ -339,11 +339,11 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
                   height: Math.round(rect.height),
                 });
               }}
-              className="px-3 py-1.5 bg-[#202c33] hover:bg-[#2a3942] text-[#e9edef] hover:text-[#00a884] rounded text-xs font-medium border border-[#374248] transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
+              className="px-2.5 py-1 bg-[#202c33] hover:bg-[#2a3942] active:scale-[0.98] text-[#e9edef] hover:text-[#00a884] rounded text-xs font-medium border border-[#2c3943] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]/60"
+              title="Configure Responsive Layout options in extension popup"
             >
-              <Smartphone className="w-3.5 h-3.5 text-[#00a884]" />
-              <span>Configure Extension...</span>
-              <ExternalLink className="w-3 h-3 opacity-70" />
+              <Sliders className="w-3.5 h-3.5 text-[#00a884]" />
+              <span>Configure...</span>
             </button>
           </div>
         </div>
