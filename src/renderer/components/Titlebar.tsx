@@ -61,6 +61,11 @@ export const Titlebar: React.FC<TitlebarProps> = ({
     return () => unsub?.();
   }, []);
 
+  const isDropdownModeRef = useRef(isDropdownMode);
+  useEffect(() => {
+    isDropdownModeRef.current = isDropdownMode;
+  }, [isDropdownMode]);
+
   // Overflow measurement logic
   const checkOverflow = useCallback(() => {
     if (!headerRef.current) return;
@@ -75,18 +80,19 @@ export const Titlebar: React.FC<TitlebarProps> = ({
 
     if (neededTabsWidth <= 0) return;
 
-    if (!isDropdownMode) {
+    const currentMode = isDropdownModeRef.current;
+    if (!currentMode) {
       if (neededTabsWidth > availableWidth) {
         setIsDropdownMode(true);
       }
     } else {
-      // 24px hysterisis gap to avoid oscillation at threshold
+      // 24px hysteresis gap to avoid oscillation at threshold
       if (availableWidth >= neededTabsWidth + 24) {
         setIsDropdownMode(false);
         setIsDropdownOpen(false);
       }
     }
-  }, [isDropdownMode, isMac, isFullScreen]);
+  }, [isMac, isFullScreen]);
 
   useEffect(() => {
     checkOverflow();
@@ -555,79 +561,55 @@ export const Titlebar: React.FC<TitlebarProps> = ({
               </button>
             )}
 
-            {/* Extension Action Icons & Extensions Menu */}
+            {/* Pinned Extension Shortcuts */}
+            {pinnedExtensions.map((ext) => (
+              <button
+                key={ext.id}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  window.electronAPI?.openExtensionPopup(activeId, ext.id, {
+                    x: rect.left,
+                    y: rect.top,
+                    width: rect.width,
+                    height: rect.height,
+                  });
+                  e.currentTarget.blur();
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+                tabIndex={-1}
+                title={ext.name}
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] active:scale-95 text-[#8696a0] hover:text-[#00a884] transition-all focus:outline-none cursor-pointer"
+              >
+                {ext.iconDataUrl ? (
+                  <img src={ext.iconDataUrl} alt={ext.name} className="w-3.5 h-3.5 object-contain rounded" />
+                ) : (
+                  <Puzzle className="w-3.5 h-3.5" />
+                )}
+              </button>
+            ))}
+
+            {/* Extension Dropdown Menu Button */}
             {popupExtensions.length > 0 && (
-              isDropdownMode ? (
-                <div className="relative">
-                  <button
-                    onClick={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      window.electronAPI?.showExtensionDropdownMenu?.(activeId, {
-                        x: Math.round(rect.left),
-                        y: Math.round(rect.top),
-                        width: Math.round(rect.width),
-                        height: Math.round(rect.height),
-                      });
-                      e.currentTarget.blur();
-                    }}
-                    onMouseDown={(e) => e.preventDefault()}
-                    tabIndex={-1}
-                    title="Active Extensions"
-                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                    className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] active:scale-95 text-[#8696a0] hover:text-[#00a884] transition-all focus:outline-none cursor-pointer"
-                  >
-                    <Puzzle className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {pinnedExtensions.map((ext) => (
-                    <button
-                      key={ext.id}
-                      onClick={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        window.electronAPI?.openExtensionPopup(activeId, ext.id, {
-                          x: rect.left,
-                          y: rect.top,
-                          width: rect.width,
-                          height: rect.height,
-                        });
-                        e.currentTarget.blur();
-                      }}
-                      onMouseDown={(e) => e.preventDefault()}
-                      tabIndex={-1}
-                      title={ext.name}
-                      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                      className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] active:scale-95 text-[#8696a0] hover:text-[#00a884] transition-all focus:outline-none cursor-pointer"
-                    >
-                      {ext.iconDataUrl ? (
-                        <img src={ext.iconDataUrl} alt={ext.name} className="w-3.5 h-3.5 object-contain rounded" />
-                      ) : (
-                        <Puzzle className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  ))}
-                  <button
-                    onClick={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      window.electronAPI?.showExtensionDropdownMenu?.(activeId, {
-                        x: Math.round(rect.left),
-                        y: Math.round(rect.top),
-                        width: Math.round(rect.width),
-                        height: Math.round(rect.height),
-                      });
-                      e.currentTarget.blur();
-                    }}
-                    onMouseDown={(e) => e.preventDefault()}
-                    tabIndex={-1}
-                    title="Extensions"
-                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                    className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] active:scale-95 text-[#8696a0] hover:text-[#00a884] transition-all focus:outline-none cursor-pointer"
-                  >
-                    <Puzzle className="w-3.5 h-3.5" />
-                  </button>
-                </>
-              )
+              <button
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  window.electronAPI?.showExtensionDropdownMenu?.(activeId, {
+                    x: Math.round(rect.left),
+                    y: Math.round(rect.top),
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                  });
+                  e.currentTarget.blur();
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+                tabIndex={-1}
+                title="Extensions"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] active:scale-95 text-[#8696a0] hover:text-[#00a884] transition-all focus:outline-none cursor-pointer"
+              >
+                <Puzzle className="w-3.5 h-3.5" />
+              </button>
             )}
 
             {/* Settings Button */}
