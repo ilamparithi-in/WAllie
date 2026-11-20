@@ -279,6 +279,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({
   const showTrafficLightSpacer = isMac && !isFullScreen;
   const activeAccount = accounts.find((a) => a.id === activeId);
   const popupExtensions = activeAccount?.extensions?.filter((e) => e.enabled && e.hasPopup) || [];
+  const pinnedExtensions = popupExtensions.filter((e) => e.pinnedInTitlebar !== false);
 
   return (
     <header
@@ -554,7 +555,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({
               </button>
             )}
 
-            {/* Extension Action Icons (individual when wide, or collapsed into Puzzle icon when narrow) */}
+            {/* Extension Action Icons & Extensions Menu */}
             {popupExtensions.length > 0 && (
               isDropdownMode ? (
                 <div className="relative">
@@ -573,38 +574,59 @@ export const Titlebar: React.FC<TitlebarProps> = ({
                     tabIndex={-1}
                     title="Active Extensions"
                     style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                    className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors focus:outline-none cursor-pointer"
+                    className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] active:scale-95 text-[#8696a0] hover:text-[#00a884] transition-all focus:outline-none cursor-pointer"
                   >
                     <Puzzle className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ) : (
-                popupExtensions.map((ext) => (
+                <>
+                  {pinnedExtensions.map((ext) => (
+                    <button
+                      key={ext.id}
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        window.electronAPI?.openExtensionPopup(activeId, ext.id, {
+                          x: rect.left,
+                          y: rect.top,
+                          width: rect.width,
+                          height: rect.height,
+                        });
+                        e.currentTarget.blur();
+                      }}
+                      onMouseDown={(e) => e.preventDefault()}
+                      tabIndex={-1}
+                      title={ext.name}
+                      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                      className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] active:scale-95 text-[#8696a0] hover:text-[#00a884] transition-all focus:outline-none cursor-pointer"
+                    >
+                      {ext.iconDataUrl ? (
+                        <img src={ext.iconDataUrl} alt={ext.name} className="w-3.5 h-3.5 object-contain rounded" />
+                      ) : (
+                        <Puzzle className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  ))}
                   <button
-                    key={ext.id}
                     onClick={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
-                      window.electronAPI?.openExtensionPopup(activeId, ext.id, {
-                        x: rect.left,
-                        y: rect.top,
-                        width: rect.width,
-                        height: rect.height,
+                      window.electronAPI?.showExtensionDropdownMenu?.(activeId, {
+                        x: Math.round(rect.left),
+                        y: Math.round(rect.top),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height),
                       });
                       e.currentTarget.blur();
                     }}
                     onMouseDown={(e) => e.preventDefault()}
                     tabIndex={-1}
-                    title={ext.name}
+                    title="Extensions"
                     style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                    className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] text-[#8696a0] hover:text-[#00a884] transition-colors focus:outline-none cursor-pointer"
+                    className="flex items-center justify-center w-7 h-[28px] hover:bg-[#202c33] active:scale-95 text-[#8696a0] hover:text-[#00a884] transition-all focus:outline-none cursor-pointer"
                   >
-                    {ext.iconDataUrl ? (
-                      <img src={ext.iconDataUrl} alt={ext.name} className="w-3.5 h-3.5 object-contain rounded" />
-                    ) : (
-                      <Puzzle className="w-3.5 h-3.5" />
-                    )}
+                    <Puzzle className="w-3.5 h-3.5" />
                   </button>
-                ))
+                </>
               )
             )}
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Puzzle, FolderOpen, X, RefreshCw } from 'lucide-react';
+import { Puzzle, FolderOpen, RefreshCw, Pin, Sliders, Trash2 } from 'lucide-react';
 import type { AccountInfo, GlobalSettings } from '../../../preload';
 
 interface ExtensionsSettingsPageProps {
@@ -19,6 +19,7 @@ interface ExtensionsSettingsPageProps {
   handleInstallWebStoreExtension: () => Promise<void> | void;
   extensions: any[];
   handleToggleExtension: (extId: string, enabled: boolean) => Promise<void> | void;
+  handleToggleExtensionPin: (extId: string, pinned: boolean) => Promise<void> | void;
   handleRemoveExtension: (extId: string) => Promise<void> | void;
 }
 
@@ -39,6 +40,7 @@ export const ExtensionsSettingsPage: React.FC<ExtensionsSettingsPageProps> = ({
   handleInstallWebStoreExtension,
   extensions,
   handleToggleExtension,
+  handleToggleExtensionPin,
   handleRemoveExtension,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -231,17 +233,17 @@ export const ExtensionsSettingsPage: React.FC<ExtensionsSettingsPageProps> = ({
             <Puzzle className="w-12 h-12 mb-3 text-[#202c33]" />
             <p className="font-medium text-[#d1d7db] mb-1">No Extensions Loaded</p>
             <p className="text-[11px] max-w-[320px] leading-relaxed">
-              Import unpacked directories, ZIP archives, or CRX packages to run helper extensions (e.g. privacy sheets, message backup tools) in this session.
+              Import unpacked directories, ZIP archives, or CRX packages to run helper extensions in this session.
             </p>
           </div>
         ) : (
           extensions.map((ext) => (
-            <div
+            <article
               key={ext.id}
               className="flex items-center justify-between p-3 bg-[#182229] border border-[#222d34] rounded-lg hover:border-[#374248] transition-colors gap-3"
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="w-8 h-8 rounded bg-[#202c33] flex items-center justify-center text-[#00a884] shrink-0 overflow-hidden">
+                <div className="w-9 h-9 rounded-lg bg-[#202c33] border border-[#2a3942] flex items-center justify-center text-[#00a884] shrink-0 overflow-hidden">
                   {ext.iconDataUrl ? (
                     <img src={ext.iconDataUrl} alt="" className="w-5 h-5 object-contain" />
                   ) : (
@@ -249,9 +251,16 @@ export const ExtensionsSettingsPage: React.FC<ExtensionsSettingsPageProps> = ({
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-xs text-[#e9edef] truncate" title={ext.name}>
-                    {ext.name}
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-xs text-[#e9edef] truncate tracking-tight" title={ext.name}>
+                      {ext.name}
+                    </h4>
                   </div>
+                  {ext.description && (
+                    <p className="text-[10px] text-[#8696a0] mt-0.5 line-clamp-1 leading-normal" title={ext.description}>
+                      {ext.description}
+                    </p>
+                  )}
                   <div className="text-[10px] text-[#8696a0] mt-1 flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-[#aebac1]">v{ext.version}</span>
                     <span className="text-[#374248]">•</span>
@@ -284,7 +293,37 @@ export const ExtensionsSettingsPage: React.FC<ExtensionsSettingsPageProps> = ({
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2.5 shrink-0">
+
+              {/* Redesigned Actions Toolbar */}
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Pin to Titlebar Toggle */}
+                {ext.hasPopup && (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleExtensionPin(ext.id, ext.pinnedInTitlebar === false)}
+                    disabled={!ext.enabled}
+                    className={`p-1.5 rounded-md transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]/60 cursor-pointer ${
+                      !ext.enabled
+                        ? 'opacity-25 cursor-not-allowed text-[#8696a0]'
+                        : ext.pinnedInTitlebar !== false
+                        ? 'bg-[#00a884]/15 text-[#00a884] border border-[#00a884]/30 hover:bg-[#00a884]/25'
+                        : 'text-[#8696a0] hover:text-[#e9edef] hover:bg-[#202c33] border border-transparent'
+                    }`}
+                    title={
+                      !ext.enabled
+                        ? 'Enable extension to pin to titlebar'
+                        : ext.pinnedInTitlebar !== false
+                        ? 'Pinned to titlebar (click to unpin)'
+                        : 'Pin to titlebar'
+                    }
+                    aria-label={ext.pinnedInTitlebar !== false ? 'Unpin from titlebar' : 'Pin to titlebar'}
+                    aria-pressed={ext.pinnedInTitlebar !== false}
+                  >
+                    <Pin className={`w-3.5 h-3.5 ${ext.pinnedInTitlebar !== false ? 'fill-current' : ''}`} />
+                  </button>
+                )}
+
+                {/* Options Button */}
                 {ext.hasPopup && ext.enabled && (
                   <button
                     type="button"
@@ -297,39 +336,53 @@ export const ExtensionsSettingsPage: React.FC<ExtensionsSettingsPageProps> = ({
                         height: rect.height,
                       });
                     }}
-                    className="px-2 py-1 bg-[#202c33] hover:bg-[#2a3942] text-[#e9edef] rounded text-[10px] font-medium transition-colors border border-[#374248] cursor-pointer flex items-center gap-1"
+                    className="px-2.5 py-1 bg-[#202c33] hover:bg-[#2a3942] active:scale-[0.98] text-[#e9edef] hover:text-[#00a884] rounded-md text-[11px] font-medium border border-[#2c3943] transition-all cursor-pointer flex items-center gap-1.5 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]/60"
                     title="Open extension popup options"
                   >
+                    <Sliders className="w-3 h-3 text-[#00a884]" />
                     <span>Options</span>
                   </button>
                 )}
-                <label className="relative inline-flex items-center cursor-pointer">
+
+                {/* Accessible Enable/Disable Switch */}
+                <label
+                  className="relative inline-flex items-center cursor-pointer select-none"
+                  title={ext.enabled ? 'Disable extension' : 'Enable extension'}
+                >
                   <input
                     type="checkbox"
+                    role="switch"
+                    aria-checked={ext.enabled}
+                    aria-label={`Enable ${ext.name}`}
                     checked={ext.enabled}
                     onChange={() => handleToggleExtension(ext.id, !ext.enabled)}
                     className="sr-only peer"
                   />
-                  <div className="w-7 h-4 bg-[#202c33] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#8696a0] after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#00a884] peer-checked:after:bg-[#111b21] peer-checked:after:border-[#00a884]"></div>
+                  <div className="w-8 h-4.5 bg-[#202c33] peer-focus-visible:ring-2 peer-focus-visible:ring-[#00a884]/60 rounded-full peer peer-checked:after:translate-x-3.5 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#8696a0] after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-[#00a884] peer-checked:after:bg-[#111b21] peer-checked:after:border-[#00a884] border border-[#2c3943]"></div>
                 </label>
+
+                {/* Remove/Uninstall Button */}
                 {ext.isBuiltIn ? (
                   <div
                     className="p-1.5 text-[#374248] cursor-not-allowed select-none"
-                    title="Built-in extensions cannot be deleted"
+                    title="Built-in extension cannot be uninstalled"
+                    aria-hidden="true"
                   >
-                    <X className="w-3.5 h-3.5 opacity-30" />
+                    <Trash2 className="w-3.5 h-3.5 opacity-25" />
                   </div>
                 ) : (
                   <button
+                    type="button"
                     onClick={() => handleRemoveExtension(ext.id)}
-                    className="p-1.5 rounded hover:bg-[#202c33] text-[#8696a0] hover:text-[#ea4335] transition-colors cursor-pointer"
-                    title="Delete extension"
+                    className="p-1.5 rounded-md hover:bg-[#ef4444]/15 text-[#8696a0] hover:text-[#ef4444] transition-all active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef4444]/60 border border-transparent hover:border-[#ef4444]/25"
+                    title="Uninstall extension"
+                    aria-label={`Uninstall ${ext.name}`}
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
-            </div>
+            </article>
           ))
         )}
       </div>

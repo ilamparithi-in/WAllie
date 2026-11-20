@@ -114,6 +114,7 @@ export function syncBuiltinExtensionsForAccount(account: Account): boolean {
           existing.path = extDir;
           existing.name = manifest.name || existing.name;
           existing.version = manifest.version || existing.version;
+          existing.description = manifest.description || existing.description || '';
           existing.hasPopup = hasPopup;
           existing.popupPath = popupPath;
           existing.iconDataUrl = iconDataUrl;
@@ -123,6 +124,7 @@ export function syncBuiltinExtensionsForAccount(account: Account): boolean {
             id: extId,
             name: manifest.name || entry.name,
             version: manifest.version || '1.0.0',
+            description: manifest.description || '',
             path: extDir,
             enabled: true,
             source: 'builtin',
@@ -663,6 +665,7 @@ export async function importExtension(
       id: extId,
       name: manifest.name || 'Unnamed Extension',
       version: manifest.version || '1.0.0',
+      description: manifest.description || '',
       path: targetDir,
       enabled: true,
       hasPopup,
@@ -761,6 +764,7 @@ export async function installWebStoreExtension(accountId: string, urlOrId: strin
       id: extensionId,
       name: manifest.name || 'Unnamed Extension',
       version: manifest.version || '1.0.0',
+      description: manifest.description || '',
       path: targetDir,
       enabled: true,
       source: 'webstore',
@@ -857,6 +861,24 @@ export async function toggleExtension(accountId: string, extensionId: string, en
   }
 
   state.mainWindow?.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+  return true;
+}
+
+export async function toggleExtensionPin(accountId: string, extensionId: string, pinned: boolean): Promise<boolean> {
+  const account = getAccountById(accountId);
+  if (!account || !account.extensions) return false;
+
+  const ext = account.extensions.find((e) => e.id === extensionId);
+  if (!ext) return false;
+
+  ext.pinnedInTitlebar = pinned;
+  await saveAccounts();
+
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('account:list-changed', state.accounts, state.activeAccountId);
+    }
+  }
   return true;
 }
 
