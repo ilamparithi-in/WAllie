@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sliders, Link, Check, ShieldAlert, Info, Maximize2, Monitor, RotateCcw, ExternalLink } from 'lucide-react';
+import { Sliders, Link, Check, ShieldAlert, Info, Maximize2, Monitor, RotateCcw } from 'lucide-react';
 import type { GlobalSettings } from '../../../preload';
 import { SettingsToggle } from './common';
 
@@ -44,23 +44,23 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
       </div>
 
       {/* Main Feature Container - Desktop Link Previews (Delegated to WAllie - RElinked) */}
-      <div className="bg-[#182229] border border-[#222d34] rounded-xl overflow-hidden shadow-sm">
-        <div className="p-4 flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-xl bg-[#00a884]/10 text-[#00a884] border border-[#00a884]/20 shrink-0 mt-0.5">
+      <article className="bg-[#182229] border border-[#222d34] rounded-xl overflow-hidden shadow-sm">
+        <div className="p-4 flex items-center justify-between gap-4">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <div className="p-2 rounded-lg bg-[#00a884]/10 text-[#00a884] border border-[#00a884]/20 shrink-0 mt-0.5">
               <Link className="w-4 h-4" />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-[#e9edef] text-[13px] tracking-tight">
+                <h4 className="font-semibold text-[#e9edef] text-[13px] tracking-tight">
                   Standalone Desktop Link Previews
-                </span>
-                <span className="text-[9px] bg-[#53bdeb]/15 text-[#53bdeb] border border-[#53bdeb]/20 px-1.5 py-0.5 rounded font-semibold select-none">
-                  WAllie - RElinked
+                </h4>
+                <span className="text-[9px] bg-[#53bdeb]/15 text-[#53bdeb] border border-[#53bdeb]/20 px-1.5 py-0.5 rounded font-semibold select-none whitespace-nowrap">
+                  Extension
                 </span>
               </div>
               <p className="text-[11px] text-[#8696a0] leading-relaxed pr-2">
-                Scrapes OpenGraph metadata and renders rich link cards locally on your Linux desktop without relying on peer-to-peer Signal requests to your primary phone. Eliminates 7-second timeouts when your phone is unreachable, offline, or being repaired.
+                Scrapes OpenGraph metadata and renders rich link cards locally on your Linux desktop without relying on phone requests or timing out when your device is offline.
               </p>
             </div>
           </div>
@@ -76,14 +76,14 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
                 height: Math.round(rect.height),
               });
             }}
-            className="px-3.5 py-1.5 bg-[#202c33] hover:bg-[#2a3942] text-[#e9edef] hover:text-[#00a884] rounded text-xs font-medium border border-[#374248] transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 mt-1"
+            className="px-2.5 py-1 bg-[#202c33] hover:bg-[#2a3942] active:scale-[0.98] text-[#e9edef] hover:text-[#00a884] rounded text-xs font-medium border border-[#2c3943] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]/60"
+            title="Configure Link Previews in extension options"
           >
-            <Link className="w-3.5 h-3.5 text-[#00a884]" />
-            <span>Configure Extension...</span>
-            <ExternalLink className="w-3 h-3 opacity-70" />
+            <Sliders className="w-3.5 h-3.5 text-[#00a884]" />
+            <span>Configure...</span>
           </button>
         </div>
-      </div>
+      </article>
 
       {/* Window Sizing Limits Container */}
       <div className="bg-[#182229] border border-[#222d34] rounded-xl overflow-hidden shadow-sm">
