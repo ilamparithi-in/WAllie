@@ -40,11 +40,11 @@ const SETTINGS_MENU_ITEMS: {
     { page: 'preload', icon: Users, title: 'Accounts to load on launch', description: 'Select which accounts get preloaded in the background' },
     { page: 'permissions', icon: Shield, title: 'Browser permissions', description: 'Manage camera, mic, notifications, geolocation, and clipboard access' },
     { page: 'extensions', icon: Puzzle, title: 'Chrome Extensions', description: 'Manage helper extensions and plugins' },
-    { page: 'css', icon: Palette, title: 'Appearance, Fonts & Themes', description: 'Customize fonts, wallpaper, preset themes, and CSS' },
+    { page: 'css', icon: Palette, title: 'Appearance, Fonts & Themes', description: 'Customize fonts, preset themes, and CSS' },
     { page: 'storage', icon: Database, title: 'Storage & Cache', description: 'Inspect sizes, clear browser media or cache' },
     { page: 'notifications', icon: Bell, title: 'Notification History', description: 'View and search desktop alert logs' },
     { page: 'exporter', icon: FileArchive, title: 'Chat Exporter', description: 'Export chats to JSON, HTML, and launch the built-in offline viewer' },
-    { page: 'advanced', icon: Sliders, title: 'Advanced Settings', description: 'Standalone link previews & desktop enhancements' },
+    { page: 'advanced', icon: Sliders, title: 'Advanced Settings', description: 'Desktop enhancements & window behavior' },
   ];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -125,7 +125,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [followSystemFont, setFollowSystemFont] = useState<boolean>(false);
   const [preferGoogleFont, setPreferGoogleFont] = useState<boolean>(false);
   const [preferGoogleMonoFont, setPreferGoogleMonoFont] = useState<boolean>(false);
-  const [customWallpaper, setCustomWallpaper] = useState<string>('');
   const [systemFonts, setSystemFonts] = useState<string[]>([]);
   const [systemFontsMeta, setSystemFontsMeta] = useState<SystemFontInfo[]>([]);
   const [desktopFont, setDesktopFont] = useState<{ name: string; isVariable: boolean }>({ name: '', isVariable: false });
@@ -336,7 +335,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setFollowSystemFont(!!selectedAccount.settings?.followSystemFont);
       setPreferGoogleFont(!!selectedAccount.settings?.preferGoogleFont);
       setPreferGoogleMonoFont(!!selectedAccount.settings?.preferGoogleMonoFont);
-      setCustomWallpaper(selectedAccount.settings?.customWallpaper || '');
     }
   }, [selectedAccountId, accounts]);
 
@@ -393,23 +391,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleTogglePreferGoogleMonoFont = (enabled: boolean) => {
     setPreferGoogleMonoFont(enabled);
     handleSaveAppearance({ preferGoogleMonoFont: enabled });
-  };
-
-  const handleSelectWallpaper = async () => {
-    try {
-      const dataUri = await window.electronAPI.selectWallpaperFile();
-      if (dataUri) {
-        setCustomWallpaper(dataUri);
-        await handleSaveAppearance({ customWallpaper: dataUri });
-      }
-    } catch (err) {
-      console.error('Failed to select wallpaper:', err);
-    }
-  };
-
-  const handleClearWallpaper = () => {
-    setCustomWallpaper('');
-    handleSaveAppearance({ customWallpaper: '' });
   };
 
   const handleImportCustomCss = async () => {
@@ -887,7 +868,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     fontFamily={fontFamily}
                     monoFontFamily={monoFontFamily}
                     followSystemFont={followSystemFont}
-                    customWallpaper={customWallpaper}
                     systemFonts={systemFonts}
                     systemFontsMeta={systemFontsMeta}
                     desktopFont={desktopFont}
@@ -899,8 +879,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onUpdateFont={handleUpdateFont}
                     onUpdateMonoFont={handleUpdateMonoFont}
                     onToggleFollowSystemFont={handleToggleFollowSystemFont}
-                    onSelectWallpaper={handleSelectWallpaper}
-                    onClearWallpaper={handleClearWallpaper}
                     onImportCustomCss={handleImportCustomCss}
                     onClearCustomCss={handleClearCustomCss}
                   />

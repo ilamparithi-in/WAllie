@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Sliders, Link, Trash2, Check, ShieldAlert, Cpu, Network, Terminal, Info, Maximize2, Monitor, RotateCcw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sliders, Link, Check, ShieldAlert, Info, Maximize2, Monitor, RotateCcw, ExternalLink } from 'lucide-react';
 import type { GlobalSettings } from '../../../preload';
 import { SettingsToggle } from './common';
 
@@ -12,35 +12,9 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
   globalSettings,
   handleToggleGlobalSetting,
 }) => {
-  const isLinkPreviewEnabled = globalSettings?.standaloneLinkPreviewEnabled !== false;
   const isUnblockMinSize = !!globalSettings?.unblockMinWindowSize;
-  const [cacheCount, setCacheCount] = useState<number | null>(null);
-  const [clearing, setClearing] = useState(false);
-  const [clearedNotice, setClearedNotice] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const [resetNotice, setResetNotice] = useState<string | null>(null);
-
-  useEffect(() => {
-    window.electronAPI?.getLinkPreviewCacheSize?.().then((count) => {
-      setCacheCount(count);
-    }).catch(() => {});
-  }, []);
-
-  const handleClearCache = async () => {
-    setClearing(true);
-    try {
-      const res = await window.electronAPI?.clearLinkPreviewCache?.();
-      const count = res?.clearedCount ?? 0;
-      setCacheCount(0);
-      setClearedNotice(count > 0 ? `Cleared ${count} cached link${count === 1 ? '' : 's'}` : 'Cache is empty');
-      setTimeout(() => setClearedNotice(null), 3000);
-    } catch {
-      setClearedNotice('Failed to clear');
-      setTimeout(() => setClearedNotice(null), 3000);
-    } finally {
-      setClearing(false);
-    }
-  };
 
   const handleResetWindowSize = async () => {
     setResetting(true);
@@ -69,9 +43,8 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
         </p>
       </div>
 
-      {/* Main Feature Container - Desktop Link Previews */}
+      {/* Main Feature Container - Desktop Link Previews (Delegated to WAllie - RElinked) */}
       <div className="bg-[#182229] border border-[#222d34] rounded-xl overflow-hidden shadow-sm">
-        {/* Top Feature Header & Toggle */}
         <div className="p-4 flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="p-2.5 rounded-xl bg-[#00a884]/10 text-[#00a884] border border-[#00a884]/20 shrink-0 mt-0.5">
@@ -82,14 +55,8 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
                 <span className="font-semibold text-[#e9edef] text-[13px] tracking-tight">
                   Standalone Desktop Link Previews
                 </span>
-                <span
-                  className={`text-[9px] font-semibold px-2 py-0.5 rounded-full transition-colors ${
-                    isLinkPreviewEnabled
-                      ? 'bg-[#00a884]/20 text-[#00a884] border border-[#00a884]/30'
-                      : 'bg-[#8696a0]/20 text-[#8696a0] border border-[#8696a0]/30'
-                  }`}
-                >
-                  {isLinkPreviewEnabled ? 'Active' : 'Disabled'}
+                <span className="text-[9px] bg-[#53bdeb]/15 text-[#53bdeb] border border-[#53bdeb]/20 px-1.5 py-0.5 rounded font-semibold select-none">
+                  WAllie - RElinked
                 </span>
               </div>
               <p className="text-[11px] text-[#8696a0] leading-relaxed pr-2">
@@ -98,64 +65,23 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
             </div>
           </div>
 
-          <SettingsToggle
-            checked={isLinkPreviewEnabled}
-            onChange={(checked) => handleToggleGlobalSetting('standaloneLinkPreviewEnabled', checked)}
-            ariaLabel="Toggle standalone desktop link previews"
-            className="mt-1"
-          />
-        </div>
-
-        {/* Feature Spec Badges */}
-        <div className="px-4 py-2.5 bg-[#141d22] border-t border-b border-[#222d34]/70 flex flex-wrap items-center gap-2 text-[10px] text-[#8696a0]">
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#182229] border border-[#222d34] text-[#cfd9df]">
-            <Network className="w-3 h-3 text-[#00a884]" />
-            Direct Desktop HTTP Fetch
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#182229] border border-[#222d34] text-[#cfd9df]">
-            <Cpu className="w-3 h-3 text-[#00a884]" />
-            Local JPEG Thumbnailer (≤30KB)
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#182229] border border-[#222d34] text-[#cfd9df]">
-            <Terminal className="w-3 h-3 text-[#00a884]" />
-            Main-World Action Hook
-          </span>
-        </div>
-
-        {/* Cache Management Row */}
-        <div className="px-4 py-3 bg-[#182229] flex items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <div className="text-[12px] font-medium text-[#e9edef] flex items-center gap-2">
-              <span>Preview Cache</span>
-              {cacheCount !== null && (
-                <span className="text-[10px] text-[#8696a0] font-normal bg-[#111b21] px-2 py-0.5 rounded border border-[#222d34]">
-                  {cacheCount} {cacheCount === 1 ? 'item' : 'items'} in memory
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-[#8696a0]">
-              Flushes cached OpenGraph models and thumbnail buffers to force fresh re-scraping.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0">
-            {clearedNotice && (
-              <span className="text-[11px] text-[#00a884] flex items-center gap-1 font-medium">
-                <Check className="w-3.5 h-3.5" />
-                {clearedNotice}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={handleClearCache}
-              disabled={clearing}
-              className="px-3 py-1.5 rounded-lg bg-[#222d34] hover:bg-[#2a3942] active:bg-[#32424b] text-[#e9edef] text-[11px] font-medium border border-[#2a3942] hover:border-[#00a884]/40 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
-              title="Flush in-memory link preview cache"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-[#f15c6d]" />
-              <span>{clearing ? 'Clearing...' : 'Clear Cache'}</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              window.electronAPI?.openExtensionPopup?.('', 'builtin_link-preview', {
+                x: Math.round(rect.left),
+                y: Math.round(rect.top),
+                width: Math.round(rect.width),
+                height: Math.round(rect.height),
+              });
+            }}
+            className="px-3.5 py-1.5 bg-[#202c33] hover:bg-[#2a3942] text-[#e9edef] hover:text-[#00a884] rounded text-xs font-medium border border-[#374248] transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 mt-1"
+          >
+            <Link className="w-3.5 h-3.5 text-[#00a884]" />
+            <span>Configure Extension...</span>
+            <ExternalLink className="w-3 h-3 opacity-70" />
+          </button>
         </div>
       </div>
 
@@ -261,7 +187,7 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
           <li className="flex items-start gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80 shrink-0 mt-1.5"></span>
             <span>
-              <strong className="text-[#e9edef] font-medium">Client-Side JavaScript Hooking:</strong> WAllie injects an interceptor into WhatsApp Web's main-world JavaScript runtime (<code className="px-1.5 py-0.5 rounded bg-[#111b21] border border-[#222d34] text-[10px] text-[#cfd9df] font-mono">WAWebLinkPreviewChatAction.getLinkPreview</code>) to substitute desktop OpenGraph models directly into the message composer.
+              <strong className="text-[#e9edef] font-medium">Client-Side JavaScript Hooking:</strong> WAllie's RElinked extension injects an interceptor into WhatsApp Web's main-world JavaScript runtime (<code className="px-1.5 py-0.5 rounded bg-[#111b21] border border-[#222d34] text-[10px] text-[#cfd9df] font-mono">WAWebLinkPreviewChatAction.getLinkPreview</code>) to substitute desktop OpenGraph models directly into the message composer.
             </span>
           </li>
         </ul>

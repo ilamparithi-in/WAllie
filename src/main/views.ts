@@ -130,7 +130,6 @@ export async function buildAccountStyling(account: Account): Promise<{ fontCss: 
     monoFontUrl = '',
     preferGoogleMonoFont = false,
     followSystemFont = false,
-    customWallpaper = '',
   } = account.settings || {};
 
   // 1. Font CSS
@@ -214,11 +213,8 @@ export async function buildAccountStyling(account: Account): Promise<{ fontCss: 
   }
   const fontCss = [...importRules, ...styleRules].join('\n\n');
 
-  // 2. Chat Wallpaper CSS on #main
-  let wallpaperCss = '';
-  if (customWallpaper && customWallpaper.trim()) {
-    wallpaperCss = `#main {\n  background-image: url(${JSON.stringify(customWallpaper.trim())}) !important;\n  background-size: cover !important;\n  background-position: center center !important;\n  background-repeat: no-repeat !important;\n}`;
-  }
+  // 2. Chat Wallpaper CSS on #main is delegated to WAllie - REsponsive extension
+  const wallpaperCss = '';
 
   // 3. Preset Theme & Custom CSS
   let themeCss = '';

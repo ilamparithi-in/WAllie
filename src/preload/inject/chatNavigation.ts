@@ -1,5 +1,10 @@
 import './types';
-import { setPortraitViewState } from './responsiveLayout';
+
+function notifyPortraitView(view: 'chat' | 'list' | 'info'): void {
+  try {
+    window.dispatchEvent(new CustomEvent('wa-portrait-view-change', { detail: { view } }));
+  } catch {}
+}
 
 export function norm(s: string | null | undefined): string {
   return (s || '')
@@ -345,7 +350,7 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
       const contactName = typeof arg === 'object' && arg ? arg.contactName || '' : '';
 
       // Activate portrait chat view immediately upon notification click
-      setPortraitViewState('chat');
+      notifyPortraitView('chat');
 
       if (window.__wallie_ipc && window.__wallie_ipc.dismissChat) {
         window.__wallie_ipc.dismissChat({ tag, contactName });
@@ -357,7 +362,7 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
       }
 
       if (!contactName) {
-        setPortraitViewState('chat');
+        notifyPortraitView('chat');
         return;
       }
 
@@ -365,7 +370,7 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
 
       // Fast path: if the chat is already open, nothing more needed!
       if (isChatOpen(targetQuery)) {
-        setPortraitViewState('chat');
+        notifyPortraitView('chat');
         dismissActiveChat();
         return;
       }
@@ -376,7 +381,7 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
         attempts++;
         if (isChatOpen(targetQuery)) {
           clearNavTimer(checkNativeInterval);
-          setPortraitViewState('chat');
+          notifyPortraitView('chat');
           dismissActiveChat();
           return;
         }
@@ -388,13 +393,13 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
           const row = findMatchingRow(targetQuery);
           if (row) {
             clickChatRow(row);
-            setPortraitViewState('chat');
+            notifyPortraitView('chat');
             let waitOpenAttempts = 0;
             const waitOpen = registerNavInterval(() => {
               waitOpenAttempts++;
               if (isChatOpen(targetQuery) || waitOpenAttempts >= 10) {
                 clearNavTimer(waitOpen);
-                setPortraitViewState('chat');
+                notifyPortraitView('chat');
                 dismissActiveChat();
               }
             }, 50);
@@ -414,7 +419,7 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
               if (searchedRow) {
                 clearNavTimer(searchPoll);
                 clickChatRow(searchedRow);
-                setPortraitViewState('chat');
+                notifyPortraitView('chat');
 
                 // Wait for chat to open, then restore search box to previous state
                 let openAttempts = 0;
@@ -422,7 +427,7 @@ export function initChatNavigation(activeNotificationCallbacks: Map<string, () =
                   openAttempts++;
                   if (isChatOpen(targetQuery) || openAttempts >= 15) {
                     clearNavTimer(openPoll);
-                    setPortraitViewState('chat');
+                    notifyPortraitView('chat');
                     dismissActiveChat();
                     setTimeout(() => {
                       restoreSearchBox(sbox, prevSearchText);
