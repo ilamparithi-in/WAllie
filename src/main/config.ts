@@ -172,6 +172,7 @@ export function loadAccounts(): Account[] {
           ...acc,
           loggedIn: !!acc.loggedIn,
           extensions: acc.extensions || [],
+          showExtensionsButton: acc.showExtensionsButton !== false,
           unreadCount: 0,
           settings: {
             cameraEnabled: acc.settings?.cameraEnabled !== false,
@@ -207,12 +208,13 @@ export function loadAccounts(): Account[] {
 
 export async function saveAccounts() {
   try {
-    const dataToSave = state.accounts.map(({ id, name, partition, loggedIn, extensions, settings, emoji }) => ({
+    const dataToSave = state.accounts.map(({ id, name, partition, loggedIn, extensions, showExtensionsButton, settings, emoji }) => ({
       id,
       name,
       partition,
       loggedIn,
       extensions,
+      showExtensionsButton: showExtensionsButton !== false,
       emoji: emoji || '',
       settings: settings || DEFAULT_ACCOUNT_SETTINGS,
     }));

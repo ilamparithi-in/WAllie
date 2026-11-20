@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell, History, Sliders, Pin, Puzzle } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell, History, Sliders, Pin, Puzzle, RefreshCw, Code } from 'lucide-react';
 import type { GlobalSettings, AccountInfo } from '../../../preload';
 import { SettingsToggle } from './common';
 
@@ -709,7 +709,10 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
               <div className="flex-1 min-w-0 pr-2">
-                <div className="font-medium text-[#e9edef] text-[11px]">Refresh Button</div>
+                <div className="font-medium text-[#e9edef] text-[11px] flex items-center gap-1.5">
+                  <RefreshCw className="w-3.5 h-3.5 text-[#00a884]" />
+                  <span>Refresh Button</span>
+                </div>
                 <div className="text-[10px] text-[#8696a0]">
                   Show refresh icon to reload the active WhatsApp Web view
                 </div>
@@ -723,7 +726,10 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
 
             <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
               <div className="flex-1 min-w-0 pr-2">
-                <div className="font-medium text-[#e9edef] text-[11px]">Developer Tools Button</div>
+                <div className="font-medium text-[#e9edef] text-[11px] flex items-center gap-1.5">
+                  <Code className="w-3.5 h-3.5 text-[#00a884]" />
+                  <span>Developer Tools Button</span>
+                </div>
                 <div className="text-[10px] text-[#8696a0]">
                   Show code icon in the titlebar to toggle developer tools
                 </div>
@@ -737,7 +743,10 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
 
             <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
               <div className="flex-1 min-w-0 pr-2">
-                <div className="font-medium text-[#e9edef] text-[11px]">Notification History Button</div>
+                <div className="font-medium text-[#e9edef] text-[11px] flex items-center gap-1.5">
+                  <Bell className="w-3.5 h-3.5 text-[#00a884]" />
+                  <span>Notification History Button</span>
+                </div>
                 <div className="text-[10px] text-[#8696a0]">
                   Show bell icon in the titlebar to open notification history
                 </div>

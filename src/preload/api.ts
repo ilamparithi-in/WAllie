@@ -95,6 +95,7 @@ export interface ElectronAPI {
   importExtension: (accountId: string, importType: 'folder' | 'archive') => Promise<ExtensionInfo | null>;
   toggleExtension: (accountId: string, extensionId: string, enabled: boolean) => Promise<boolean>;
   toggleExtensionPin: (accountId: string, extensionId: string, pinned: boolean) => Promise<boolean>;
+  setAccountShowExtensionsButton: (accountId: string, show: boolean) => Promise<boolean>;
   removeExtension: (accountId: string, extensionId: string) => Promise<boolean>;
   openExtensionPopup: (accountId: string, extensionId: string, anchorBounds?: { x: number; y: number; width: number; height: number }) => Promise<boolean>;
   showExtensionDropdownMenu: (accountId?: string, rect?: { x: number; y: number; width: number; height: number }) => void;
@@ -250,6 +251,7 @@ export const api: ElectronAPI = {
   importExtension: (accountId, importType) => ipcRenderer.invoke('extension:import', accountId, importType),
   toggleExtension: (accountId, extensionId, enabled) => ipcRenderer.invoke('extension:toggle', accountId, extensionId, enabled),
   toggleExtensionPin: (accountId, extensionId, pinned) => ipcRenderer.invoke('extension:toggle-pin', accountId, extensionId, pinned),
+  setAccountShowExtensionsButton: (accountId, show) => ipcRenderer.invoke('extension:set-show-menu-button', accountId, show),
   removeExtension: (accountId, extensionId) => ipcRenderer.invoke('extension:remove', accountId, extensionId),
   openExtensionPopup: (accountId, extensionId, anchorBounds) => ipcRenderer.invoke('extension:open-popup', accountId, extensionId, anchorBounds),
   showExtensionDropdownMenu: (accountId, rect) => ipcRenderer.send('extension:show-dropdown-menu', accountId, rect),

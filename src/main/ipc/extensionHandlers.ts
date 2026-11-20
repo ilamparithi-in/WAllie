@@ -5,6 +5,7 @@ import {
   installWebStoreExtension,
   toggleExtension,
   toggleExtensionPin,
+  setAccountShowExtensionsButton,
   removeExtension,
   checkForWebStoreUpdates,
   openExtensionPopup,
@@ -93,6 +94,12 @@ export function registerExtensionHandlers(): void {
     return await toggleExtensionPin(accountId, extensionId, pinned);
   });
 
+  ipcMain.handle('extension:set-show-menu-button', async (_event, rawAccountId: unknown, rawShow: unknown) => {
+    const accountId = validate(accountIdSchema, rawAccountId);
+    const show = rawShow !== false;
+    return await setAccountShowExtensionsButton(accountId, show);
+  });
+
   ipcMain.handle('extension:remove', async (_event, rawAccountId: unknown, rawExtensionId: unknown) => {
     const { accountId, extensionId } = validate(extensionRemoveSchema, {
       accountId: rawAccountId,
@@ -120,18 +127,18 @@ export function registerExtensionHandlers(): void {
     const account = getAccountById(accountId);
     if (!account) return;
 
-    const enabledExts = (account.extensions || []).filter((e) => e.enabled && e.hasPopup);
+    const hiddenExts = (account.extensions || []).filter((e) => e.enabled && e.hasPopup && e.pinnedInTitlebar === false);
     const scaleFactor = (state.globalSettings?.appScale || 100) / 100;
 
     const template: Electron.MenuItemConstructorOptions[] = [];
 
-    if (enabledExts.length === 0) {
+    if (hiddenExts.length === 0) {
       template.push({
-        label: 'No Extension Popups Available',
+        label: 'No Hidden Extensions',
         enabled: false,
       });
     } else {
-      for (const ext of enabledExts) {
+      for (const ext of hiddenExts) {
         let itemIcon: Electron.NativeImage | undefined;
         if (ext.iconDataUrl) {
           try {

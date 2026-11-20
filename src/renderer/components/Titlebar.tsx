@@ -286,6 +286,8 @@ export const Titlebar: React.FC<TitlebarProps> = ({
   const activeAccount = accounts.find((a) => a.id === activeId);
   const popupExtensions = activeAccount?.extensions?.filter((e) => e.enabled && e.hasPopup) || [];
   const pinnedExtensions = popupExtensions.filter((e) => e.pinnedInTitlebar !== false);
+  const hiddenExtensions = popupExtensions.filter((e) => e.pinnedInTitlebar === false);
+  const showExtensionsMenu = activeAccount?.showExtensionsButton !== false;
 
   return (
     <header
@@ -589,8 +591,8 @@ export const Titlebar: React.FC<TitlebarProps> = ({
               </button>
             ))}
 
-            {/* Extension Dropdown Menu Button */}
-            {popupExtensions.length > 0 && (
+            {/* Extension Dropdown Menu Button: Only visible if at least one extension is hidden, and setting is enabled */}
+            {showExtensionsMenu && hiddenExtensions.length > 0 && (
               <button
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
