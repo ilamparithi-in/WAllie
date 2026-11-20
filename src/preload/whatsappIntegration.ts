@@ -288,6 +288,13 @@ export function setupWhatsAppIntegration(mainWorldScript: string): void {
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && document.fullscreenElement) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.exitFullscreen().catch(() => {});
+      return;
+    }
+
     if (e.key === 'Control' || e.key === 'Meta' || e.ctrlKey || e.metaKey) {
       isPhysicalCtrlDown = true;
     }

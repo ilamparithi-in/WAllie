@@ -25,16 +25,17 @@ export function applyActiveViewBoundsImmediately(aView: WebContentsView) {
   if (!state.mainWindow || state.mainWindow.isDestroyed() || !aView) return;
   const [w, h] = state.mainWindow.getContentSize();
   const scaleFactor = (state.globalSettings?.appScale || 100) / 100;
-  const scaledTitlebarHeight = Math.round(TITLEBAR_HEIGHT * scaleFactor);
-  const scaledDrawerWidth = Math.round(state.settingsDrawerWidth * scaleFactor);
+  const isFullScreen = state.mainWindow.isFullScreen() || state.isHtmlFullScreen;
+  const scaledTitlebarHeight = isFullScreen ? 0 : Math.round(TITLEBAR_HEIGHT * scaleFactor);
+  const scaledDrawerWidth = isFullScreen ? 0 : Math.round(state.settingsDrawerWidth * scaleFactor);
   const vWidth = w - scaledDrawerWidth;
 
   aView.setVisible(true);
   aView.setBounds({
     x: 0,
-    y: scaledTitlebarHeight,
+    y: isFullScreen ? 0 : scaledTitlebarHeight,
     width: Math.max(0, vWidth),
-    height: Math.max(0, h - scaledTitlebarHeight),
+    height: Math.max(0, h - (isFullScreen ? 0 : scaledTitlebarHeight)),
   });
   if (aView.webContents && !aView.webContents.isDestroyed()) {
     aView.webContents.invalidate();
@@ -343,12 +344,25 @@ export function createMainWindow() {
 
   state.mainWindow.on('enter-full-screen', () => {
     state.mainWindow?.webContents.send('window:fullscreen-changed', true);
-    setTimeout(updateActiveViewBounds, 100);
+    setTimeout(updateActiveViewBounds, 50);
   });
 
   state.mainWindow.on('leave-full-screen', () => {
-    state.mainWindow?.webContents.send('window:fullscreen-changed', false);
-    setTimeout(updateActiveViewBounds, 100);
+    state.mainWindow?.webContents.send('window:fullscreen-changed', state.isHtmlFullScreen);
+    setTimeout(updateActiveViewBounds, 50);
+  });
+
+  state.mainWindow.on('enter-html-full-screen', () => {
+    state.isHtmlFullScreen = true;
+    state.mainWindow?.webContents.send('window:fullscreen-changed', true);
+    setTimeout(updateActiveViewBounds, 50);
+  });
+
+  state.mainWindow.on('leave-html-full-screen', () => {
+    state.isHtmlFullScreen = false;
+    const isWinFs = state.mainWindow?.isFullScreen() ?? false;
+    state.mainWindow?.webContents.send('window:fullscreen-changed', isWinFs);
+    setTimeout(updateActiveViewBounds, 50);
   });
 
   state.mainWindow.on('close', (event) => {

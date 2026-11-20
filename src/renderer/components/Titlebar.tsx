@@ -289,6 +289,10 @@ export const Titlebar: React.FC<TitlebarProps> = ({
   const hiddenExtensions = popupExtensions.filter((e) => e.pinnedInTitlebar === false);
   const showExtensionsMenu = activeAccount?.showExtensionsButton !== false;
 
+  if (isFullScreen) {
+    return null;
+  }
+
   return (
     <header
       ref={headerRef}
