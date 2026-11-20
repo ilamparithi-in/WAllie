@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow, Menu, nativeImage } from 'electron';
 import { state } from '../state';
 import {
   importExtension,
@@ -9,7 +9,7 @@ import {
   openExtensionPopup,
 } from '../extensions';
 import { getAccountById, getPreloadPath } from '../utils';
-import { getInitialWindowSize } from '../window';
+import { getInitialWindowSize, openSettingsWindow } from '../window';
 import {
   validate,
   accountIdSchema,
@@ -100,6 +100,64 @@ export function registerExtensionHandlers(): void {
   ipcMain.handle('extension:check-updates', async (_event, rawAccountId?: unknown) => {
     const accountId = typeof rawAccountId === 'string' && rawAccountId.trim() ? validate(accountIdSchema, rawAccountId) : undefined;
     return await checkForWebStoreUpdates(accountId);
+  });
+
+  ipcMain.on('extension:show-dropdown-menu', (_event, rawAccountId: unknown, rect?: { x: number; y: number; width: number; height: number }) => {
+    if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
+
+    const accountId = typeof rawAccountId === 'string' && rawAccountId ? rawAccountId : state.activeAccountId;
+    const account = getAccountById(accountId);
+    if (!account) return;
+
+    const enabledExts = (account.extensions || []).filter((e) => e.enabled && e.hasPopup);
+    const scaleFactor = (state.globalSettings?.appScale || 100) / 100;
+
+    const template: Electron.MenuItemConstructorOptions[] = [];
+
+    if (enabledExts.length === 0) {
+      template.push({
+        label: 'No Extension Popups Available',
+        enabled: false,
+      });
+    } else {
+      for (const ext of enabledExts) {
+        let itemIcon: Electron.NativeImage | undefined;
+        if (ext.iconDataUrl) {
+          try {
+            itemIcon = nativeImage.createFromDataURL(ext.iconDataUrl).resize({ width: 16, height: 16 });
+          } catch {}
+        }
+
+        template.push({
+          label: ext.name,
+          icon: itemIcon,
+          click: () => {
+            openExtensionPopup(accountId, ext.id, rect);
+          },
+        });
+      }
+    }
+
+    template.push({ type: 'separator' });
+    template.push({
+      label: 'Manage Extensions...',
+      click: () => {
+        openSettingsWindow('extensions', accountId);
+      },
+    });
+
+    const menu = Menu.buildFromTemplate(template);
+
+    const popupOptions: Electron.PopupOptions = {
+      window: state.mainWindow,
+    };
+
+    if (rect && typeof rect.x === 'number' && typeof rect.y === 'number') {
+      popupOptions.x = Math.round(rect.x * scaleFactor);
+      popupOptions.y = Math.round((rect.y + (rect.height || 28)) * scaleFactor);
+    }
+
+    menu.popup(popupOptions);
   });
 }
 
