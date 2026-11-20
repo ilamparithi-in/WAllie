@@ -88,6 +88,12 @@ export const extensionToggleSchema = z.object({
   enabled: z.boolean(),
 });
 
+export const extensionTogglePinSchema = z.object({
+  accountId: accountIdSchema,
+  extensionId: z.string().trim().min(1).max(200),
+  pinned: z.boolean(),
+});
+
 export const extensionRemoveSchema = z.object({
   accountId: accountIdSchema,
   extensionId: z.string().trim().min(1).max(200),

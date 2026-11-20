@@ -513,6 +513,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const handleToggleExtensionPin = async (extId: string, pinned: boolean) => {
+    if (!selectedAccountId) return;
+    try {
+      await window.electronAPI.toggleExtensionPin(selectedAccountId, extId, pinned);
+    } catch (err) {
+      console.error('Toggle extension pin error:', err);
+    }
+  };
+
   const handleRemoveExtension = async (extId: string) => {
     if (!selectedAccountId) return;
     try {
@@ -790,6 +799,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     globalSettings={globalSettings}
                     handleToggleGlobalSetting={handleToggleGlobalSetting}
                     accounts={accounts}
+                    onNavigateToExtensions={() => setActivePage('extensions')}
                   />
                 )}
 
@@ -850,6 +860,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     handleInstallWebStoreExtension={handleInstallWebStoreExtension}
                     extensions={extensions}
                     handleToggleExtension={handleToggleExtension}
+                    handleToggleExtensionPin={handleToggleExtensionPin}
                     handleRemoveExtension={handleRemoveExtension}
                   />
                 )}

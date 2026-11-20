@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell, History, Sliders } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, ExternalLink, Plus, Trash2, Search, ChevronLeft, ChevronRight, X, Bell, History, Sliders, Pin, Puzzle } from 'lucide-react';
 import type { GlobalSettings, AccountInfo } from '../../../preload';
 import { SettingsToggle } from './common';
 
@@ -7,6 +7,7 @@ interface GeneralSettingsPageProps {
   globalSettings: GlobalSettings | null;
   handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<boolean | void> | boolean | void;
   accounts?: AccountInfo[];
+  onNavigateToExtensions?: () => void;
 }
 
 const DOMAINS_PER_PAGE = 5;
@@ -32,6 +33,7 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
   globalSettings,
   handleToggleGlobalSetting,
   accounts = [],
+  onNavigateToExtensions,
 }) => {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -745,6 +747,28 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
                 onChange={(checked) => handleToggleGlobalSetting('showNotificationHistoryButton', checked)}
                 ariaLabel="Notification History Button"
               />
+            </div>
+
+            <div className="flex items-center justify-between gap-4 p-2 rounded hover:bg-[#182229] transition-colors">
+              <div className="flex-1 min-w-0 pr-2">
+                <div className="font-medium text-[#e9edef] text-[11px] flex items-center gap-1.5">
+                  <Pin className="w-3.5 h-3.5 text-[#00a884]" />
+                  <span>Pinned Extension Shortcuts</span>
+                </div>
+                <div className="text-[10px] text-[#8696a0]">
+                  Configure which extension icons appear directly on the titlebar
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onNavigateToExtensions}
+                className="px-2.5 py-1 bg-[#202c33] hover:bg-[#2a3942] active:scale-[0.98] text-[#e9edef] hover:text-[#00a884] rounded text-xs font-medium border border-[#2c3943] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]/60"
+                title="Open Extensions page to manage titlebar pins"
+              >
+                <Puzzle className="w-3.5 h-3.5 text-[#00a884]" />
+                <span>Configure in Extensions...</span>
+                <ChevronRight className="w-3 h-3 opacity-60" />
+              </button>
             </div>
           </div>
         </div>

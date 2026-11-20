@@ -12,6 +12,7 @@ export interface ExtensionInfo {
   popupPath?: string;
   iconDataUrl?: string;
   pinnedInTitlebar?: boolean;
+  description?: string;
 }
 
 export interface AccountSettings {

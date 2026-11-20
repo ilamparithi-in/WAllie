@@ -4,6 +4,7 @@ import {
   importExtension,
   installWebStoreExtension,
   toggleExtension,
+  toggleExtensionPin,
   removeExtension,
   checkForWebStoreUpdates,
   openExtensionPopup,
@@ -15,6 +16,7 @@ import {
   accountIdSchema,
   extensionImportTypeSchema,
   extensionToggleSchema,
+  extensionTogglePinSchema,
   extensionRemoveSchema,
   extensionInstallWebstoreSchema,
 } from './schemas';
@@ -80,6 +82,15 @@ export function registerExtensionHandlers(): void {
       enabled: rawEnabled,
     });
     return await toggleExtension(accountId, extensionId, enabled);
+  });
+
+  ipcMain.handle('extension:toggle-pin', async (_event, rawAccountId: unknown, rawExtensionId: unknown, rawPinned: unknown) => {
+    const { accountId, extensionId, pinned } = validate(extensionTogglePinSchema, {
+      accountId: rawAccountId,
+      extensionId: rawExtensionId,
+      pinned: rawPinned,
+    });
+    return await toggleExtensionPin(accountId, extensionId, pinned);
   });
 
   ipcMain.handle('extension:remove', async (_event, rawAccountId: unknown, rawExtensionId: unknown) => {
