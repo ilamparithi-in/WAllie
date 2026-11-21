@@ -937,6 +937,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <AdvancedSettingsPage
                     globalSettings={globalSettings}
                     handleToggleGlobalSetting={handleToggleGlobalSetting}
+                    selectedAccountId={selectedAccountId}
+                    accounts={accounts}
                   />
                 )}
               </>

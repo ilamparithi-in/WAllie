@@ -8,23 +8,24 @@ arch=('any')
 url="https://github.com/ilamparithi-in/WAllie"
 license=('MIT')
 depends=('electron45')
-makedepends=('npm' 'nodejs')
-source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('COMPUTE_WITH_updpkgsums_OR_sha256sum')
+makedepends=('npm' 'nodejs' 'git')
+source=("${pkgname}::git+${url}.git#tag=v${pkgver}")
+sha256sums=('SKIP')
 
 prepare() {
-  cd "WAllie-${pkgver}"
+  cd "${srcdir}/${pkgname}"
+  git submodule update --init --recursive
   npm ci
 }
 
 build() {
-  cd "WAllie-${pkgver}"
+  cd "${srcdir}/${pkgname}"
   npm run build
   npm prune --omit=dev
 }
 
 package() {
-  cd "WAllie-${pkgver}"
+  cd "${srcdir}/${pkgname}"
   
   # App directory
   install -d "${pkgdir}/usr/lib/${pkgname}"
