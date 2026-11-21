@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { state } from './state';
 import { switchActiveAccount } from './window';
 import { getAccountForWebContents, getConfigDir } from './utils';
-import { TimelineEntry } from '../shared/types';
+import { HistoricalNotification } from '../shared/types';
 import { getAccountDisplayName } from '../shared/constants';
 import { decodeHtmlEntities } from '../shared/notificationFormatting';
 import { notificationManager } from './notifications/index';
@@ -12,14 +12,14 @@ import { notificationManager } from './notifications/index';
 export const NOTIFICATION_HISTORY_FILE = path.join(getConfigDir(), 'notification_history.json');
 const HISTORY_FLUSH_DELAY = 5000;
 
-export function getEntryTimestampMs(item: TimelineEntry): number {
+export function getEntryTimestampMs(item: HistoricalNotification): number {
   if (item.type === 'date_divider') return 0;
   if (!item.timestamp) return 0;
   const parsed = Date.parse(item.timestamp);
   return isNaN(parsed) ? 0 : parsed;
 }
 
-export function pruneHistoryByRetention(history: TimelineEntry[]): TimelineEntry[] {
+export function pruneHistoryByRetention(history: HistoricalNotification[]): HistoricalNotification[] {
   const retentionDays = typeof state.globalSettings?.notificationRetentionDays === 'number'
     ? state.globalSettings.notificationRetentionDays
     : 30;
@@ -44,7 +44,7 @@ export function applyRetentionPruning() {
   }
 }
 
-export function getNotificationHistory(): TimelineEntry[] {
+export function getNotificationHistory(): HistoricalNotification[] {
   if (state.notificationHistoryCache === null) {
     try {
       if (fs.existsSync(NOTIFICATION_HISTORY_FILE)) {
@@ -88,7 +88,7 @@ export function scheduleHistoryFlush() {
   }, HISTORY_FLUSH_DELAY);
 }
 
-export function logNotificationToHistory(notif: TimelineEntry) {
+export function logNotificationToHistory(notif: HistoricalNotification) {
   const history = getNotificationHistory();
   if (Array.isArray(history)) {
     history.unshift(notif);
@@ -123,7 +123,7 @@ export function clearNotificationHistoryCache(optionsOrPeriod: string | ClearHis
     options = optionsOrPeriod || { mode: 'all' };
   }
 
-  let updatedHistory: TimelineEntry[];
+  let updatedHistory: HistoricalNotification[];
 
   switch (options.mode) {
     case 'range': {

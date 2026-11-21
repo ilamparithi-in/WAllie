@@ -184,21 +184,6 @@ export const nativeConfirmOptionsSchema = z.object({
 });
 
 /**
- * Chat Exporter schemas
- */
-export const exportIdSchema = z.string().trim().min(1).max(200);
-
-export const chatExportOptionsSchema = z.object({
-  accountId: accountIdSchema,
-  chatJid: z.string().max(200),
-  chatName: z.string().max(500),
-  exportPath: filePathSchema.optional(),
-  includeMedia: z.boolean().optional(),
-  format: z.string().optional(),
-  mediaTypes: z.array(z.string()).optional(),
-}).passthrough();
-
-/**
  * Safe validation helper
  */
 export function validate<T>(schema: z.ZodType<T>, data: unknown): T {

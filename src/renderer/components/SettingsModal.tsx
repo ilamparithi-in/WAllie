@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Shield, ArrowLeft, Users, RotateCw, User, Download, Copy, Check, Sliders, FileArchive, ExternalLink } from 'lucide-react';
+import { X, Puzzle, Palette, Database, Bell, Settings as SettingsIcon, Shield, ArrowLeft, Users, RotateCw, User, Download, Copy, Check, Sliders, ExternalLink } from 'lucide-react';
 import type { AccountInfo, GlobalSettings, AppVersionInfo, AccountSettings, SystemFontInfo } from '../../preload';
 import { GeneralSettingsPage } from './settings/GeneralSettingsPage';
 import { PreloadSettingsPage } from './settings/PreloadSettingsPage';
@@ -11,7 +11,6 @@ import { StorageSettingsPage } from './settings/StorageSettingsPage';
 import { NotificationSettingsPage } from './settings/NotificationSettingsPage';
 import { DownloadsSettingsPage } from './settings/DownloadsSettingsPage';
 import { AdvancedSettingsPage } from './settings/AdvancedSettingsPage';
-import { ChatExporterSettingsPage } from './settings/ChatExporterSettingsPage';
 import { AddAccountModal } from './AddAccountModal';
 
 interface SettingsModalProps {
@@ -26,7 +25,7 @@ interface SettingsModalProps {
   onOpenAddAccount?: () => void;
 }
 
-type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads' | 'advanced' | 'exporter';
+type PageType = 'main' | 'extensions' | 'css' | 'storage' | 'notifications' | 'general' | 'preload' | 'permissions' | 'accounts' | 'downloads' | 'advanced';
 
 const SETTINGS_MENU_ITEMS: {
   page: PageType;
@@ -43,7 +42,6 @@ const SETTINGS_MENU_ITEMS: {
     { page: 'css', icon: Palette, title: 'Appearance, Fonts & Themes', description: 'Customize fonts, preset themes, and CSS' },
     { page: 'storage', icon: Database, title: 'Storage & Cache', description: 'Inspect sizes, clear browser media or cache' },
     { page: 'notifications', icon: Bell, title: 'Notification History', description: 'View and search desktop alert logs' },
-    { page: 'exporter', icon: FileArchive, title: 'Chat Exporter', description: 'Export chats to JSON, HTML, and launch the built-in offline viewer' },
     { page: 'advanced', icon: Sliders, title: 'Advanced Settings', description: 'Desktop enhancements & window behavior' },
   ];
 
@@ -615,7 +613,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {activePage === 'storage' && 'Storage & Cache'}
               {activePage === 'notifications' && 'Notification History'}
               {activePage === 'accounts' && 'Manage Accounts'}
-              {activePage === 'exporter' && 'Chat Exporter'}
             </span>
           </button>
         )}
@@ -940,15 +937,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <AdvancedSettingsPage
                     globalSettings={globalSettings}
                     handleToggleGlobalSetting={handleToggleGlobalSetting}
-                  />
-                )}
-
-                {subPage === 'exporter' && (
-                  <ChatExporterSettingsPage
-                    onCloseSettings={() => {
-                      setActivePage('main');
-                      onClose();
-                    }}
                   />
                 )}
               </>

@@ -6,7 +6,6 @@ import { registerNotificationHandlers } from './notificationHandlers';
 import { registerSystemHandlers } from './systemHandlers';
 import { registerDownloadHandlers } from './downloadHandlers';
 import { registerProtocolHandlers } from './protocolHandlers';
-import { registerChatExportHandlers } from './chatExportHandlers';
 
 /**
  * Registers all modular IPC handlers across the main process.
@@ -21,7 +20,6 @@ export function registerIpcHandlers(): void {
   registerSystemHandlers();
   registerDownloadHandlers();
   registerProtocolHandlers();
-  registerChatExportHandlers();
 }
 
 export * from './schemas';

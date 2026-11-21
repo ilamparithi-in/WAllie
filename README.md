@@ -91,7 +91,6 @@ I was tired of finding Linux clients for WhatsApp which did not do everything I 
 - 🧩 **Chrome Extensions Support**: Install extensions directly from the Chrome Web Store (e.g. WA Web Plus, Privacy Extension) or load unpacked local extensions per account.
 - 📱 **Responsive UI & Collapsible Sidebar**: Optimized for tiling window managers, vertical/portrait monitors, and narrow splits. Includes a collapsible chat sidebar in landscape and a full-width single-pane navigation flow in portrait mode, with an unblocked minimum window size toggle.
 - 🔗 **Standalone Link Preview Generator**: Reverse-engineered client-side link preview engine that generates rich metadata cards with full-sized preview images directly from your desktop — eliminating WhatsApp Web's requirement for your primary phone to be online.
-- 💾 **Built-in Chat Exporter**: Export complete individual or group chats with automated backward history scrolling, live progress tracking, media streaming (photos, voice notes, videos, albums), and export cancellation support.
 - 🔔 **Smart Notifications & History**: Native desktop notifications tagged with account emojis. Stores searchable notification history locally with time-based pruning and export capabilities.
 - 🚀 **Deep Linking & URI Protocol**: Direct support for `whatsapp://` and phone number URLs, with an interactive prompt to select which account handles the incoming chat.
 - 📌 **Picture-in-Picture (PIP) for Video Calls**: Pop out video calls into a dedicated, floating always-on-top window while you multitask.

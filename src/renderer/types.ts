@@ -26,6 +26,5 @@ export type SettingsPageType =
   | 'permissions'
   | 'accounts'
   | 'downloads'
-  | 'advanced'
-  | 'exporter';
+  | 'advanced';
 

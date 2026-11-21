@@ -196,10 +196,6 @@ export function setupWhatsAppIntegration(mainWorldScript: string): void {
         return;
       }
 
-      if ((window as any).__wallie_is_exporting || document.getElementById('wallie-export-hud-overlay')) {
-        return;
-      }
-
       // Ensure the click was strictly inside the document card / document space (the darker inner rectangle)
       const docCard = target.closest<HTMLElement>(
         '[data-testid="document-thumb"], [data-testid="document-thumb-details"], [data-testid="audio-play"], [data-testid="audio-download"], [role="button"][title^="Download "], [role="button"][title^="View "]'
@@ -380,54 +376,6 @@ export function setupWhatsAppIntegration(mainWorldScript: string): void {
     },
     fetchLinkPreview: (url: string) => {
       return ipcRenderer.invoke('link-preview:fetch', url);
-    },
-    saveChatMedia: (outputDirectory: string, filesDirName: string, subPath: string, data: string | ArrayBuffer) => {
-      return ipcRenderer.invoke('chat-export:save-media', outputDirectory, filesDirName, subPath, data);
-    },
-    finalizeChatExport: (outputDirectory: string, exportData: any, includeViewer: boolean) => {
-      return ipcRenderer.invoke('chat-export:finalize', outputDirectory, exportData, includeViewer);
-    },
-    registerChatExportJob: (exportId: string, options: any, totalChats: number, currentChatIndex: number) => {
-      return ipcRenderer.invoke('chat-export:register-job', exportId, options, totalChats, currentChatIndex);
-    },
-    updateChatExportProgress: (exportId: string, partial: any) => {
-      return ipcRenderer.invoke('chat-export:update-progress', exportId, partial);
-    },
-    completeChatExportJob: (exportId: string) => {
-      return ipcRenderer.invoke('chat-export:complete-job', exportId);
-    },
-    isChatExportAborted: (exportId: string) => {
-      return ipcRenderer.invoke('chat-export:is-aborted', exportId);
-    },
-    stopChatExport: (exportId?: string) => {
-      return ipcRenderer.invoke('chat-export:stop', exportId);
-    },
-    openPath: (targetPath: string) => {
-      return ipcRenderer.invoke('downloads:open-file', targetPath);
-    },
-    showInFolder: (targetPath: string) => {
-      return ipcRenderer.invoke('downloads:show-in-folder', targetPath);
-    },
-    openExportViewer: (filePath: string) => {
-      return ipcRenderer.invoke('chat-export:open-viewer', filePath);
-    },
-    findExistingDownload: (filename: string, size?: number) => {
-      return ipcRenderer.invoke('chat-export:find-existing-file', filename, size);
-    },
-    copyFileToExport: (outputDirectory: string, filesDirName: string, subPath: string, sourcePath: string) => {
-      return ipcRenderer.invoke('chat-export:copy-file-to-export', outputDirectory, filesDirName, subPath, sourcePath);
-    },
-    prepareExportDownload: (filename?: string, size?: number) => {
-      return ipcRenderer.invoke('chat-export:prepare-export-download', filename, size);
-    },
-    dispatchMouse: (type: 'click' | 'contextmenu', x: number, y: number) => {
-      return ipcRenderer.invoke('chat-export:dispatch-mouse', type, x, y);
-    },
-    waitForDownload: (expectedFilename?: string, timeoutMs?: number) => {
-      return ipcRenderer.invoke('chat-export:wait-for-download', expectedFilename, timeoutMs);
-    },
-    unzipAlbumDownload: (outputDirectory: string, filesDirName: string, zipPath: string, stanzaIds: string[]) => {
-      return ipcRenderer.invoke('chat-export:unzip-album-download', outputDirectory, filesDirName, zipPath, stanzaIds);
     },
     getResponsiveLayoutMode: () => {
       return ipcRenderer.invoke('responsive-layout:get-mode');

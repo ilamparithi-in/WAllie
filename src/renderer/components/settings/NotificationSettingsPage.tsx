@@ -12,7 +12,7 @@ import {
   AlertTriangle,
   History,
 } from 'lucide-react';
-import type { AccountInfo, GlobalSettings, HistoricalNotification, TimelineEntry, WhatsAppChatExport } from '../../../preload';
+import type { AccountInfo, GlobalSettings, HistoricalNotification, NotificationHistoryExport } from '../../../shared/types';
 import { decodeHtmlEntities, tokenizeFormattedText } from '../../../shared/notificationFormatting';
 import { SettingsSelect } from './common';
 
@@ -32,7 +32,7 @@ interface NotificationSettingsPageProps {
 
 type DateQuickFilter = 'all' | 'today' | 'yesterday' | '7days' | 'custom';
 
-const getEntryTimestampMs = (item: TimelineEntry | any): number => {
+const getEntryTimestampMs = (item: HistoricalNotification | any): number => {
   if (!item) return 0;
   if (typeof item.timestamp === 'number') return item.timestamp;
   if (typeof item.timestamp === 'string') {
@@ -223,7 +223,7 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
     }
   }, [notificationHistory, clearMode, clearStartDate, clearEndDate]);
 
-  // Export handler conforming to WhatsAppChatExport schema
+  // Export handler conforming to native notification history schema
   const handleExportHistory = () => {
     if (!notificationHistory || notificationHistory.length === 0) return;
 
@@ -236,27 +236,16 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
       ? String(newestItem.timestamp)
       : new Date().toISOString();
 
-    const exportData: WhatsAppChatExport = {
+    const exportData: NotificationHistoryExport = {
       schemaVersion: '1.0.0',
       exportedAt: new Date().toISOString(),
-      exporter: {
-        app: 'WAllie',
-        version: '1.1.0',
-        accountName: notifAccountFilter === 'all' ? 'All Accounts' : notifAccountFilter,
-      },
-      chat: {
-        jid: 'notifications@wallie.local',
-        name: notifAccountFilter === 'all' ? 'Notification History' : `Notification History (${notifAccountFilter})`,
-        type: 'broadcast',
-      },
-      exportRange: {
-        requestedLimitTimestamp: null,
-        oldestMessageTimestamp: oldestTimestamp,
-        newestMessageTimestamp: newestTimestamp,
-        totalMessagesCount: notificationHistory.length,
-        completed: true,
-      },
-      timeline: notificationHistory,
+      app: 'WAllie',
+      version: '1.3.0',
+      accountFilter: notifAccountFilter === 'all' ? 'All Accounts' : notifAccountFilter,
+      totalNotifications: notificationHistory.length,
+      oldestTimestamp,
+      newestTimestamp,
+      notifications: notificationHistory,
     };
 
     const jsonString = JSON.stringify(exportData, null, 2);

@@ -6,22 +6,6 @@ export interface WallieIpcBridge {
   closeNotification: (tag: string) => void;
   dismissChat?: (data: { tag?: string; contactName?: string }) => void;
   fetchLinkPreview?: (url: string) => Promise<any>;
-  saveChatMedia?: (outputDirectory: string, filesDirName: string, subPath: string, data: string | ArrayBuffer) => Promise<string>;
-  finalizeChatExport?: (outputDirectory: string, exportData: any, includeViewer: boolean) => Promise<{ jsonPath: string; htmlPath?: string }>;
-  registerChatExportJob?: (exportId: string, options: any, totalChats: number, currentChatIndex: number) => Promise<boolean>;
-  updateChatExportProgress?: (exportId: string, partial: any) => Promise<boolean>;
-  completeChatExportJob?: (exportId: string) => Promise<boolean>;
-  isChatExportAborted?: (exportId: string) => Promise<boolean>;
-  stopChatExport?: (exportId?: string) => Promise<boolean>;
-  openPath?: (targetPath: string) => Promise<boolean>;
-  showInFolder?: (targetPath: string) => Promise<boolean>;
-  openExportViewer?: (filePath: string) => Promise<void>;
-  findExistingDownload?: (filename: string, size?: number) => Promise<{ found: boolean; path?: string }>;
-  copyFileToExport?: (outputDirectory: string, filesDirName: string, subPath: string, sourcePath: string) => Promise<string>;
-  prepareExportDownload?: (filename?: string, size?: number) => Promise<boolean>;
-  dispatchMouse?: (type: 'click' | 'contextmenu', x: number, y: number) => Promise<boolean>;
-  waitForDownload?: (expectedFilename?: string, timeoutMs?: number) => Promise<{ success: boolean; savePath?: string; filename?: string }>;
-  unzipAlbumDownload?: (outputDirectory: string, filesDirName: string, zipPath: string, stanzaIds: string[]) => Promise<{ success: boolean; count: number; mapping: Record<string, string> }>;
   getResponsiveLayoutMode?: () => Promise<'disabled' | 'auto' | 'portrait'>;
   onResponsiveLayoutModeChanged?: (callback: (mode: 'disabled' | 'auto' | 'portrait') => void) => () => void;
 }

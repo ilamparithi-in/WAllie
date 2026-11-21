@@ -20,7 +20,6 @@ import './types';
 import { activeNotificationCallbacks, initCustomNotification, initAnchorDownloadHandler } from './customNotification';
 import { initChatNavigation } from './chatNavigation';
 import { initDragDropStabilizer } from './dragDrop';
-import { initChatExporter } from './chatExporter';
 
 (() => {
   if ((window as any).__wallie_main_world_initialized) {
@@ -32,5 +31,4 @@ import { initChatExporter } from './chatExporter';
   initAnchorDownloadHandler();
   initChatNavigation(activeNotificationCallbacks);
   initDragDropStabilizer();
-  initChatExporter();
 })();
