@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
-import { Sliders, Link, Check, ShieldAlert, Info, Maximize2, Monitor, RotateCcw } from 'lucide-react';
-import type { GlobalSettings } from '../../../preload';
+import { Sliders, Link, Check, Maximize2, Monitor, RotateCcw } from 'lucide-react';
+import type { GlobalSettings, AccountInfo } from '../../../preload';
 import { SettingsToggle } from './common';
 
 interface AdvancedSettingsPageProps {
   globalSettings: GlobalSettings | null;
   handleToggleGlobalSetting: (key: keyof GlobalSettings, value: any) => Promise<boolean | void> | boolean | void;
+  selectedAccountId?: string;
+  accounts?: AccountInfo[];
 }
 
 export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
   globalSettings,
   handleToggleGlobalSetting,
+  selectedAccountId,
+  accounts,
 }) => {
   const isUnblockMinSize = !!globalSettings?.unblockMinWindowSize;
   const [resetting, setResetting] = useState(false);
@@ -69,7 +73,8 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
             type="button"
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
-              window.electronAPI?.openExtensionPopup?.('', 'builtin_link-preview', {
+              const targetId = selectedAccountId || accounts?.[0]?.id || '';
+              window.electronAPI?.openExtensionPopup?.(targetId, 'builtin_link-preview', {
                 x: Math.round(rect.left),
                 y: Math.round(rect.top),
                 width: Math.round(rect.width),
@@ -167,37 +172,6 @@ export const AdvancedSettingsPage: React.FC<AdvancedSettingsPageProps> = ({
               <span>{resetting ? 'Resetting...' : 'Reset Window Size'}</span>
             </button>
           </div>
-        </div>
-      </div>
-
-      {/* Disclaimers & Security Details Callout */}
-      <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.04] p-3.5 space-y-2.5">
-        <div className="flex items-center gap-2 text-amber-400 font-medium text-[12px]">
-          <ShieldAlert className="w-4 h-4 shrink-0 text-amber-400" />
-          <span>Security & Privacy Disclaimers</span>
-        </div>
-
-        <ul className="space-y-2 text-[11px] text-[#8696a0] leading-relaxed pl-1">
-          <li className="flex items-start gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80 shrink-0 mt-1.5"></span>
-            <span>
-              <strong className="text-[#e9edef] font-medium">Client IP & Network Exposure:</strong> Generating previews locally causes your desktop client to send direct HTTP/HTTPS requests to the shared URL's host server. This exposes your device's public IP address, TLS fingerprint, and headers to that website before you even send the message. Native WhatsApp normally proxies these requests through your primary phone or WhatsApp infrastructure.
-            </span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80 shrink-0 mt-1.5"></span>
-            <span>
-              <strong className="text-[#e9edef] font-medium">Client-Side JavaScript Hooking:</strong> WAllie's RElinked extension injects an interceptor into WhatsApp Web's main-world JavaScript runtime (<code className="px-1.5 py-0.5 rounded bg-[#111b21] border border-[#222d34] text-[10px] text-[#cfd9df] font-mono">WAWebLinkPreviewChatAction.getLinkPreview</code>) to substitute desktop OpenGraph models directly into the message composer.
-            </span>
-          </li>
-        </ul>
-      </div>
-
-      {/* Architecture Context Note */}
-      <div className="p-3.5 rounded-xl bg-[#202c33]/30 border border-[#222d34] flex items-start gap-2.5 text-[11px] text-[#8696a0] leading-relaxed">
-        <Info className="w-4 h-4 text-[#00a884] shrink-0 mt-0.5" />
-        <div>
-          <strong className="text-[#e9edef] font-medium">Desktop Parity Note:</strong> Official WhatsApp Web runs inside a browser sandbox and cannot make cross-origin requests. WhatsApp Desktop for Windows works around this by using a native C++ Edge WebView2 bridge (<code className="px-1 py-0.5 rounded bg-[#111b21] text-[10px] text-[#cfd9df] font-mono">cr:17219.getWindowsBridge().linksPreview</code>) to scrape previews locally. WAllie provides the equivalent bridge architecture on Linux.
         </div>
       </div>
     </div>

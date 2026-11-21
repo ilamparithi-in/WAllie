@@ -232,18 +232,51 @@ export async function openExtensionPopup(
   extensionId: string,
   _anchorBounds?: { x: number; y: number; width: number; height: number }
 ): Promise<boolean> {
-  const targetAccountId = (accountId && accountId.trim()) ? accountId : state.activeAccountId;
-  const account = getAccountById(targetAccountId);
-  if (!account || !account.extensions) return false;
+  const targetAccountId = (accountId && accountId.trim()) ? accountId : (state.activeAccountId || state.accounts[0]?.id || '');
+  let account = getAccountById(targetAccountId);
+  if (!account) {
+    if (state.accounts.length > 0) {
+      account = state.accounts[0];
+    } else {
+      return false;
+    }
+  }
 
-  const ext = account.extensions.find((e) => e.id === extensionId);
-  if (!ext || !ext.enabled) return false;
+  // Ensure built-in extensions are synced for this account
+  syncBuiltinExtensionsForAccount(account);
+  if (!account.extensions) return false;
+
+  let ext = account.extensions.find((e) => e.id === extensionId);
+  if (!ext) {
+    ext = account.extensions.find(
+      (e) => e.id.endsWith(extensionId) || extensionId.endsWith(e.id) || e.name.toLowerCase().includes(extensionId.toLowerCase())
+    );
+  }
+  if (!ext) return false;
+
+  if (ext.isBuiltIn && !ext.enabled) {
+    ext.enabled = true;
+  }
+  if (!ext.enabled) return false;
 
   const accountSession = session.fromPartition(account.partition);
   const loadedExts = accountSession.getAllExtensions();
-  const matched = loadedExts.find((e) => path.resolve(e.path) === path.resolve(ext.path));
+  let matched = loadedExts.find((e) => path.resolve(e.path) === path.resolve(ext.path));
   if (!matched) {
-    console.warn(`Extension ${ext.name} is not loaded in session for account ${targetAccountId}`);
+    try {
+      prepareExtensionForElectron(ext.path);
+      if (accountSession.extensions) {
+        matched = await accountSession.extensions.loadExtension(ext.path);
+      } else {
+        matched = await accountSession.loadExtension(ext.path);
+      }
+    } catch (err) {
+      console.warn(`[extensions] Failed to dynamically load extension ${ext.name} into session for ${account.id}:`, err);
+    }
+  }
+
+  if (!matched) {
+    console.warn(`Extension ${ext.name} is not loaded in session for account ${account.id}`);
     return false;
   }
 
@@ -396,7 +429,7 @@ export async function openExtensionPopup(
   // Intercept any new window or tab opened from this popup
   // Spawns a dedicated auxiliary window in the SAME accountSession (no leakage)
   popupWin.webContents.setWindowOpenHandler((details) => {
-    openExtensionAuxiliaryWindow(details.url, accountId, ext.name);
+    openExtensionAuxiliaryWindow(details.url, targetAccountId, ext.name);
     return { action: 'deny' };
   });
 
@@ -413,6 +446,10 @@ export async function openExtensionPopup(
   });
 
   await popupWin.loadURL(popupUrl);
+  if (!popupWin.isDestroyed() && !popupWin.isVisible()) {
+    popupWin.show();
+    popupWin.focus();
+  }
   return true;
 }
 

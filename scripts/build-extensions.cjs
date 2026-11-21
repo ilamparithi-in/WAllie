@@ -28,6 +28,7 @@ async function buildExtensionDirectory(extDirName) {
   const manifestPath = path.join(extSourceDir, 'manifest.json');
   if (!fs.existsSync(manifestPath)) {
     // Not an extension (missing manifest.json)
+    console.warn(`[build-extensions] Warning: Directory 'extensions/${extDirName}' is missing manifest.json (uninitialized git submodule?). Skipping.`);
     return false;
   }
 
@@ -173,6 +174,10 @@ async function main() {
 
     const built = await buildExtensionDirectory(entry.name);
     if (built) count++;
+  }
+
+  if (count === 0 && entries.some((e) => e.isDirectory() && !e.name.startsWith('.'))) {
+    console.warn('[build-extensions] Warning: Subdirectories found in extensions/ but 0 extensions were compiled. Check if git submodules need to be initialized (git submodule update --init --recursive).');
   }
 
   console.log(`[build-extensions] All extensions built successfully (${count} extension(s) compiled).`);

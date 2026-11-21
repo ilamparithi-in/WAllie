@@ -109,7 +109,12 @@ export function registerExtensionHandlers(): void {
   });
 
   ipcMain.handle('extension:open-popup', async (_event, rawAccountId: unknown, rawExtensionId: unknown, rawAnchorBounds?: unknown) => {
-    const accountId = validate(accountIdSchema, rawAccountId);
+    let accountId = '';
+    if (typeof rawAccountId === 'string' && rawAccountId.trim().length > 0) {
+      accountId = validate(accountIdSchema, rawAccountId);
+    } else {
+      accountId = state.activeAccountId || (state.accounts[0]?.id ?? '');
+    }
     const extensionId = typeof rawExtensionId === 'string' ? rawExtensionId.trim() : '';
     const anchorBounds = rawAnchorBounds && typeof rawAnchorBounds === 'object' ? (rawAnchorBounds as any) : undefined;
     return await openExtensionPopup(accountId, extensionId, anchorBounds);
