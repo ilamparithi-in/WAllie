@@ -4,13 +4,13 @@ import path from 'node:path';
 import { state } from './state';
 import { DEFAULT_USER_AGENT, saveAccounts, saveSettings } from './config';
 import { isWhatsAppUrl, getTargetUrlIfLinkShim, getDomainFromUrl, isDomainTrusted, checkPermissionForAccount, getAccountById, getPreloadPath, showAppToast, getSystemDesktopFontName, getSystemDesktopMonoFontName } from './utils';
-import { Account } from '../shared/types';
+import { Account, WebErrorDetails } from '../shared/types';
 import { resolveGoogleFontUrl } from '../shared/fonts';
 import { VISUAL_ZOOM_MIN, VISUAL_ZOOM_MAX, MACOS_TRAFFIC_LIGHT_POSITION } from '../shared/constants';
 import { downloadManager } from './downloads';
 import { prepareExtensionForElectron, syncBuiltinExtensionsForAccount, openExtensionAuxiliaryWindow } from './extensions';
 import { createSandboxWindow } from './sandbox';
-import { updateActiveViewBounds } from './window';
+import { updateActiveViewBounds, applyActiveViewBoundsImmediately } from './window';
 
 export const OLED_THEME_CSS = `
 /* OLED Dark Theme overrides */
@@ -856,11 +856,88 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
 
   view.webContents.setUserAgent(DEFAULT_USER_AGENT);
   view.webContents.setZoomFactor(baseScale);
+
+  const onFailLoad = (
+    _event: any,
+    errorCode: number,
+    errorDescription: string,
+    validatedURL: string,
+    isMainFrame: boolean
+  ) => {
+    // Ignore iframe errors or explicit user-initiated aborts (-3)
+    if (!isMainFrame || errorCode === -3) {
+      return;
+    }
+
+    console.warn(`[Account ${account.id}] Load failure (${errorCode}: ${errorDescription}) for URL: ${validatedURL}`);
+    const errorDetails: WebErrorDetails = {
+      accountId: account.id,
+      accountName: account.name,
+      errorCode,
+      errorDescription,
+      validatedURL: validatedURL || 'https://web.whatsapp.com',
+      timestamp: Date.now(),
+    };
+
+    state.accountErrors.set(account.id, errorDetails);
+    state.accountLoading.delete(account.id);
+
+    if (account.id === state.activeAccountId) {
+      view.setVisible(false);
+      state.mainWindow?.webContents.send('account:load-error', errorDetails);
+    }
+  };
+
+  view.webContents.on('did-fail-load', onFailLoad);
+  view.webContents.on('did-fail-provisional-load', onFailLoad);
+
+  view.webContents.on('did-start-loading', () => {
+    state.accountLoading.add(account.id);
+    if (account.id === state.activeAccountId) {
+      state.mainWindow?.webContents.send('account:load-started', { accountId: account.id });
+    }
+  });
+
+  const onSuccessfulLoad = () => {
+    const curUrl = view.webContents.getURL();
+    if (curUrl && curUrl !== 'about:blank') {
+      const hadError = state.accountErrors.has(account.id);
+      state.accountErrors.delete(account.id);
+      state.accountLoading.delete(account.id);
+
+      if (account.id === state.activeAccountId) {
+        view.setVisible(true);
+        applyActiveViewBoundsImmediately(view);
+        if (hadError) {
+          state.mainWindow?.webContents.send('account:load-error-cleared', { accountId: account.id });
+        }
+      }
+    }
+  };
+
   view.webContents.loadURL('https://web.whatsapp.com').catch((err) => {
     console.warn(`[Account ${account.id}] Initial loadURL aborted or failed:`, err?.message || err);
+    if (!state.accountErrors.has(account.id) && err && !String(err).includes('ERR_ABORTED')) {
+      const errorDescription = String(err?.message || err || 'ERR_FAILED');
+      const errorDetails: WebErrorDetails = {
+        accountId: account.id,
+        accountName: account.name,
+        errorCode: -1,
+        errorDescription,
+        validatedURL: 'https://web.whatsapp.com',
+        timestamp: Date.now(),
+      };
+      state.accountErrors.set(account.id, errorDetails);
+      state.accountLoading.delete(account.id);
+      if (account.id === state.activeAccountId) {
+        view.setVisible(false);
+        state.mainWindow?.webContents.send('account:load-error', errorDetails);
+      }
+    }
   });
 
   view.webContents.on('did-finish-load', () => {
+    onSuccessfulLoad();
     if (view.webContents.navigationHistory) {
       view.webContents.navigationHistory.clear();
     } else {
@@ -1090,6 +1167,7 @@ export async function createAccountView(account: Account): Promise<WebContentsVi
   };
 
   view.webContents.on('dom-ready', () => {
+    onSuccessfulLoad();
     try {
       view.webContents.send('theme:changed', {
         themeMode: state.globalSettings?.themeMode || 'system',

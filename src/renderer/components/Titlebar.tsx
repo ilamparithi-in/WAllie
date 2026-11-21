@@ -26,6 +26,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({
   const [showRefresh, setShowRefresh] = useState<boolean>(true);
   const [showNotifHistory, setShowNotifHistory] = useState<boolean>(true);
   const [closeToTray, setCloseToTray] = useState<boolean>(true);
+  const [accountErrorIds, setAccountErrorIds] = useState<Set<string>>(new Set());
 
   // Renaming state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -202,6 +203,18 @@ export const Titlebar: React.FC<TitlebarProps> = ({
       }
     });
 
+    const unsubscribeLoadError = window.electronAPI.onAccountLoadError?.((err) => {
+      setAccountErrorIds((prev) => new Set([...prev, err.accountId]));
+    });
+
+    const unsubscribeErrorCleared = window.electronAPI.onAccountLoadErrorCleared?.((data) => {
+      setAccountErrorIds((prev) => {
+        const next = new Set(prev);
+        next.delete(data.accountId);
+        return next;
+      });
+    });
+
     return () => {
       unsubscribeAccount();
       unsubscribeUnread();
@@ -210,6 +223,8 @@ export const Titlebar: React.FC<TitlebarProps> = ({
       unsubscribeZoom();
       unsubscribeTriggerRename();
       unsubscribeGlobalSettings();
+      unsubscribeLoadError?.();
+      unsubscribeErrorCleared?.();
       if (flashTimeout) clearTimeout(flashTimeout);
     };
   }, []);
@@ -358,7 +373,14 @@ export const Titlebar: React.FC<TitlebarProps> = ({
                     onClick={(e) => e.stopPropagation()}
                   />
                 ) : (
-                  <span className={`truncate max-w-[110px] ${activeAccount?.isLoaded === false ? 'text-[#8696a0]/70' : ''}`}>
+                  <span
+                    className={`truncate max-w-[110px] ${activeAccount && accountErrorIds.has(activeAccount.id)
+                      ? 'text-red-400 font-semibold'
+                      : activeAccount?.isLoaded === false
+                        ? 'text-[#8696a0]/70'
+                        : ''
+                      }`}
+                  >
                     {activeAccount?.emoji ? `${activeAccount.emoji} ` : ''}
                     {activeAccount?.name || 'Accounts'}
                   </span>
@@ -372,9 +394,8 @@ export const Titlebar: React.FC<TitlebarProps> = ({
                 )}
 
                 <ChevronDown
-                  className={`w-3.5 h-3.5 text-[#8696a0] group-hover:text-[#e9edef] transition-transform duration-200 ${
-                    isDropdownOpen ? 'rotate-180' : ''
-                  }`}
+                  className={`w-3.5 h-3.5 text-[#8696a0] group-hover:text-[#e9edef] transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''
+                    }`}
                 />
               </button>
 
@@ -437,7 +458,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({
                     onContextMenu={(e) => handleContextMenu(account.id, e)}
                     style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
                     className={`group flex items-center gap-1.5 px-2.5 h-[22px] rounded-t text-[11px] font-medium transition-colors cursor-pointer relative ${tabStyle}`}
-                    title={!isLoaded ? "Account unloaded (click to load), Double click to rename, Right-click for options" : "Double click to rename, Right-click for options"}
+                    title={accountErrorIds.has(account.id) ? "Connection error (click to retry)" : !isLoaded ? "Account unloaded (click to load), Double click to rename, Right-click for options" : "Double click to rename, Right-click for options"}
                   >
                     {isEditing ? (
                       <input
@@ -451,7 +472,14 @@ export const Titlebar: React.FC<TitlebarProps> = ({
                         onClick={(e) => e.stopPropagation()}
                       />
                     ) : (
-                      <span className={`truncate max-w-[100px] ${!isLoaded ? 'text-[#8696a0]/70' : ''}`}>
+                      <span
+                        className={`truncate max-w-[100px] ${accountErrorIds.has(account.id)
+                          ? 'text-red-400 font-semibold'
+                          : !isLoaded
+                            ? 'text-[#8696a0]/70'
+                            : ''
+                          }`}
+                      >
                         {account.emoji ? `${account.emoji} ` : ''}{account.name}
                       </span>
                     )}

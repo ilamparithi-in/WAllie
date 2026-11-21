@@ -15,8 +15,11 @@ import type {
   NativePromptResult,
   NativeConfirmOptions,
   NotificationHistoryExport,
+  WebErrorDetails,
 } from '../shared/types';
 import type { GoogleFontResolution } from '../shared/fonts';
+
+export type { WebErrorDetails };
 
 export type {
   ExtensionInfo,
@@ -64,6 +67,11 @@ export interface ElectronAPI {
   updateAccountEmoji: (id: string, emoji: string) => Promise<boolean>;
   reloadActiveAccount: () => void;
   reloadAccount: (accountId: string) => void;
+  getAccountLoadError: (accountId: string) => Promise<WebErrorDetails | null>;
+  loadAccountUrl: (accountId: string, url: string) => Promise<boolean>;
+  onAccountLoadError: (callback: (error: WebErrorDetails) => void) => () => void;
+  onAccountLoadErrorCleared: (callback: (data: { accountId: string }) => void) => () => void;
+  onAccountLoadStarted: (callback: (data: { accountId: string }) => void) => () => void;
   unloadAccount: (accountId: string) => Promise<boolean>;
   loadAccount: (accountId: string) => Promise<boolean>;
   showAccountContextMenu: (accountId: string) => void;
@@ -206,6 +214,8 @@ export const api: ElectronAPI = {
   updateAccountEmoji: (id, emoji) => ipcRenderer.invoke('account:update-emoji', id, emoji),
   reloadActiveAccount: () => ipcRenderer.send('account:reload-active'),
   reloadAccount: (accountId) => ipcRenderer.send('account:reload', accountId),
+  getAccountLoadError: (accountId) => ipcRenderer.invoke('account:get-load-error', accountId),
+  loadAccountUrl: (accountId, url) => ipcRenderer.invoke('account:load-url', accountId, url),
   unloadAccount: (accountId) => ipcRenderer.invoke('account:unload', accountId),
   loadAccount: (accountId) => ipcRenderer.invoke('account:load', accountId),
   showAccountContextMenu: (accountId) => ipcRenderer.send('account:context-menu', accountId),
@@ -308,6 +318,24 @@ export const api: ElectronAPI = {
     const subscription = (_event: unknown, accounts: AccountInfo[], activeId: string) => callback(accounts, activeId);
     ipcRenderer.on('account:list-changed', subscription);
     return () => ipcRenderer.removeListener('account:list-changed', subscription);
+  },
+
+  onAccountLoadError: (callback) => {
+    const subscription = (_event: unknown, error: WebErrorDetails) => callback(error);
+    ipcRenderer.on('account:load-error', subscription);
+    return () => ipcRenderer.removeListener('account:load-error', subscription);
+  },
+
+  onAccountLoadErrorCleared: (callback) => {
+    const subscription = (_event: unknown, data: { accountId: string }) => callback(data);
+    ipcRenderer.on('account:load-error-cleared', subscription);
+    return () => ipcRenderer.removeListener('account:load-error-cleared', subscription);
+  },
+
+  onAccountLoadStarted: (callback) => {
+    const subscription = (_event: unknown, data: { accountId: string }) => callback(data);
+    ipcRenderer.on('account:load-started', subscription);
+    return () => ipcRenderer.removeListener('account:load-started', subscription);
   },
 
   onUnreadCountChanged: (callback) => {

@@ -30,6 +30,7 @@ import {
   accountAppearanceSchema,
   accountSettingsSchema,
   storageClearTypeSchema,
+  urlStringSchema,
 } from './schemas';
 
 export function registerAccountHandlers(): void {
@@ -65,7 +66,20 @@ export function registerAccountHandlers(): void {
     const activeView = state.accountViews.get(state.activeAccountId);
     if (activeView) {
       console.log(`Reloading active view for account: ${state.activeAccountId}`);
-      activeView.webContents.reload();
+      state.accountLoading.add(state.activeAccountId);
+      state.mainWindow?.webContents.send('account:load-started', { accountId: state.activeAccountId });
+
+      const err = state.accountErrors.get(state.activeAccountId);
+      const curUrl = activeView.webContents.getURL();
+      const targetUrl = (err?.validatedURL && err.validatedURL !== 'about:blank')
+        ? err.validatedURL
+        : (curUrl && curUrl !== 'about:blank')
+          ? curUrl
+          : 'https://web.whatsapp.com';
+
+      activeView.webContents.loadURL(targetUrl).catch((loadErr) => {
+        console.warn(`[Account ${state.activeAccountId}] Reload loadURL failed:`, loadErr?.message || loadErr);
+      });
     }
   });
 
@@ -74,8 +88,48 @@ export function registerAccountHandlers(): void {
     const view = state.accountViews.get(accountId);
     if (view) {
       console.log(`Reloading view for account: ${accountId}`);
-      view.webContents.reload();
+      state.accountLoading.add(accountId);
+      if (accountId === state.activeAccountId) {
+        state.mainWindow?.webContents.send('account:load-started', { accountId });
+      }
+
+      const err = state.accountErrors.get(accountId);
+      const curUrl = view.webContents.getURL();
+      const targetUrl = (err?.validatedURL && err.validatedURL !== 'about:blank')
+        ? err.validatedURL
+        : (curUrl && curUrl !== 'about:blank')
+          ? curUrl
+          : 'https://web.whatsapp.com';
+
+      view.webContents.loadURL(targetUrl).catch((loadErr) => {
+        console.warn(`[Account ${accountId}] Reload loadURL failed:`, loadErr?.message || loadErr);
+      });
     }
+  });
+
+  ipcMain.handle('account:load-url', async (_event, rawId: unknown, rawUrl: unknown) => {
+    const accountId = validate(accountIdSchema, rawId);
+    const url = validate(urlStringSchema, rawUrl);
+    const view = state.accountViews.get(accountId);
+    if (view && !view.webContents.isDestroyed()) {
+      state.accountLoading.add(accountId);
+      if (accountId === state.activeAccountId) {
+        state.mainWindow?.webContents.send('account:load-started', { accountId });
+      }
+      try {
+        await view.webContents.loadURL(url);
+        return true;
+      } catch (err: any) {
+        console.warn(`[Account ${accountId}] loadURL(${url}) failed:`, err?.message || err);
+        return false;
+      }
+    }
+    return false;
+  });
+
+  ipcMain.handle('account:get-load-error', (_event, rawId: unknown) => {
+    const accountId = validate(accountIdSchema, rawId);
+    return state.accountErrors.get(accountId) || null;
   });
 
   ipcMain.handle('account:add', async (_event, rawOptions?: unknown) => {

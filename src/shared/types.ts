@@ -73,6 +73,15 @@ export const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
   customWallpaper: '',
 };
 
+export interface WebErrorDetails {
+  accountId: string;
+  accountName?: string;
+  errorCode: number;
+  errorDescription: string;
+  validatedURL: string;
+  timestamp: number;
+}
+
 export interface Account {
   id: string;
   name: string;

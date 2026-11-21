@@ -3,6 +3,7 @@ import { Titlebar } from './components/Titlebar';
 import { SettingsModal } from './components/SettingsModal';
 import { DownloadsTracker } from './components/DownloadsTracker';
 import { ToastContainer } from './components/ToastContainer';
+import { BrowserErrorView } from './components/BrowserErrorView';
 
 import { useAccounts } from './hooks/useAccounts';
 import { useGlobalSettings } from './hooks/useGlobalSettings';
@@ -15,7 +16,13 @@ import type { SettingsPageType } from './types';
 
 export const App: React.FC = () => {
   // Domain hooks
-  const { isActiveAccountLoaded } = useAccounts();
+  const {
+    isActiveAccountLoaded,
+    activeAccountError,
+    isAccountLoading,
+    reloadActive,
+    loadActiveHome,
+  } = useAccounts();
   const { globalSettings } = useGlobalSettings();
   const globalSettingsRef = useRef(globalSettings);
   globalSettingsRef.current = globalSettings;
@@ -236,19 +243,26 @@ export const App: React.FC = () => {
       )}
 
       {/* Main Container Area: The Electron WebContentsView will overlay this area below the titlebar */}
-      <main className="flex-1 w-full relative bg-[#111b21]">
-        {!isActiveAccountLoaded && (
+      <main className={`flex-1 w-full relative bg-[#111b21] transition-[padding] duration-300 ${isSettingsOpen ? 'pr-[450px]' : ''}`}>
+        {activeAccountError ? (
+          <BrowserErrorView
+            error={activeAccountError}
+            isRetrying={isAccountLoading}
+            onRetry={reloadActive}
+            onLoadHome={loadActiveHome}
+          />
+        ) : (!isActiveAccountLoaded || isAccountLoading) ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-[#8696a0] text-sm gap-2">
             {isDisclaimerAccepted ? (
               <>
                 <div className="w-8 h-8 rounded-full border-2 border-[#00a884] border-t-transparent animate-spin" />
-                <span>Connecting to WhatsApp Web...</span>
+                <span>{isAccountLoading ? 'Reconnecting to WhatsApp Web...' : 'Connecting to WhatsApp Web...'}</span>
               </>
             ) : (
               <span>Please review and accept the legal disclaimer to proceed.</span>
             )}
           </div>
-        )}
+        ) : null}
       </main>
 
       {/* Floating Downloads Tracker */}

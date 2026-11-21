@@ -1,5 +1,5 @@
 import { BrowserWindow, WebContentsView, Tray } from 'electron';
-import { Account, GlobalSettings } from '../shared/types';
+import { Account, GlobalSettings, WebErrorDetails } from '../shared/types';
 
 export const state = {
   mainWindow: null as BrowserWindow | null,
@@ -8,6 +8,8 @@ export const state = {
   activeAccountId: '',
   accountHistory: [] as string[],
   accountViews: new Map<string, WebContentsView>(),
+  accountErrors: new Map<string, WebErrorDetails>(),
+  accountLoading: new Set<string>(),
   configuredSessions: new Set<string>(),
   webstoreWindows: new Map<number, string>(),
   globalSettings: null as GlobalSettings | null,
