@@ -178,3 +178,286 @@ export function tokenizeFormattedText(rawText: string): FormattedToken[] {
   return tokens;
 }
 
+export interface MediaTypeDef {
+  key: string;
+  singular: string;
+  plural: string;
+  nounRegex: RegExp;
+}
+
+export const WHATSAPP_MEDIA_TYPES: MediaTypeDef[] = [
+  {
+    key: 'photo',
+    singular: 'photo',
+    plural: 'photos',
+    nounRegex: /^(?:photos?|pictures?|images?|photo\s+albums?|albums?)$/i,
+  },
+  {
+    key: 'video',
+    singular: 'video',
+    plural: 'videos',
+    nounRegex: /^(?:videos?)$/i,
+  },
+  {
+    key: 'voice_message',
+    singular: 'voice message',
+    plural: 'voice messages',
+    nounRegex: /^(?:voice\s+messages?|voice\s+notes?)$/i,
+  },
+  {
+    key: 'audio',
+    singular: 'audio',
+    plural: 'audio files',
+    nounRegex: /^(?:audios?|audio\s+files?)$/i,
+  },
+  {
+    key: 'document',
+    singular: 'document',
+    plural: 'documents',
+    nounRegex: /^(?:documents?|files?)$/i,
+  },
+  {
+    key: 'sticker',
+    singular: 'sticker',
+    plural: 'stickers',
+    nounRegex: /^(?:stickers?)$/i,
+  },
+  {
+    key: 'gif',
+    singular: 'GIF',
+    plural: 'GIFs',
+    nounRegex: /^(?:gifs?|gif\s+videos?)$/i,
+  },
+  {
+    key: 'contact',
+    singular: 'contact',
+    plural: 'contacts',
+    nounRegex: /^(?:contacts?|contact\s+cards?)$/i,
+  },
+  {
+    key: 'location',
+    singular: 'location',
+    plural: 'locations',
+    nounRegex: /^(?:locations?|live\s+locations?)$/i,
+  },
+  {
+    key: 'poll',
+    singular: 'poll',
+    plural: 'polls',
+    nounRegex: /^(?:polls?)$/i,
+  },
+  {
+    key: 'event',
+    singular: 'event',
+    plural: 'events',
+    nounRegex: /^(?:events?)$/i,
+  },
+  {
+    key: 'media',
+    singular: 'media file',
+    plural: 'media files',
+    nounRegex: /^(?:media|media\s+files?)$/i,
+  },
+  {
+    key: 'product',
+    singular: 'product',
+    plural: 'products',
+    nounRegex: /^(?:products?|catalogs?)$/i,
+  },
+];
+
+const LEADING_EMOJI_REGEX = /^([\p{Extended_Pictographic}\uFE0F\u200D]+(?:\s+[\p{Extended_Pictographic}\uFE0F\u200D]+)*)\s*/u;
+const TRAILING_EMOJI_REGEX = /\s*([\p{Extended_Pictographic}\uFE0F\u200D]+(?:\s+[\p{Extended_Pictographic}\uFE0F\u200D]+)*)$/u;
+const DURATION_REGEX = /^(.*?)(?:\s*\(\d+:\d+\))?$/;
+const COUNT_REGEX = /^(\d+)\s+(.+)$/;
+
+export interface ParsedMediaLine {
+  sender: string;
+  mediaDef: MediaTypeDef;
+  count: number;
+  isExplicitCount: boolean;
+  emojiPrefix: string;
+}
+
+function parseMediaBody(bodyText: string): {
+  mediaDef: MediaTypeDef;
+  count: number;
+  isExplicitCount: boolean;
+  emojiPrefix: string;
+} | null {
+  const trimmed = decodeHtmlEntities(bodyText || '').trim();
+  if (!trimmed) return null;
+
+  let emojiPrefix = '';
+  let withoutEmoji = trimmed;
+
+  const leadingEmojiMatch = trimmed.match(LEADING_EMOJI_REGEX);
+  if (leadingEmojiMatch) {
+    emojiPrefix = leadingEmojiMatch[1];
+    withoutEmoji = trimmed.slice(leadingEmojiMatch[0].length).trim();
+  }
+
+  const trailingEmojiMatch = withoutEmoji.match(TRAILING_EMOJI_REGEX);
+  if (trailingEmojiMatch) {
+    if (!emojiPrefix) {
+      emojiPrefix = trailingEmojiMatch[1];
+    }
+    withoutEmoji = withoutEmoji.slice(0, trailingEmojiMatch.index).trim();
+  }
+
+  if (!withoutEmoji) return null;
+
+  let count = 1;
+  let isExplicitCount = false;
+  let nounPart = withoutEmoji;
+
+  const countMatch = withoutEmoji.match(COUNT_REGEX);
+  if (countMatch) {
+    const parsedNum = parseInt(countMatch[1], 10);
+    if (!isNaN(parsedNum) && parsedNum > 0) {
+      count = parsedNum;
+      isExplicitCount = true;
+      nounPart = countMatch[2].trim();
+    }
+  }
+
+  const durationMatch = nounPart.match(DURATION_REGEX);
+  const cleanedNoun = durationMatch ? durationMatch[1].trim() : nounPart;
+
+  for (const def of WHATSAPP_MEDIA_TYPES) {
+    if (def.nounRegex.test(cleanedNoun)) {
+      return {
+        mediaDef: def,
+        count,
+        isExplicitCount,
+        emojiPrefix: emojiPrefix.trim() ? emojiPrefix.trim() + ' ' : '',
+      };
+    }
+  }
+
+  return null;
+}
+
+export function parseMediaLine(line: string): ParsedMediaLine | null {
+  if (!line || typeof line !== 'string') return null;
+  const decoded = decodeHtmlEntities(line).trim();
+  if (!decoded) return null;
+
+  // 1. Group chat format: "Sender: Media"
+  const firstColon = decoded.indexOf(':');
+  if (firstColon > 0) {
+    const senderCandidate = decoded.slice(0, firstColon).trim();
+    const bodyCandidate = decoded.slice(firstColon + 1).trim();
+    const parsed = parseMediaBody(bodyCandidate);
+    if (parsed) {
+      return {
+        sender: senderCandidate,
+        ...parsed,
+      };
+    }
+  }
+
+  // 2. Sender with colon in name: "User:Alias: Media"
+  const lastColon = decoded.lastIndexOf(':');
+  if (lastColon > 0 && lastColon !== firstColon) {
+    const senderCandidate = decoded.slice(0, lastColon).trim();
+    const bodyCandidate = decoded.slice(lastColon + 1).trim();
+    const parsed = parseMediaBody(bodyCandidate);
+    if (parsed) {
+      return {
+        sender: senderCandidate,
+        ...parsed,
+      };
+    }
+  }
+
+  // 3. 1-on-1 chat format without sender prefix: "2 photos", "Photo", "📷 Photo"
+  const parsedDirect = parseMediaBody(decoded);
+  if (parsedDirect) {
+    return {
+      sender: '',
+      ...parsedDirect,
+    };
+  }
+
+  return null;
+}
+
+export function formatMediaLine(
+  sender: string,
+  mediaDef: MediaTypeDef,
+  count: number,
+  emojiPrefix = ''
+): string {
+  const emoji = emojiPrefix.trim() ? emojiPrefix.trim() + ' ' : '';
+  let content = '';
+
+  if (count <= 1) {
+    const singularCap = mediaDef.singular.charAt(0).toUpperCase() + mediaDef.singular.slice(1);
+    content = `${emoji}${singularCap}`;
+  } else {
+    content = `${emoji}${count} ${mediaDef.plural}`;
+  }
+
+  if (sender) {
+    return `${sender}: ${content}`;
+  }
+  return content;
+}
+
+export function coalesceNotificationMessages(
+  existingMessages: string[],
+  incomingMsg: string
+): string[] {
+  const messages = [...existingMessages];
+  const incomingMedia = parseMediaLine(incomingMsg);
+
+  if (!incomingMedia) {
+    messages.push(incomingMsg);
+    return messages;
+  }
+
+  // Find the last matching media line for the same sender and same media type
+  let matchIdx = -1;
+  let existingMedia: ParsedMediaLine | null = null;
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const parsed = parseMediaLine(messages[i]);
+    if (
+      parsed &&
+      parsed.sender.trim().toLowerCase() === incomingMedia.sender.trim().toLowerCase() &&
+      parsed.mediaDef.key === incomingMedia.mediaDef.key
+    ) {
+      matchIdx = i;
+      existingMedia = parsed;
+      break;
+    }
+  }
+
+  if (matchIdx !== -1 && existingMedia !== null) {
+    let newCount: number;
+    if (incomingMedia.count > existingMedia.count) {
+      // Cumulative count from WhatsApp Web (e.g. 2 photos -> 3 photos -> 4 photos)
+      newCount = incomingMedia.count;
+    } else if (incomingMedia.isExplicitCount) {
+      // Explicit count arriving <= existing (e.g. subsequent batch arriving)
+      newCount = existingMedia.count + incomingMedia.count;
+    } else {
+      // Single media arriving one by one without explicit count (e.g. Photo after Photo)
+      newCount = existingMedia.count + 1;
+    }
+
+    const emojiPrefix = existingMedia.emojiPrefix || incomingMedia.emojiPrefix;
+    const sender = incomingMedia.sender || existingMedia.sender;
+    const updatedLine = formatMediaLine(sender, incomingMedia.mediaDef, newCount, emojiPrefix);
+
+    messages[matchIdx] = updatedLine;
+    return messages;
+  }
+
+  // First media message from this sender for this media type
+  messages.push(incomingMsg);
+  return messages;
+}
+
+

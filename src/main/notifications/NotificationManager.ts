@@ -6,6 +6,7 @@ import {
 } from './types';
 import { FreedesktopDbusProvider } from './providers/FreedesktopDbusProvider';
 import { ElectronNativeProvider } from './providers/ElectronNativeProvider';
+import { coalesceNotificationMessages } from '../../shared/notificationFormatting';
 
 interface ActiveNotificationEntry {
   id: string | number;
@@ -97,9 +98,9 @@ export class NotificationManager {
       const existing = this.conversations.get(convKey);
       const formattedMsg = formatSingleMessage(payload.body, 140);
 
-      // If active conversation exists within 60s window, append message and update in-place
+      // If active conversation exists within 60s window, coalesce/append message and update in-place
       if (existing && now - existing.lastTime < 60000 && existing.notificationId) {
-        existing.messages.push(formattedMsg);
+        existing.messages = coalesceNotificationMessages(existing.messages, formattedMsg);
         existing.lastTime = now;
         payload.body = existing.messages.join('\n');
         payload.replacesId = existing.notificationId;
