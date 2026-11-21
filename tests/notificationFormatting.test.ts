@@ -5,6 +5,10 @@ import {
   stripHtmlTags,
   formatNotificationSummary,
   formatNotificationBody,
+  parseMediaLine,
+  formatMediaLine,
+  coalesceNotificationMessages,
+  WHATSAPP_MEDIA_TYPES,
 } from '../src/shared/notificationFormatting.ts';
 
 describe('Notification Formatting Utilities', () => {
@@ -85,6 +89,196 @@ describe('Notification Formatting Utilities', () => {
       const longBody = 'Hello '.repeat(1000);
       const output = formatNotificationBody(longBody, 100);
       assert.ok(output.length <= 150);
+    });
+  });
+
+  describe('parseMediaLine', () => {
+    test('parses group chat photo notification with sender and count', () => {
+      const parsed = parseMediaLine('Ajay Adithya: 2 photos');
+      assert.ok(parsed);
+      assert.equal(parsed.sender, 'Ajay Adithya');
+      assert.equal(parsed.mediaDef.key, 'photo');
+      assert.equal(parsed.count, 2);
+      assert.equal(parsed.isExplicitCount, true);
+      assert.equal(parsed.emojiPrefix, '');
+    });
+
+    test('parses group chat photo notification with single photo and emoji', () => {
+      const parsed = parseMediaLine('Ajay Adithya: 📷 Photo');
+      assert.ok(parsed);
+      assert.equal(parsed.sender, 'Ajay Adithya');
+      assert.equal(parsed.mediaDef.key, 'photo');
+      assert.equal(parsed.count, 1);
+      assert.equal(parsed.isExplicitCount, false);
+      assert.equal(parsed.emojiPrefix.trim(), '📷');
+    });
+
+    test('parses 1-on-1 chat photo notification without sender prefix', () => {
+      const parsed = parseMediaLine('2 photos');
+      assert.ok(parsed);
+      assert.equal(parsed.sender, '');
+      assert.equal(parsed.mediaDef.key, 'photo');
+      assert.equal(parsed.count, 2);
+      assert.equal(parsed.isExplicitCount, true);
+    });
+
+    test('parses all official WhatsApp media types', () => {
+      const expectations: [string, string, number][] = [
+        ['Ajay: 2 photos', 'photo', 2],
+        ['Ajay: Photo', 'photo', 1],
+        ['Ajay: 2 videos', 'video', 2],
+        ['Ajay: Video', 'video', 1],
+        ['Ajay: 🎤 Voice message (0:15)', 'voice_message', 1],
+        ['Ajay: 2 voice messages', 'voice_message', 2],
+        ['Ajay: 2 voice notes', 'voice_message', 2],
+        ['Ajay: 2 audio files', 'audio', 2],
+        ['Ajay: Audio', 'audio', 1],
+        ['Ajay: 2 documents', 'document', 2],
+        ['Ajay: 📄 Document', 'document', 1],
+        ['Ajay: 2 files', 'document', 2],
+        ['Ajay: 2 stickers', 'sticker', 2],
+        ['Ajay: Sticker', 'sticker', 1],
+        ['Ajay: 2 GIFs', 'gif', 2],
+        ['Ajay: 👾 GIF', 'gif', 1],
+        ['Ajay: 2 contacts', 'contact', 2],
+        ['Ajay: Contact card', 'contact', 1],
+        ['Ajay: 2 locations', 'location', 2],
+        ['Ajay: 📍 Location', 'location', 1],
+        ['Ajay: 2 live locations', 'location', 2],
+        ['Ajay: 2 polls', 'poll', 2],
+        ['Ajay: 📊 Poll', 'poll', 1],
+        ['Ajay: 2 events', 'event', 2],
+        ['Ajay: 📅 Event', 'event', 1],
+        ['Ajay: 2 media files', 'media', 2],
+        ['Ajay: 2 products', 'product', 2],
+      ];
+
+      for (const [input, expectedKey, expectedCount] of expectations) {
+        const parsed = parseMediaLine(input);
+        assert.ok(parsed, `Expected "${input}" to parse as media line`);
+        assert.equal(parsed.mediaDef.key, expectedKey, `Expected key ${expectedKey} for "${input}"`);
+        assert.equal(parsed.count, expectedCount, `Expected count ${expectedCount} for "${input}"`);
+      }
+    });
+
+    test('returns null for standard non-media chat messages and sentences', () => {
+      assert.equal(parseMediaLine('Ajay Adithya: Hello world'), null);
+      assert.equal(parseMediaLine('Ajay Adithya: 2 apples for dinner'), null);
+      assert.equal(parseMediaLine('Ajay Adithya: Check out this photo'), null);
+      assert.equal(parseMediaLine('2 photos are missing from the drive'), null);
+      assert.equal(parseMediaLine(''), null);
+    });
+  });
+
+  describe('formatMediaLine', () => {
+    test('formats plural media with sender and count', () => {
+      const photoDef = WHATSAPP_MEDIA_TYPES.find((d) => d.key === 'photo')!;
+      assert.equal(formatMediaLine('Ajay Adithya', photoDef, 4), 'Ajay Adithya: 4 photos');
+    });
+
+    test('formats plural media with emoji prefix', () => {
+      const photoDef = WHATSAPP_MEDIA_TYPES.find((d) => d.key === 'photo')!;
+      assert.equal(formatMediaLine('Ajay Adithya', photoDef, 4, '📷'), 'Ajay Adithya: 📷 4 photos');
+    });
+
+    test('formats 1-on-1 media without sender', () => {
+      const photoDef = WHATSAPP_MEDIA_TYPES.find((d) => d.key === 'photo')!;
+      assert.equal(formatMediaLine('', photoDef, 4), '4 photos');
+    });
+
+    test('formats singular media without count', () => {
+      const photoDef = WHATSAPP_MEDIA_TYPES.find((d) => d.key === 'photo')!;
+      assert.equal(formatMediaLine('Ajay Adithya', photoDef, 1), 'Ajay Adithya: Photo');
+    });
+  });
+
+  describe('coalesceNotificationMessages', () => {
+    test('replicates user bug: updates sequential media arrival to count in a single line', () => {
+      let messages: string[] = [];
+      messages = coalesceNotificationMessages(messages, 'Ajay Adithya: 2 photos');
+      assert.deepEqual(messages, ['Ajay Adithya: 2 photos']);
+
+      messages = coalesceNotificationMessages(messages, 'Ajay Adithya: 3 photos');
+      assert.deepEqual(messages, ['Ajay Adithya: 3 photos']);
+
+      messages = coalesceNotificationMessages(messages, 'Ajay Adithya: 4 photos');
+      assert.deepEqual(messages, ['Ajay Adithya: 4 photos']);
+    });
+
+    test('coalesces single photos arriving one by one without explicit count', () => {
+      let messages: string[] = [];
+      messages = coalesceNotificationMessages(messages, 'Ajay Adithya: Photo');
+      assert.deepEqual(messages, ['Ajay Adithya: Photo']);
+
+      messages = coalesceNotificationMessages(messages, 'Ajay Adithya: Photo');
+      assert.deepEqual(messages, ['Ajay Adithya: 2 photos']);
+
+      messages = coalesceNotificationMessages(messages, 'Ajay Adithya: Photo');
+      assert.deepEqual(messages, ['Ajay Adithya: 3 photos']);
+    });
+
+    test('preserves emoji prefix across sequential media count updates', () => {
+      let messages: string[] = [];
+      messages = coalesceNotificationMessages(messages, 'Ajay Adithya: 📷 Photo');
+      assert.deepEqual(messages, ['Ajay Adithya: 📷 Photo']);
+
+      messages = coalesceNotificationMessages(messages, 'Ajay Adithya: 2 photos');
+      assert.deepEqual(messages, ['Ajay Adithya: 📷 2 photos']);
+
+      messages = coalesceNotificationMessages(messages, 'Ajay Adithya: 3 photos');
+      assert.deepEqual(messages, ['Ajay Adithya: 📷 3 photos']);
+    });
+
+    test('coalesces in 1-on-1 chat without sender prefix', () => {
+      let messages: string[] = [];
+      messages = coalesceNotificationMessages(messages, '2 photos');
+      messages = coalesceNotificationMessages(messages, '3 photos');
+      messages = coalesceNotificationMessages(messages, '4 photos');
+      assert.deepEqual(messages, ['4 photos']);
+    });
+
+    test('keeps distinct senders in group chat separated while coalescing per-sender', () => {
+      let messages: string[] = [];
+      messages = coalesceNotificationMessages(messages, 'Bob: 2 photos');
+      messages = coalesceNotificationMessages(messages, 'Ajay: 2 photos');
+      assert.deepEqual(messages, ['Bob: 2 photos', 'Ajay: 2 photos']);
+
+      messages = coalesceNotificationMessages(messages, 'Ajay: 3 photos');
+      assert.deepEqual(messages, ['Bob: 2 photos', 'Ajay: 3 photos']);
+
+      messages = coalesceNotificationMessages(messages, 'Bob: 3 photos');
+      assert.deepEqual(messages, ['Bob: 3 photos', 'Ajay: 3 photos']);
+    });
+
+    test('keeps different media types from the same sender separated', () => {
+      let messages: string[] = [];
+      messages = coalesceNotificationMessages(messages, 'Ajay: 2 photos');
+      messages = coalesceNotificationMessages(messages, 'Ajay: Video');
+      assert.deepEqual(messages, ['Ajay: 2 photos', 'Ajay: Video']);
+
+      messages = coalesceNotificationMessages(messages, 'Ajay: 2 videos');
+      assert.deepEqual(messages, ['Ajay: 2 photos', 'Ajay: 2 videos']);
+    });
+
+    test('coalesces media while preserving preceding text messages', () => {
+      let messages: string[] = [];
+      messages = coalesceNotificationMessages(messages, 'Ajay: Check these out');
+      messages = coalesceNotificationMessages(messages, 'Ajay: 2 photos');
+      messages = coalesceNotificationMessages(messages, 'Ajay: 3 photos');
+      messages = coalesceNotificationMessages(messages, 'Ajay: 4 photos');
+      assert.deepEqual(messages, [
+        'Ajay: Check these out',
+        'Ajay: 4 photos',
+      ]);
+    });
+
+    test('appends normal text message following media without altering media count', () => {
+      let messages = ['Ajay: 4 photos'];
+      messages = coalesceNotificationMessages(messages, 'Ajay: Let me know what you think');
+      assert.deepEqual(messages, [
+        'Ajay: 4 photos',
+        'Ajay: Let me know what you think',
+      ]);
     });
   });
 });
