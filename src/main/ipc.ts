@@ -10,7 +10,6 @@
  * - systemHandlers.ts
  * - downloadHandlers.ts
  * - protocolHandlers.ts
- * - chatExportHandlers.ts
  * - schemas.ts (Zod input validation)
  */
 export { registerIpcHandlers } from './ipc/index';

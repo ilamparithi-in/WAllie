@@ -1,5 +1,3 @@
-import type { TimelineEntry } from './chatExportTypes';
-
 export interface ExtensionInfo {
   id: string;
   name: string;
@@ -88,6 +86,8 @@ export interface Account {
   isLoaded?: boolean;
 }
 
+export type AccountInfo = Account;
+
 export interface AddAccountOptions {
   name?: string;
   emoji?: string;
@@ -154,8 +154,6 @@ export interface LinkPreviewData {
   previewType?: 'video' | 'image' | 'none';
 }
 
-export * from './chatExportTypes';
-
 export interface NativePromptOptions {
   title: string;
   message: string;
@@ -183,8 +181,68 @@ export interface NativeConfirmOptions {
   defaultConfirm?: boolean;
 }
 
-// Canonical alias for notification history entries conforming to the chat export spec
-export type HistoricalNotification = TimelineEntry;
+// Native notification history interfaces
+export interface HistoricalNotificationSender {
+  displayName?: string;
+  avatarUrl?: string;
+}
+
+export interface HistoricalNotificationContent {
+  type: string;
+  body: string;
+}
+
+export interface HistoricalNotificationFlags {
+  isEdited?: boolean;
+  isDeleted?: boolean;
+}
+
+export interface HistoricalNotificationMessage {
+  type: 'message';
+  id: string;
+  timestamp: string;
+  displayTime?: string;
+  direction?: 'incoming' | 'outgoing';
+  sender?: HistoricalNotificationSender;
+  accountId?: string;
+  accountName?: string;
+  content?: HistoricalNotificationContent;
+  flags?: HistoricalNotificationFlags;
+}
+
+export interface HistoricalNotificationSystemEvent {
+  type: 'system_event';
+  id: string;
+  timestamp: string;
+  subtype?: string;
+  text?: string;
+  accountId?: string;
+  accountName?: string;
+}
+
+export interface HistoricalNotificationDateDivider {
+  type: 'date_divider';
+  id: string;
+  date: string;
+  displayText: string;
+}
+
+export type HistoricalNotification =
+  | HistoricalNotificationMessage
+  | HistoricalNotificationSystemEvent
+  | HistoricalNotificationDateDivider;
+
+export interface NotificationHistoryExport {
+  schemaVersion: string;
+  exportedAt: string;
+  app: string;
+  version: string;
+  accountFilter: string;
+  totalNotifications: number;
+  oldestTimestamp: string;
+  newestTimestamp: string;
+  notifications: HistoricalNotification[];
+}
 
 export interface AppVersionInfo {
   version: string;
