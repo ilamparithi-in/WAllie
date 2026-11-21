@@ -30,7 +30,8 @@ export function applyActiveViewBoundsImmediately(aView: WebContentsView) {
   const scaledDrawerWidth = isFullScreen ? 0 : Math.round(state.settingsDrawerWidth * scaleFactor);
   const vWidth = w - scaledDrawerWidth;
 
-  aView.setVisible(true);
+  const hasError = state.accountErrors.has(state.activeAccountId);
+  aView.setVisible(!hasError);
   aView.setBounds({
     x: 0,
     y: isFullScreen ? 0 : scaledTitlebarHeight,
@@ -67,10 +68,11 @@ export async function switchActiveAccount(newAccountId: string) {
   state.accountHistory.push(newAccountId);
 
   const currentView = state.accountViews.get(state.activeAccountId);
+  const currentHasError = state.accountErrors.has(newAccountId);
   if (state.activeAccountId === newAccountId && currentView) {
-    currentView.setVisible(true);
+    currentView.setVisible(!currentHasError);
     applyActiveViewBoundsImmediately(currentView);
-    if (currentView.webContents && !currentView.webContents.isDestroyed()) {
+    if (currentView.webContents && !currentView.webContents.isDestroyed() && !currentHasError) {
       currentView.webContents.focus();
     }
     return;
@@ -95,11 +97,18 @@ export async function switchActiveAccount(newAccountId: string) {
   if (targetView) {
     // Add or bring the target view to the top of the stack
     state.mainWindow.contentView.addChildView(targetView);
-    targetView.setVisible(true);
-    applyActiveViewBoundsImmediately(targetView);
-    updateActiveViewBounds();
+    const errorDetails = state.accountErrors.get(newAccountId);
+    if (errorDetails) {
+      targetView.setVisible(false);
+      state.mainWindow.webContents.send('account:load-error', errorDetails);
+    } else {
+      targetView.setVisible(true);
+      applyActiveViewBoundsImmediately(targetView);
+      updateActiveViewBounds();
+      state.mainWindow.webContents.send('account:load-error-cleared', { accountId: newAccountId });
+    }
 
-    if (state.mainWindow?.isVisible() && targetView.webContents && !targetView.webContents.isDestroyed()) {
+    if (state.mainWindow?.isVisible() && targetView.webContents && !targetView.webContents.isDestroyed() && !errorDetails) {
       targetView.webContents.focus();
     }
 
@@ -528,6 +537,8 @@ export async function removeAccountLogic(id: string): Promise<boolean> {
       } catch (e) { }
     }
     state.accountViews.delete(id);
+    state.accountErrors.delete(id);
+    state.accountLoading.delete(id);
   }
 
   state.accountHistory = state.accountHistory.filter((accId) => accId !== id);
@@ -604,6 +615,8 @@ export async function unloadAccountLogic(id: string): Promise<boolean> {
       } catch (e) { }
     }
     state.accountViews.delete(id);
+    state.accountErrors.delete(id);
+    state.accountLoading.delete(id);
   }
 
   // Remove the unloaded account from active history
