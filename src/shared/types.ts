@@ -120,6 +120,9 @@ export interface DownloadRecord {
 export const DEFAULT_MIN_WINDOW_WIDTH = 480;
 export const DEFAULT_MIN_WINDOW_HEIGHT = 540;
 
+export type MultiAccountOpenChatBehavior = 'all' | 'focused' | 'disabled';
+export type MultiAccountInlineReplyBehavior = 'disabled' | 'focused';
+
 export interface GlobalSettings {
   closeToTray: boolean;
   hardwareAcceleration: boolean;
@@ -146,6 +149,9 @@ export interface GlobalSettings {
   inlineReplyEnabled?: boolean;
   notificationDismissalTime?: number;
   notificationRetentionDays?: number;
+  coalesceMultiAccountNotifications?: boolean;
+  multiAccountOpenChatBehavior?: MultiAccountOpenChatBehavior;
+  multiAccountInlineReplyBehavior?: MultiAccountInlineReplyBehavior;
   defaultProtocolAccountId?: string;
   standaloneLinkPreviewEnabled?: boolean;
   responsiveLayoutMode?: 'disabled' | 'auto' | 'portrait';

@@ -70,11 +70,17 @@ export const storageClearTypeSchema = z.enum(['cache', 'media']);
  */
 export const themeModeSchema = z.enum(['system', 'light', 'dark']);
 
+export const multiAccountOpenChatBehaviorSchema = z.enum(['all', 'focused', 'disabled']);
+export const multiAccountInlineReplyBehaviorSchema = z.enum(['disabled', 'focused']);
+
 export const globalSettingsSchema = z.object({
   appScale: z.number().min(25).max(500).optional(),
   notificationRetentionDays: z.number().int().min(0).max(3650).optional(),
   themeMode: themeModeSchema.optional(),
   disclaimerAccepted: z.boolean().optional(),
+  coalesceMultiAccountNotifications: z.boolean().optional(),
+  multiAccountOpenChatBehavior: multiAccountOpenChatBehaviorSchema.optional(),
+  multiAccountInlineReplyBehavior: multiAccountInlineReplyBehaviorSchema.optional(),
 }).passthrough();
 
 /**

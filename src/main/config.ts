@@ -110,6 +110,13 @@ export function loadSettings(): GlobalSettings {
         inlineReplyEnabled: parsed.inlineReplyEnabled !== false,
         notificationDismissalTime: typeof parsed.notificationDismissalTime === 'number' ? parsed.notificationDismissalTime : 10,
         notificationRetentionDays: typeof parsed.notificationRetentionDays === 'number' ? parsed.notificationRetentionDays : 30,
+        coalesceMultiAccountNotifications: parsed.coalesceMultiAccountNotifications !== false,
+        multiAccountOpenChatBehavior: (['all', 'focused', 'disabled'].includes(parsed.multiAccountOpenChatBehavior)
+          ? parsed.multiAccountOpenChatBehavior
+          : 'all'),
+        multiAccountInlineReplyBehavior: (parsed.multiAccountInlineReplyBehavior === 'focused'
+          ? 'focused'
+          : 'disabled'),
         defaultProtocolAccountId: typeof parsed.defaultProtocolAccountId === 'string' ? parsed.defaultProtocolAccountId : 'ask',
         standaloneLinkPreviewEnabled: parsed.standaloneLinkPreviewEnabled !== false,
         responsiveLayoutMode: (parsed.responsiveLayoutMode === 'disabled' || parsed.responsiveLayoutMode === 'portrait') ? parsed.responsiveLayoutMode : 'auto',
@@ -144,6 +151,9 @@ export function loadSettings(): GlobalSettings {
     inlineReplyEnabled: true,
     notificationDismissalTime: 10,
     notificationRetentionDays: 30,
+    coalesceMultiAccountNotifications: true,
+    multiAccountOpenChatBehavior: 'all',
+    multiAccountInlineReplyBehavior: 'disabled',
     defaultProtocolAccountId: 'ask',
     standaloneLinkPreviewEnabled: true,
     responsiveLayoutMode: 'auto',

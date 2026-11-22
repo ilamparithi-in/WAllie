@@ -460,4 +460,146 @@ export function coalesceNotificationMessages(
   return messages;
 }
 
+/**
+ * Normalizes text for notification deduplication and matching:
+ * - Decodes HTML entities
+ * - Strips zero-width and directional Unicode control characters
+ * - Normalizes quotes and collapses consecutive whitespace
+ * - Trims and lowercases
+ */
+export function normalizeNotificationText(str: string | null | undefined): string {
+  if (!str) return '';
+  return decodeHtmlEntities(str)
+    .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+    .replace(/["“”„‟]/g, '"')
+    .replace(/['’‘`´‚‛]/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Returns a short badge string for an account (emoji if defined, otherwise account name).
+ */
+export function formatAccountBadge(account: { emoji?: string; name?: string }): string {
+  if (account.emoji && account.emoji.trim()) {
+    return account.emoji.trim();
+  }
+  if (account.name && account.name.trim()) {
+    return account.name.trim();
+  }
+  return '';
+}
+
+/**
+ * Formats a coalesced notification title with all receiving account badges placed before ` | `:
+ * e.g. "🏢 👥 | General" or "🏢 | General"
+ * If accountOrder is provided, accounts are ordered according to the configured order in state.
+ */
+export function formatCoalescedNotificationTitle(
+  accounts: Array<{ id?: string; accountId?: string; emoji?: string; name?: string }>,
+  chatTitle: string,
+  accountOrder?: string[]
+): string {
+  const cleanTitle = decodeHtmlEntities(chatTitle || '').trim();
+  if (!accounts || accounts.length === 0) {
+    return cleanTitle ? `| ${cleanTitle}` : '';
+  }
+
+  // Deduplicate accounts by ID
+  const uniqueAccounts: Array<{ id?: string; accountId?: string; emoji?: string; name?: string }> = [];
+  const seenIds = new Set<string>();
+
+  for (const acc of accounts) {
+    const id = acc.accountId || acc.id;
+    if (id) {
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+    }
+    uniqueAccounts.push(acc);
+  }
+
+  // Sort by configured accountOrder if provided
+  if (accountOrder && accountOrder.length > 0) {
+    uniqueAccounts.sort((a, b) => {
+      const idA = a.accountId || a.id || '';
+      const idB = b.accountId || b.id || '';
+      const idxA = accountOrder.indexOf(idA);
+      const idxB = accountOrder.indexOf(idB);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return 0;
+    });
+  }
+
+  const badges = uniqueAccounts.map(formatAccountBadge).filter(Boolean);
+
+  if (badges.length === 0) {
+    return `| ${cleanTitle}`;
+  }
+
+  return `${badges.join(' ')} | ${cleanTitle}`;
+}
+
+/**
+ * Checks whether two notification payloads represent the exact same incoming message
+ * based on chat title, sender & message body, and JID tags.
+ */
+export function isSameNotificationMessage(
+  a: { title?: string; contactName?: string; body: string; tag?: string },
+  b: { title?: string; contactName?: string; body: string; tag?: string }
+): boolean {
+  const chatA = normalizeNotificationText(a.contactName || a.title);
+  const chatB = normalizeNotificationText(b.contactName || b.title);
+  if (!chatA || !chatB || chatA !== chatB) {
+    return false;
+  }
+
+  const bodyA = normalizeNotificationText(a.body);
+  const bodyB = normalizeNotificationText(b.body);
+  if (!bodyA || !bodyB || bodyA !== bodyB) {
+    return false;
+  }
+
+  // If both tags are WhatsApp JIDs, verify they match
+  const isJidRegex = /@(?:g\.us|c\.us|s\.whatsapp\.net|newsletter|broadcast)$/i;
+  if (a.tag && b.tag && isJidRegex.test(a.tag) && isJidRegex.test(b.tag)) {
+    if (a.tag.trim().toLowerCase() !== b.tag.trim().toLowerCase()) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Resolves the focused account if it is in the coalesced accounts list,
+ * or falls back to the account appearing first in the configured account list.
+ */
+export function getFocusedOrFirstInListAccount<T extends { accountId?: string; id?: string }>(
+  accounts: T[],
+  activeAccountId?: string,
+  accountOrder?: string[]
+): T | undefined {
+  if (!accounts || accounts.length === 0) return undefined;
+
+  // 1. If currently focused account is among the coalesced accounts, choose it
+  if (activeAccountId) {
+    const active = accounts.find((a) => (a.accountId || a.id) === activeAccountId);
+    if (active) return active;
+  }
+
+  // 2. Otherwise, pick the account that appears earliest in the configured account list
+  if (accountOrder && accountOrder.length > 0) {
+    for (const id of accountOrder) {
+      const match = accounts.find((a) => (a.accountId || a.id) === id);
+      if (match) return match;
+    }
+  }
+
+  // 3. Fallback to the first account in the array
+  return accounts[0];
+}
+
 

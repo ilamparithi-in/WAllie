@@ -15,6 +15,12 @@ export interface NotificationPayload {
   replacesId?: number | string;
   contactName?: string;
   accountId?: string;
+  accountEmoji?: string;
+  accountName?: string;
+  accountOrder?: string[];
+  coalesceMultiAccount?: boolean;
+  multiAccountOpenChatBehavior?: 'all' | 'focused' | 'disabled';
+  multiAccountInlineReplyBehavior?: 'disabled' | 'focused';
   onAction?: (actionId: string) => void;
   onReply?: (replyText: string) => void;
   onClose?: (reason?: number | string) => void;

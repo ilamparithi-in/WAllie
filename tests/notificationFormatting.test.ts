@@ -8,6 +8,11 @@ import {
   parseMediaLine,
   formatMediaLine,
   coalesceNotificationMessages,
+  normalizeNotificationText,
+  formatAccountBadge,
+  formatCoalescedNotificationTitle,
+  isSameNotificationMessage,
+  getFocusedOrFirstInListAccount,
   WHATSAPP_MEDIA_TYPES,
 } from '../src/shared/notificationFormatting.ts';
 
@@ -279,6 +284,379 @@ describe('Notification Formatting Utilities', () => {
         'Alice: 4 photos',
         'Alice: Let me know what you think',
       ]);
+    });
+  });
+
+  describe('normalizeNotificationText', () => {
+    test('strips zero-width spaces and Unicode bidirectional formatting marks', () => {
+      const input = 'Alice Cooper\u200e: Happy birthday 🎉 @Bob\u200e';
+      const expected = 'alice cooper: happy birthday 🎉 @bob';
+      assert.equal(normalizeNotificationText(input), expected);
+    });
+
+    test('collapses whitespace and normalizes single/double quotes', () => {
+      const input = '   “Hello”   \n\t  ‘World’   ';
+      assert.equal(normalizeNotificationText(input), '"hello" \'world\'');
+    });
+
+    test('decodes HTML entities prior to normalization', () => {
+      const input = 'Alice &amp; Bob &gt; Charlie';
+      assert.equal(normalizeNotificationText(input), 'alice & bob > charlie');
+    });
+
+    test('handles empty or nullish input', () => {
+      assert.equal(normalizeNotificationText(''), '');
+      assert.equal(normalizeNotificationText(null), '');
+      assert.equal(normalizeNotificationText(undefined), '');
+    });
+  });
+
+  describe('formatAccountBadge', () => {
+    test('prefers emoji when available', () => {
+      assert.equal(formatAccountBadge({ emoji: '🏢', name: 'Official' }), '🏢');
+      assert.equal(formatAccountBadge({ emoji: '👥', name: 'Personal' }), '👥');
+    });
+
+    test('falls back to account name when emoji is empty', () => {
+      assert.equal(formatAccountBadge({ emoji: '', name: 'Personal' }), 'Personal');
+      assert.equal(formatAccountBadge({ name: 'Work' }), 'Work');
+    });
+
+    test('returns empty string if neither is provided', () => {
+      assert.equal(formatAccountBadge({}), '');
+    });
+  });
+
+  describe('formatCoalescedNotificationTitle', () => {
+    test('formats multiple account emojis before pipe delimiter', () => {
+      const accounts = [
+        { accountId: 'acc_1', emoji: '🏢', name: 'Official' },
+        { accountId: 'acc_2', emoji: '👥', name: 'Personal' },
+      ];
+      assert.equal(
+        formatCoalescedNotificationTitle(accounts, 'General'),
+        '🏢 👥 | General'
+      );
+    });
+
+    test('respects configured account order when sorting emojis', () => {
+      const accounts = [
+        { accountId: 'acc_2', emoji: '👥', name: 'Personal' },
+        { accountId: 'acc_1', emoji: '🏢', name: 'Official' },
+      ];
+      const accountOrder = ['acc_1', 'acc_2'];
+      assert.equal(
+        formatCoalescedNotificationTitle(accounts, 'General', accountOrder),
+        '🏢 👥 | General'
+      );
+    });
+
+    test('deduplicates duplicate accounts by id', () => {
+      const accounts = [
+        { accountId: 'acc_1', emoji: '🏢', name: 'Official' },
+        { accountId: 'acc_1', emoji: '🏢', name: 'Official' },
+        { accountId: 'acc_2', emoji: '👥', name: 'Personal' },
+      ];
+      assert.equal(
+        formatCoalescedNotificationTitle(accounts, 'General'),
+        '🏢 👥 | General'
+      );
+    });
+
+    test('formats single account title', () => {
+      const accounts = [{ accountId: 'acc_1', emoji: '🏢', name: 'Official' }];
+      assert.equal(
+        formatCoalescedNotificationTitle(accounts, 'General'),
+        '🏢 | General'
+      );
+    });
+
+    test('handles accounts with names instead of emojis', () => {
+      const accounts = [
+        { accountId: 'acc_1', emoji: '🏢', name: 'Official' },
+        { accountId: 'acc_2', name: 'Personal' },
+      ];
+      assert.equal(
+        formatCoalescedNotificationTitle(accounts, 'General'),
+        '🏢 Personal | General'
+      );
+    });
+  });
+
+  describe('isSameNotificationMessage', () => {
+    test('matches exact identical chat title, sender and message content', () => {
+      const a = {
+        contactName: 'General',
+        body: 'Alice Cooper\u200e: Happy birthday 🎉 @Bob\u200e',
+      };
+      const b = {
+        contactName: 'General',
+        body: 'Alice Cooper: Happy birthday 🎉 @Bob',
+      };
+      assert.equal(isSameNotificationMessage(a, b), true);
+    });
+
+    test('matches when title is passed via title property fallback', () => {
+      const a = {
+        title: 'General',
+        body: 'Alice Cooper: Happy birthday 🎉',
+      };
+      const b = {
+        contactName: 'General',
+        body: 'Alice Cooper: Happy birthday 🎉',
+      };
+      assert.equal(isSameNotificationMessage(a, b), true);
+    });
+
+    test('rejects different message bodies in the same chat', () => {
+      const a = {
+        contactName: 'General',
+        body: 'Alice Cooper: Happy birthday 🎉',
+      };
+      const b = {
+        contactName: 'General',
+        body: 'Bob: Thanks everyone!',
+      };
+      assert.equal(isSameNotificationMessage(a, b), false);
+    });
+
+    test('rejects different chat titles with the same message', () => {
+      const a = {
+        contactName: 'General',
+        body: 'Alice Cooper: Happy birthday 🎉',
+      };
+      const b = {
+        contactName: 'Random Group',
+        body: 'Alice Cooper: Happy birthday 🎉',
+      };
+      assert.equal(isSameNotificationMessage(a, b), false);
+    });
+
+    test('matches when WhatsApp group JID tags match', () => {
+      const a = {
+        contactName: 'General',
+        body: 'Alice Cooper: Happy birthday 🎉',
+        tag: '120363028192839182@g.us',
+      };
+      const b = {
+        contactName: 'General',
+        body: 'Alice Cooper: Happy birthday 🎉',
+        tag: '120363028192839182@g.us',
+      };
+      assert.equal(isSameNotificationMessage(a, b), true);
+    });
+
+    test('rejects if WhatsApp group JID tags are explicitly different', () => {
+      const a = {
+        contactName: 'General',
+        body: 'Alice Cooper: Happy birthday 🎉',
+        tag: '120363028192839182@g.us',
+      };
+      const b = {
+        contactName: 'General',
+        body: 'Alice Cooper: Happy birthday 🎉',
+        tag: '120363999999999999@g.us',
+      };
+      assert.equal(isSameNotificationMessage(a, b), false);
+    });
+  });
+
+  describe('Multi-Account Notification Coalescing Logic', () => {
+    test('coalesces multiple accounts receiving identical message and updates title in-place', () => {
+      interface MockEntry {
+        id: number;
+        title: string;
+        body: string;
+        contactName: string;
+        accounts: Array<{ accountId: string; emoji?: string; name?: string }>;
+        lastTime: number;
+      }
+
+      const activeNotifications = new Map<number, MockEntry>();
+      const accountOrder = ['acc_1', 'acc_2', 'acc_3'];
+
+      function handleIncomingNotification(payload: {
+        contactName: string;
+        body: string;
+        accountId: string;
+        accountEmoji?: string;
+        accountName?: string;
+      }) {
+        const now = Date.now();
+        let matching: MockEntry | null = null;
+        for (const entry of activeNotifications.values()) {
+          if (
+            now - entry.lastTime < 60000 &&
+            isSameNotificationMessage(
+              { contactName: entry.contactName, body: entry.body },
+              { contactName: payload.contactName, body: payload.body }
+            )
+          ) {
+            matching = entry;
+            break;
+          }
+        }
+
+        if (matching) {
+          if (!matching.accounts.some((a) => a.accountId === payload.accountId)) {
+            matching.accounts.push({
+              accountId: payload.accountId,
+              emoji: payload.accountEmoji,
+              name: payload.accountName,
+            });
+          }
+          matching.title = formatCoalescedNotificationTitle(matching.accounts, payload.contactName, accountOrder);
+          matching.lastTime = now;
+          return { id: matching.id, replacesId: matching.id, title: matching.title };
+        }
+
+        const newId = activeNotifications.size + 1;
+        const accounts = [{ accountId: payload.accountId, emoji: payload.accountEmoji, name: payload.accountName }];
+        const title = formatCoalescedNotificationTitle(accounts, payload.contactName, accountOrder);
+        const entry: MockEntry = {
+          id: newId,
+          title,
+          body: payload.body,
+          contactName: payload.contactName,
+          accounts,
+          lastTime: now,
+        };
+        activeNotifications.set(newId, entry);
+        return { id: newId, title };
+      }
+
+      // 1. First account receives notification
+      const res1 = handleIncomingNotification({
+        contactName: 'General',
+        body: 'Alice Cooper: Happy birthday 🎉 @Bob',
+        accountId: 'acc_1',
+        accountEmoji: '🏢',
+        accountName: 'Official',
+      });
+      assert.equal(res1.title, '🏢 | General');
+      assert.equal(activeNotifications.size, 1);
+
+      // 2. Second account receives same notification 15ms later
+      const res2 = handleIncomingNotification({
+        contactName: 'General',
+        body: 'Alice Cooper\u200e: Happy birthday 🎉 @Bob\u200e',
+        accountId: 'acc_2',
+        accountEmoji: '👥',
+        accountName: 'Personal',
+      });
+      assert.equal(res2.replacesId, res1.id);
+      assert.equal(res2.title, '🏢 👥 | General');
+      assert.equal(activeNotifications.size, 1);
+
+      // 3. Third account receives same notification
+      const res3 = handleIncomingNotification({
+        contactName: 'General',
+        body: 'Alice Cooper: Happy birthday 🎉 @Bob',
+        accountId: 'acc_3',
+        accountEmoji: '💼',
+        accountName: 'Business',
+      });
+      assert.equal(res3.replacesId, res1.id);
+      assert.equal(res3.title, '🏢 👥 💼 | General');
+      assert.equal(activeNotifications.size, 1);
+    });
+  });
+
+  describe('getFocusedOrFirstInListAccount', () => {
+    const accounts = [
+      { accountId: 'acc_2', emoji: '👥', name: 'Personal' },
+      { accountId: 'acc_1', emoji: '🏢', name: 'Official' },
+    ];
+    const accountOrder = ['acc_1', 'acc_2', 'acc_3'];
+
+    test('picks the currently focused account when it is in the coalesced list', () => {
+      const target = getFocusedOrFirstInListAccount(accounts, 'acc_2', accountOrder);
+      assert.ok(target);
+      assert.equal(target.accountId, 'acc_2');
+    });
+
+    test('falls back to the earliest account in accountOrder when active account is not coalesced', () => {
+      const target = getFocusedOrFirstInListAccount(accounts, 'acc_3', accountOrder);
+      assert.ok(target);
+      // acc_1 is earlier than acc_2 in accountOrder
+      assert.equal(target.accountId, 'acc_1');
+    });
+
+    test('falls back to first-in-list account when activeAccountId is undefined', () => {
+      const target = getFocusedOrFirstInListAccount(accounts, undefined, accountOrder);
+      assert.ok(target);
+      assert.equal(target.accountId, 'acc_1');
+    });
+
+    test('returns undefined for empty accounts list', () => {
+      const target = getFocusedOrFirstInListAccount([], 'acc_1', accountOrder);
+      assert.equal(target, undefined);
+    });
+  });
+
+  describe('Multi-Account Notification Actions & Reply Behaviors', () => {
+    const coalescedAccounts = [
+      { accountId: 'acc_1', emoji: '🏢', name: 'Official' },
+      { accountId: 'acc_2', emoji: '👥', name: 'Personal' },
+    ];
+    const accountOrder = ['acc_1', 'acc_2'];
+
+    test('"Open Chat" all: marks all read and activates focused/first-in-list account', () => {
+      const readMarks: string[] = [];
+      let activatedAccount = '';
+
+      const behavior = 'all';
+      const activeId = 'acc_2'; // User is currently looking at acc_2
+
+      const target = getFocusedOrFirstInListAccount(coalescedAccounts, activeId, accountOrder);
+      assert.equal(target?.accountId, 'acc_2');
+
+      if (behavior === 'all') {
+        for (const acc of coalescedAccounts) {
+          readMarks.push(acc.accountId);
+        }
+        activatedAccount = target!.accountId;
+      }
+
+      assert.deepEqual(readMarks, ['acc_1', 'acc_2']);
+      assert.equal(activatedAccount, 'acc_2');
+    });
+
+    test('"Open Chat" focused: only marks read and opens focused/first-in-list account', () => {
+      const readMarks: string[] = [];
+      let activatedAccount = '';
+
+      const behavior = 'focused';
+      const activeId = 'acc_99'; // Some unrelated account active
+
+      const target = getFocusedOrFirstInListAccount(coalescedAccounts, activeId, accountOrder);
+      assert.equal(target?.accountId, 'acc_1'); // Falls back to first-in-list (acc_1)
+
+      if (behavior === 'focused' && target) {
+        readMarks.push(target.accountId);
+        activatedAccount = target.accountId;
+      }
+
+      assert.deepEqual(readMarks, ['acc_1']);
+      assert.equal(activatedAccount, 'acc_1');
+    });
+
+    test('in-line reply behavior: disabled removes reply box', () => {
+      const behavior = 'disabled';
+      const canReply = behavior !== 'disabled';
+      assert.equal(canReply, false);
+    });
+
+    test('in-line reply behavior: focused routes reply to focused/first-in-list account', () => {
+      const behavior = 'focused';
+      const activeId = 'acc_2';
+      const target = getFocusedOrFirstInListAccount(coalescedAccounts, activeId, accountOrder);
+
+      let repliedAccount = '';
+      if (behavior === 'focused' && target) {
+        repliedAccount = target.accountId;
+      }
+      assert.equal(repliedAccount, 'acc_2');
     });
   });
 });

@@ -375,6 +375,68 @@ export const GeneralSettingsPage: React.FC<GeneralSettingsPageProps> = ({
               />
             </div>
 
+            {/* Multi-Account Notification Coalescing */}
+            <div className="p-2 rounded hover:bg-[#182229] transition-colors space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 min-w-0 pr-2">
+                  <div className="font-medium text-[#e9edef] text-[11px]">
+                    Merge identical notifications from multiple accounts
+                  </div>
+                  <div className="text-[10px] text-[#8696a0]">
+                    Combine duplicate notifications received across multiple accounts for the same chat and message into a single alert with all account badges
+                  </div>
+                </div>
+                <SettingsToggle
+                  checked={globalSettings?.coalesceMultiAccountNotifications ?? true}
+                  onChange={(checked) => handleToggleGlobalSetting('coalesceMultiAccountNotifications', checked)}
+                  ariaLabel="Merge identical notifications from multiple accounts"
+                />
+              </div>
+
+              {(globalSettings?.coalesceMultiAccountNotifications ?? true) && (
+                <div className="pl-3 border-l-2 border-[#00a884]/40 space-y-3 pt-1">
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-medium text-[#e9edef]">
+                      "Open Chat" behavior
+                    </label>
+                    <select
+                      value={globalSettings?.multiAccountOpenChatBehavior || 'all'}
+                      onChange={(e) => handleToggleGlobalSetting('multiAccountOpenChatBehavior', e.target.value)}
+                      className="w-full bg-[#202c33] text-[#e9edef] text-xs px-2.5 py-1.5 rounded border border-[#2c3943] focus:border-[#00a884] focus:outline-none cursor-pointer"
+                    >
+                      <option value="all">
+                        Open in all accounts (default)
+                      </option>
+                      <option value="focused">
+                        Open in only focused/first-in-list account
+                      </option>
+                      <option value="disabled">
+                        Disable Button
+                      </option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-medium text-[#e9edef]">
+                      In-line reply behavior
+                    </label>
+                    <select
+                      value={globalSettings?.multiAccountInlineReplyBehavior || 'disabled'}
+                      onChange={(e) => handleToggleGlobalSetting('multiAccountInlineReplyBehavior', e.target.value)}
+                      className="w-full bg-[#202c33] text-[#e9edef] text-xs px-2.5 py-1.5 rounded border border-[#2c3943] focus:border-[#00a884] focus:outline-none cursor-pointer"
+                    >
+                      <option value="disabled">
+                        Disable reply box (default)
+                      </option>
+                      <option value="focused">
+                        Reply from focused/first-in-list account
+                      </option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="p-2 rounded hover:bg-[#182229] transition-colors space-y-2">
               <div>
                 <div className="font-medium text-[#e9edef] text-[11px]">Notification Dismissal Time</div>
