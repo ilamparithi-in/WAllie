@@ -349,7 +349,7 @@ export function setupWhatsAppIntegration(mainWorldScript: string): void {
   }, false);
 
   contextBridge.exposeInMainWorld('__wallie_ipc', {
-    createNotification: (data: { title: string; body: string; icon: string; tag: string; canReply?: boolean }) => {
+    createNotification: (data: { title: string; body: string; icon: string; tag: string; canReply?: boolean; isEdit?: boolean }) => {
       resolveIconToBase64(data.icon).then((base64Icon) => {
         ipcRenderer.send('notification:create', {
           title: data.title,
@@ -357,6 +357,7 @@ export function setupWhatsAppIntegration(mainWorldScript: string): void {
           icon: base64Icon || '',
           tag: data.tag,
           canReply: data.canReply,
+          isEdit: data.isEdit,
         });
       });
     },

@@ -21,6 +21,7 @@ export interface NotificationPayload {
   coalesceMultiAccount?: boolean;
   multiAccountOpenChatBehavior?: 'all' | 'focused' | 'disabled';
   multiAccountInlineReplyBehavior?: 'disabled' | 'focused';
+  isEdit?: boolean;
   onAction?: (actionId: string) => void;
   onReply?: (replyText: string) => void;
   onClose?: (reason?: number | string) => void;

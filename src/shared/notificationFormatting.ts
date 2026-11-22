@@ -405,11 +405,70 @@ export function formatMediaLine(
   return content;
 }
 
+/**
+ * Extracts the sender prefix and message body from a notification line.
+ * e.g. "Alice: Hello world" -> { sender: "Alice", body: "Hello world" }
+ * In 1-on-1 chats (no sender prefix): -> { sender: "", body: "..." }
+ * Correctly strips directional Unicode controls (\u200e) and avoids false positives on URLs (http://...).
+ */
+export function extractSenderPrefix(line: string): { sender: string; body: string } {
+  if (!line || typeof line !== 'string') return { sender: '', body: '' };
+  const decoded = decodeHtmlEntities(line).trim();
+  const cleanLine = decoded.replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '');
+  const colonIdx = cleanLine.indexOf(':');
+  if (colonIdx > 0) {
+    const candidateSender = cleanLine.slice(0, colonIdx).trim();
+    if (!/^(?:https?|ftp|file|mailto)$/i.test(candidateSender)) {
+      const candidateBody = cleanLine.slice(colonIdx + 1).trim();
+      return { sender: candidateSender, body: candidateBody };
+    }
+  }
+  return { sender: '', body: cleanLine };
+}
+
 export function coalesceNotificationMessages(
   existingMessages: string[],
-  incomingMsg: string
+  incomingMsg: string,
+  options?: { isEdit?: boolean }
 ): string[] {
   const messages = [...existingMessages];
+
+  // If this incoming message is an edit, update the previous line from this sender in-place
+  if (options?.isEdit) {
+    const incomingParsed = extractSenderPrefix(incomingMsg);
+    let matchIdx = -1;
+
+    if (incomingParsed.sender) {
+      // Group chat: search backwards for the last message from this sender
+      const targetSenderNorm = normalizeNotificationText(incomingParsed.sender);
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const existingParsed = extractSenderPrefix(messages[i]);
+        if (existingParsed.sender && normalizeNotificationText(existingParsed.sender) === targetSenderNorm) {
+          matchIdx = i;
+          break;
+        }
+      }
+    } else {
+      // 1-on-1 chat: search backwards for the last message that is not an inline reply ("You: ...")
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const existingParsed = extractSenderPrefix(messages[i]);
+        if (normalizeNotificationText(existingParsed.sender) !== 'you') {
+          matchIdx = i;
+          break;
+        }
+      }
+    }
+
+    if (matchIdx !== -1) {
+      messages[matchIdx] = incomingMsg;
+      return messages;
+    }
+
+    // Fallback: if no prior message found from this sender, append as usual
+    messages.push(incomingMsg);
+    return messages;
+  }
+
   const incomingMedia = parseMediaLine(incomingMsg);
 
   if (!incomingMedia) {

@@ -182,7 +182,7 @@ export async function closeNotificationByContact(contactName: string, accountId?
 }
 
 export async function createNotification(
-  data: { title: string; body: string; icon: string; tag: string; canReply?: boolean },
+  data: { title: string; body: string; icon: string; tag: string; canReply?: boolean; isEdit?: boolean },
   senderWebContents: WebContents
 ) {
   const senderAccount = getAccountForWebContents(senderWebContents);
@@ -210,6 +210,7 @@ export async function createNotification(
         type: 'text',
         body: cleanBody,
       },
+      flags: data.isEdit ? { isEdited: true } : undefined,
     });
   }
 
@@ -237,6 +238,7 @@ export async function createNotification(
     coalesceMultiAccount: state.globalSettings?.coalesceMultiAccountNotifications !== false,
     multiAccountOpenChatBehavior: state.globalSettings?.multiAccountOpenChatBehavior || 'all',
     multiAccountInlineReplyBehavior: state.globalSettings?.multiAccountInlineReplyBehavior || 'disabled',
+    isEdit: data.isEdit,
     timeoutMs,
     canReply: isInlineReplyEnabled && data.canReply !== false,
     replyPlaceholder: `Reply to ${cleanTitle}…`,

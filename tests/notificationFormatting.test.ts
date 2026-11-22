@@ -7,6 +7,7 @@ import {
   formatNotificationBody,
   parseMediaLine,
   formatMediaLine,
+  extractSenderPrefix,
   coalesceNotificationMessages,
   normalizeNotificationText,
   formatAccountBadge,
@@ -285,6 +286,137 @@ describe('Notification Formatting Utilities', () => {
         'Alice: Let me know what you think',
       ]);
     });
+
+    describe('edited message handling (isEdit: true)', () => {
+      test('resolves user reported bug: replaces original message in-place on edit instead of appending duplicate line', () => {
+        let messages = [
+          'Alice Cooper: Please review the document and send feedback',
+        ];
+        const edited = 'Alice Cooper: Please review the document and send feedback today';
+        messages = coalesceNotificationMessages(messages, edited, { isEdit: true });
+        assert.deepEqual(messages, [
+          'Alice Cooper: Please review the document and send feedback today',
+        ]);
+      });
+
+      test('replaces matching sender message in a multi-sender group chat without affecting others', () => {
+        let messages = [
+          'Alice: Good morning team',
+          'Alice Cooper: Please review the document and send feedback',
+          'Bob: Noted, thanks!',
+        ];
+        const edited = 'Alice Cooper: Please review the document and send feedback today';
+        messages = coalesceNotificationMessages(messages, edited, { isEdit: true });
+        assert.deepEqual(messages, [
+          'Alice: Good morning team',
+          'Alice Cooper: Please review the document and send feedback today',
+          'Bob: Noted, thanks!',
+        ]);
+      });
+
+      test('replaces the most recent message when sender has multiple messages in the conversation', () => {
+        let messages = [
+          'Alice: First message',
+          'Alice: Second message with typo',
+        ];
+        const edited = 'Alice: Second message with typo fixed';
+        messages = coalesceNotificationMessages(messages, edited, { isEdit: true });
+        assert.deepEqual(messages, [
+          'Alice: First message',
+          'Alice: Second message with typo fixed',
+        ]);
+      });
+
+      test('replaces line in-place in 1-on-1 chat without sender prefix', () => {
+        let messages = [
+          'Are we meeting at 5pm today?',
+        ];
+        const edited = 'Are we meeting at 6pm today?';
+        messages = coalesceNotificationMessages(messages, edited, { isEdit: true });
+        assert.deepEqual(messages, [
+          'Are we meeting at 6pm today?',
+        ]);
+      });
+
+      test('preserves user inline reply ("You: ...") when editing incoming 1-on-1 message', () => {
+        let messages = [
+          'Are we meeting at 5pm today?',
+          'You: Sounds good!',
+        ];
+        const edited = 'Are we meeting at 6pm today?';
+        messages = coalesceNotificationMessages(messages, edited, { isEdit: true });
+        assert.deepEqual(messages, [
+          'Are we meeting at 6pm today?',
+          'You: Sounds good!',
+        ]);
+      });
+
+      test('appends message when isEdit is true but no prior message from that sender exists', () => {
+        let messages = [
+          'Charlie: Hello',
+        ];
+        const incoming = 'Alice: Hello Charlie';
+        messages = coalesceNotificationMessages(messages, incoming, { isEdit: true });
+        assert.deepEqual(messages, [
+          'Charlie: Hello',
+          'Alice: Hello Charlie',
+        ]);
+      });
+
+      test('handles directional Unicode characters in sender prefix when matching edit', () => {
+        let messages = [
+          'Alice Cooper\u200e: original message\u200e',
+        ];
+        const edited = 'Alice Cooper\u200e: edited message\u200e';
+        messages = coalesceNotificationMessages(messages, edited, { isEdit: true });
+        assert.deepEqual(messages, [
+          'Alice Cooper\u200e: edited message\u200e',
+        ]);
+      });
+
+      test('normal new message with isEdit false or undefined appends normally', () => {
+        let messages = [
+          'Alice: Message 1',
+        ];
+        messages = coalesceNotificationMessages(messages, 'Alice: Message 2');
+        assert.deepEqual(messages, [
+          'Alice: Message 1',
+          'Alice: Message 2',
+        ]);
+      });
+    });
+
+    describe('extractSenderPrefix', () => {
+      test('extracts sender and message body from group line', () => {
+        const parsed = extractSenderPrefix('Alice Cooper: hello world');
+        assert.equal(parsed.sender, 'Alice Cooper');
+        assert.equal(parsed.body, 'hello world');
+      });
+
+      test('strips directional Unicode controls before extracting sender', () => {
+        const parsed = extractSenderPrefix('Alice Cooper\u200e: hello world');
+        assert.equal(parsed.sender, 'Alice Cooper');
+        assert.equal(parsed.body, 'hello world');
+      });
+
+      test('does not mistake URLs for sender prefixes', () => {
+        const parsed = extractSenderPrefix('https://github.com/walinux');
+        assert.equal(parsed.sender, '');
+        assert.equal(parsed.body, 'https://github.com/walinux');
+      });
+
+      test('handles 1-on-1 messages with no colon', () => {
+        const parsed = extractSenderPrefix('Just a simple text message');
+        assert.equal(parsed.sender, '');
+        assert.equal(parsed.body, 'Just a simple text message');
+      });
+
+      test('handles empty or non-string input safely', () => {
+        assert.deepEqual(extractSenderPrefix(''), { sender: '', body: '' });
+        assert.deepEqual(extractSenderPrefix(null as any), { sender: '', body: '' });
+        assert.deepEqual(extractSenderPrefix(undefined as any), { sender: '', body: '' });
+      });
+    });
   });
 
   describe('normalizeNotificationText', () => {
@@ -487,6 +619,7 @@ describe('Notification Formatting Utilities', () => {
         for (const entry of activeNotifications.values()) {
           if (
             now - entry.lastTime < 60000 &&
+            !entry.accounts.some((a) => a.accountId === payload.accountId) &&
             isSameNotificationMessage(
               { contactName: entry.contactName, body: entry.body },
               { contactName: payload.contactName, body: payload.body }
@@ -559,6 +692,19 @@ describe('Notification Formatting Utilities', () => {
       assert.equal(res3.replacesId, res1.id);
       assert.equal(res3.title, '🏢 👥 💼 | General');
       assert.equal(activeNotifications.size, 1);
+
+      // 4. Consecutive message with identical text on the SAME account does NOT match as multi-account duplicate
+      const res4 = handleIncomingNotification({
+        contactName: 'General',
+        body: 'Alice Cooper: Happy birthday 🎉 @Bob',
+        accountId: 'acc_1',
+        accountEmoji: '🏢',
+        accountName: 'Official',
+      });
+      assert.notEqual(res4.id, res1.id);
+      assert.equal(res4.replacesId, undefined);
+      assert.equal(res4.title, '🏢 | General');
+      assert.equal(activeNotifications.size, 2);
     });
   });
 

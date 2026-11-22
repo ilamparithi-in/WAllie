@@ -141,6 +141,7 @@ export class NotificationManager {
       for (const entry of this.activeNotifications.values()) {
         if (
           now - entry.lastTime < NotificationManager.COALESCE_WINDOW_MS &&
+          !entry.accounts.some((a) => a.accountId === payload.accountId) &&
           isSameNotificationMessage(
             { contactName: entry.contactName, body: entry.lastMessageText, tag: entry.tag },
             { contactName: payload.contactName, body: payload.body, tag: payload.tag }
@@ -191,6 +192,10 @@ export class NotificationManager {
       if (activeConv) {
         this.conversations.set(convKey, activeConv);
         activeConv.lastTime = now;
+        if (payload.isEdit) {
+          const formattedMsg = formatSingleMessage(payload.body, 140);
+          activeConv.messages = coalesceNotificationMessages(activeConv.messages, formattedMsg, { isEdit: true });
+        }
         payload.body = activeConv.messages.join('\n');
       } else {
         const formattedMsg = formatSingleMessage(payload.body, 140);
@@ -222,6 +227,7 @@ export class NotificationManager {
       payload.replacesId = matchingActiveEntry.id;
       matchingActiveEntry.lastTime = now;
       matchingActiveEntry.body = payload.body;
+      matchingActiveEntry.lastMessageText = formatSingleMessage(payload.body, 140);
 
       const allAccounts = [...matchingActiveEntry.accounts];
       payload.onAction = (actionId) => {
@@ -334,14 +340,16 @@ export class NotificationManager {
     // Android-style notification coalescing:
     // Append messages sequentially on the next line and truncate long individual messages with an ellipsis
     let convKey: string | null = null;
+    let lastMsgText = payload.body;
     if (payload.contactName && payload.accountId) {
       convKey = `${payload.accountId}:${payload.contactName.trim().toLowerCase()}`;
       const existing = this.conversations.get(convKey);
       const formattedMsg = formatSingleMessage(payload.body, 140);
+      lastMsgText = formattedMsg;
 
       // If active conversation exists within 60s window, coalesce/append message and update in-place
       if (existing && now - existing.lastTime < 60000 && existing.notificationId) {
-        existing.messages = coalesceNotificationMessages(existing.messages, formattedMsg);
+        existing.messages = coalesceNotificationMessages(existing.messages, formattedMsg, { isEdit: payload.isEdit });
         existing.lastTime = now;
         payload.body = existing.messages.join('\n');
         payload.replacesId = existing.notificationId;
@@ -429,7 +437,7 @@ export class NotificationManager {
           onClose: payload.onClose,
         }] : [],
         body: payload.body,
-        lastMessageText: payload.body,
+        lastMessageText: lastMsgText,
         lastTime: now,
         convKeys: convKey ? new Set([convKey]) : new Set(),
         accountOrder: payload.accountOrder,

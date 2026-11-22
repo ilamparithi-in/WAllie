@@ -119,6 +119,7 @@ export const notificationCreateSchema = z.object({
   icon: z.string().max(5000000).default(''),
   tag: z.string().max(500).default(''),
   canReply: z.boolean().optional(),
+  isEdit: z.boolean().optional(),
 });
 
 export const notificationLogEntrySchema = z.object({

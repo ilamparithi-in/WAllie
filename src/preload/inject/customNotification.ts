@@ -12,6 +12,82 @@ export const activeNotificationCallbacks = new Map<string, () => void>();
 
 let OriginalNotification: typeof Notification | null = typeof window !== 'undefined' && window.Notification ? window.Notification : null;
 
+let cachedChatCollection: any = null;
+function getChatCollection(): any {
+  if (cachedChatCollection) return cachedChatCollection;
+  try {
+    if (typeof (window as any).require === 'function') {
+      const mod = (window as any).require('WAWebChatCollection');
+      cachedChatCollection = mod ? (mod.ChatCollection || mod.default) : null;
+    }
+  } catch (e) {}
+  if (!cachedChatCollection && (window as any).Store && (window as any).Store.Chat) {
+    cachedChatCollection = (window as any).Store.Chat;
+  }
+  return cachedChatCollection;
+}
+
+function findChat(tag: string, title: string): any {
+  try {
+    const chatCollection = getChatCollection();
+    if (!chatCollection) return null;
+    let chat: any = null;
+    if (tag && typeof chatCollection.get === 'function') {
+      chat = chatCollection.get(tag);
+    }
+    if (!chat && chatCollection.models && Array.isArray(chatCollection.models)) {
+      const normTitle = (title || '').trim().toLowerCase();
+      chat = chatCollection.models.find((c: any) => {
+        if (tag && c.id && (c.id._serialized === tag || c.id === tag)) return true;
+        const cName = (c.name || c.formattedTitle || '').trim().toLowerCase();
+        return cName && normTitle && cName === normTitle;
+      });
+    }
+    return chat;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function checkIsEditMessage(tag: string, title: string, opts: any): boolean {
+  // 1. Direct options metadata check
+  if (opts && opts.data) {
+    const d = opts.data;
+    if (d.isEdit === true || d.latestEditMsgKey || d.editAttr || d.subtype === 'message_edit') {
+      return true;
+    }
+    if (d.msg && (d.msg.isEdit === true || d.msg.latestEditMsgKey || d.msg.editAttr)) {
+      return true;
+    }
+  }
+
+  // 2. WhatsApp Web internal store check
+  try {
+    const chat = findChat(tag, title);
+    if (chat && chat.msgs) {
+      const msgs = chat.msgs.models || (typeof chat.msgs.getModelsArray === 'function' ? chat.msgs.getModelsArray() : []);
+      const lastMsg = typeof chat.msgs.last === 'function' ? chat.msgs.last() : (msgs.length > 0 ? msgs[msgs.length - 1] : null);
+
+      const isMsgEdit = (m: any): boolean => {
+        if (!m) return false;
+        return Boolean(
+          m.isEdit === true ||
+          m.latestEditMsgKey ||
+          m.latestEditSenderTimestamp ||
+          m.editAttr ||
+          (m.type === 'protocol' && m.subtype === 'message_edit')
+        );
+      };
+
+      if (lastMsg) {
+        return isMsgEdit(lastMsg);
+      }
+    }
+  } catch (e) {}
+
+  return false;
+}
+
 function isReadOnlyChat(tag: string, title: string, opts: any): boolean {
   // 1. WhatsApp Channels & Broadcast lists are strictly one-way for followers
   if (tag && (tag.endsWith('@newsletter') || tag.endsWith('@broadcast'))) {
@@ -35,37 +111,10 @@ function isReadOnlyChat(tag: string, title: string, opts: any): boolean {
 
   // 4. WhatsApp Web internal store check
   try {
-    let chatCollection: any = null;
-    if (typeof (window as any).require === 'function') {
-      try {
-        const mod = (window as any).require('WAWebChatCollection');
-        chatCollection = mod ? (mod.ChatCollection || mod.default) : null;
-      } catch (e) { }
-    }
-    if (!chatCollection && (window as any).Store && (window as any).Store.Chat) {
-      chatCollection = (window as any).Store.Chat;
-    }
-
-    if (chatCollection) {
-      let chat: any = null;
-      if (tag && typeof chatCollection.get === 'function') {
-        chat = chatCollection.get(tag);
-      }
-      if (!chat && chatCollection.models && Array.isArray(chatCollection.models)) {
-        const normTitle = (title || '').trim().toLowerCase();
-        chat = chatCollection.models.find((c: any) => {
-          if (tag && c.id && (c.id._serialized === tag || c.id === tag)) return true;
-          const cName = (c.name || c.formattedTitle || '').trim().toLowerCase();
-          return cName && normTitle && cName === normTitle;
-        });
-      }
-
-      if (chat) {
-        if (chat.groupMetadata && chat.groupMetadata.announce) {
-          if (chat.groupMetadata.canSend === false || chat.groupMetadata.isSenderAnAdmin === false) {
-            return true;
-          }
-        }
+    const chat = findChat(tag, title);
+    if (chat && chat.groupMetadata && chat.groupMetadata.announce) {
+      if (chat.groupMetadata.canSend === false || chat.groupMetadata.isSenderAnAdmin === false) {
+        return true;
       }
     }
   } catch (e) { }
@@ -113,6 +162,7 @@ export class CustomNotification extends EventTarget {
 
     const isReadOnly = isReadOnlyChat(this.tag, this.title, options);
     const canReply = !isReadOnly;
+    const isEdit = checkIsEditMessage(this.tag, this.title, options);
 
     if (window.__wallie_ipc) {
       window.__wallie_ipc.createNotification({
@@ -121,6 +171,7 @@ export class CustomNotification extends EventTarget {
         icon: this.icon,
         tag: this.tag,
         canReply: canReply,
+        isEdit: isEdit,
       });
     }
 
