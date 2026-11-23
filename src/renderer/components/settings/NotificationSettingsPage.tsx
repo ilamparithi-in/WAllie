@@ -11,6 +11,7 @@ import {
   X,
   AlertTriangle,
   History,
+  Pencil,
 } from 'lucide-react';
 import type { AccountInfo, GlobalSettings, HistoricalNotification, NotificationHistoryExport } from '../../../shared/types';
 import { decodeHtmlEntities, tokenizeFormattedText } from '../../../shared/notificationFormatting';
@@ -813,6 +814,15 @@ export const NotificationSettingsPage: React.FC<NotificationSettingsPageProps> =
                                 {accountLabel && (
                                   <span className="bg-[#202c33] text-[#00a884] font-medium text-[8px] px-1.5 py-0.5 rounded-md border border-[#222d34]">
                                     {accountLabel}
+                                  </span>
+                                )}
+                                {notif.flags?.isEdited && (
+                                  <span
+                                    className="bg-[#202c33] text-[#00a884] font-medium text-[8px] px-1.5 py-0.5 rounded-md border border-[#222d34] flex items-center gap-1"
+                                    title="Edited message"
+                                  >
+                                    <Pencil className="w-2.5 h-2.5" />
+                                    <span>Edited</span>
                                   </span>
                                 )}
                                 <span className="text-[9px] text-[#8696a0]">

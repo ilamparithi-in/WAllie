@@ -421,9 +421,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const textContent = notif?.type === 'message'
       ? (notif.content?.type === 'text' ? notif.content.body : '')
       : (notif?.type === 'system_event' ? notif.text : '');
+    const searchLower = notifSearch.toLowerCase().trim();
+    const isEditedMatch = Boolean(notif?.flags?.isEdited && 'edited'.includes(searchLower) && searchLower.length > 0);
     const matchesSearch =
-      sender.toLowerCase().includes(notifSearch.toLowerCase()) ||
-      textContent.toLowerCase().includes(notifSearch.toLowerCase());
+      sender.toLowerCase().includes(searchLower) ||
+      textContent.toLowerCase().includes(searchLower) ||
+      isEditedMatch;
     const matchesAccount = notifAccountFilter === 'all' || notif?.accountId === notifAccountFilter;
     return matchesSearch && matchesAccount;
   });

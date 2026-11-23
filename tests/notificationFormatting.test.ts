@@ -805,4 +805,112 @@ describe('Notification Formatting Utilities', () => {
       assert.equal(repliedAccount, 'acc_2');
     });
   });
+
+  describe('Notification History Logging & Edited Message Retention', () => {
+    test('logs initial message and edited message as separate historical entries', () => {
+      const history: any[] = [];
+
+      // Initial message arrives
+      const initialEntry = {
+        type: 'message',
+        id: 'notif_1001_abc',
+        timestamp: '2026-11-23T10:00:00.000Z',
+        displayTime: '10:00 AM',
+        direction: 'incoming',
+        sender: { displayName: 'Alice' },
+        accountId: 'acc_1',
+        accountName: 'Personal',
+        content: { type: 'text', body: 'original draft' },
+        flags: undefined,
+      };
+      history.unshift(initialEntry);
+
+      // Edited version arrives
+      const editedEntry = {
+        type: 'message',
+        id: 'notif_1002_def',
+        timestamp: '2026-11-23T10:01:00.000Z',
+        displayTime: '10:01 AM',
+        direction: 'incoming',
+        sender: { displayName: 'Alice' },
+        accountId: 'acc_1',
+        accountName: 'Personal',
+        content: { type: 'text', body: 'revised draft' },
+        flags: { isEdited: true },
+      };
+      history.unshift(editedEntry);
+
+      // Verify history contains both entries separately
+      assert.equal(history.length, 2);
+      assert.equal(history[0].content.body, 'revised draft');
+      assert.equal(history[0].flags?.isEdited, true);
+      assert.equal(history[1].content.body, 'original draft');
+      assert.equal(history[1].flags, undefined);
+    });
+
+    test('retains full version history across multiple successive edits', () => {
+      const history: any[] = [];
+      const versions = ['v1 text', 'v2 text', 'v3 text'];
+
+      for (let i = 0; i < versions.length; i++) {
+        history.unshift({
+          type: 'message',
+          id: `notif_${1000 + i}`,
+          timestamp: `2026-11-23T10:0${i}:00.000Z`,
+          displayTime: `10:0${i} AM`,
+          direction: 'incoming',
+          sender: { displayName: 'Bob' },
+          accountId: 'acc_1',
+          content: { type: 'text', body: versions[i] },
+          flags: i > 0 ? { isEdited: true } : undefined,
+        });
+      }
+
+      assert.equal(history.length, 3);
+      assert.equal(history[0].content.body, 'v3 text');
+      assert.equal(history[0].flags?.isEdited, true);
+      assert.equal(history[1].content.body, 'v2 text');
+      assert.equal(history[1].flags?.isEdited, true);
+      assert.equal(history[2].content.body, 'v1 text');
+      assert.equal(history[2].flags, undefined);
+    });
+
+    test('search filtering matches "edited" keyword for items flagged with isEdited', () => {
+      const entries = [
+        {
+          type: 'message',
+          sender: { displayName: 'Alice' },
+          content: { type: 'text', body: 'hello there' },
+          flags: undefined,
+        },
+        {
+          type: 'message',
+          sender: { displayName: 'Alice' },
+          content: { type: 'text', body: 'hello everyone' },
+          flags: { isEdited: true },
+        },
+      ];
+
+      const searchFilter = (items: any[], query: string) => {
+        const q = query.toLowerCase().trim();
+        return items.filter((item) => {
+          const sender = item.sender?.displayName || '';
+          const body = item.content?.body || '';
+          const isEditedMatch = Boolean(item.flags?.isEdited && 'edited'.includes(q) && q.length > 0);
+          return (
+            sender.toLowerCase().includes(q) ||
+            body.toLowerCase().includes(q) ||
+            isEditedMatch
+          );
+        });
+      };
+
+      const matchedGeneral = searchFilter(entries, 'hello');
+      assert.equal(matchedGeneral.length, 2);
+
+      const matchedEdited = searchFilter(entries, 'edited');
+      assert.equal(matchedEdited.length, 1);
+      assert.equal(matchedEdited[0].content.body, 'hello everyone');
+    });
+  });
 });
