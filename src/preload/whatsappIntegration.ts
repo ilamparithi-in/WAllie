@@ -375,9 +375,6 @@ export function setupWhatsAppIntegration(mainWorldScript: string): void {
     onAnchorDownload: (filename: string, size?: number, hash?: string) => {
       ipcRenderer.send('download:set-intent', { intent: 'anchor-detected', filename, size, hash });
     },
-    fetchLinkPreview: (url: string) => {
-      return ipcRenderer.invoke('link-preview:fetch', url);
-    },
     getResponsiveLayoutMode: () => {
       return ipcRenderer.invoke('responsive-layout:get-mode');
     },

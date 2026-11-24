@@ -73,6 +73,7 @@ async function buildExtensionDirectory(extDirName) {
     // Pure JS / Minimal Extension: copy all relevant files maintaining directory structure
     fs.cpSync(extSourceDir, outDir, {
       recursive: true,
+      force: true,
       filter: (src) => {
         const rel = path.relative(extSourceDir, src);
         if (!rel) return true;

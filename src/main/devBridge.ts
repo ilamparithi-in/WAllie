@@ -38,6 +38,7 @@ export interface NetworkLogEntry {
   error?: string;
   durationMs?: number;
   timestamp: number;
+  requestHeaders?: Record<string, string>;
 }
 
 const MAX_LOGS = 500;
@@ -146,14 +147,18 @@ function attachSessionNetwork(sess: Electron.Session, partitionName?: string) {
   monitoredSessions.add(sess);
 
   const startTimes = new Map<number, number>();
+  const reqHeaders = new Map<number, Record<string, string>>();
 
   sess.webRequest.onSendHeaders((details) => {
     startTimes.set(details.id, Date.now());
+    reqHeaders.set(details.id, details.requestHeaders);
   });
 
   sess.webRequest.onCompleted((details) => {
     const startTime = startTimes.get(details.id);
     startTimes.delete(details.id);
+    const headers = reqHeaders.get(details.id);
+    reqHeaders.delete(details.id);
     const durationMs = startTime ? Date.now() - startTime : undefined;
 
     networkLogs.push({
@@ -167,6 +172,7 @@ function attachSessionNetwork(sess: Electron.Session, partitionName?: string) {
       fromCache: details.fromCache,
       durationMs,
       timestamp: Date.now(),
+      requestHeaders: headers,
     });
 
     if (networkLogs.length > MAX_LOGS) {

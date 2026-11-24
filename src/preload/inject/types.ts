@@ -5,7 +5,6 @@ export interface WallieIpcBridge {
   createNotification: (data: { title: string; body: string; icon: string; tag: string; canReply?: boolean; isEdit?: boolean }) => void;
   closeNotification: (tag: string) => void;
   dismissChat?: (data: { tag?: string; contactName?: string }) => void;
-  fetchLinkPreview?: (url: string) => Promise<any>;
   getResponsiveLayoutMode?: () => Promise<'disabled' | 'auto' | 'portrait'>;
   onResponsiveLayoutModeChanged?: (callback: (mode: 'disabled' | 'auto' | 'portrait') => void) => () => void;
 }

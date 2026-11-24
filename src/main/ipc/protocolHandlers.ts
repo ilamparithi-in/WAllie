@@ -3,7 +3,6 @@ import { state } from '../state';
 import { DEFAULT_USER_AGENT } from '../config';
 import { updateActiveViewBounds, switchActiveAccount } from '../window';
 import { clearPausedMediaState } from '../views';
-import { fetchLinkPreview, clearLinkPreviewCache, getLinkPreviewCacheSize } from '../linkPreview';
 import { GroupInviteDetails } from '../../shared/types';
 import { extractMetaContent } from '../../shared/htmlMetadata.ts';
 import {
@@ -103,19 +102,6 @@ export function registerProtocolHandlers(): void {
   ipcMain.handle('protocol:get-group-invite-info', async (_event, rawCode: unknown) => {
     const code = validate(inviteCodeSchema, rawCode);
     return await fetchGroupInviteDetails(code);
-  });
-
-  ipcMain.handle('link-preview:fetch', async (_event, rawUrl: unknown) => {
-    const url = validate(urlStringSchema, rawUrl);
-    return await fetchLinkPreview(url);
-  });
-
-  ipcMain.handle('link-preview:clear-cache', () => {
-    return clearLinkPreviewCache();
-  });
-
-  ipcMain.handle('link-preview:get-cache-size', () => {
-    return getLinkPreviewCacheSize();
   });
 
   ipcMain.on('protocol:ready', () => {

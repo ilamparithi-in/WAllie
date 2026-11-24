@@ -153,20 +153,8 @@ export interface GlobalSettings {
   multiAccountOpenChatBehavior?: MultiAccountOpenChatBehavior;
   multiAccountInlineReplyBehavior?: MultiAccountInlineReplyBehavior;
   defaultProtocolAccountId?: string;
-  standaloneLinkPreviewEnabled?: boolean;
   responsiveLayoutMode?: 'disabled' | 'auto' | 'portrait';
   unblockMinWindowSize?: boolean;
-}
-
-export interface LinkPreviewData {
-  url: string;
-  title: string;
-  description: string;
-  thumbnailBase64?: string;
-  thumbnailHQBase64?: string;
-  thumbnailWidth?: number;
-  thumbnailHeight?: number;
-  previewType?: 'video' | 'image' | 'none';
 }
 
 export interface NativePromptOptions {
